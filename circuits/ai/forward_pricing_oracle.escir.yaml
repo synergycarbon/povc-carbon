@@ -1,0 +1,439 @@
+# SynergyCarbon Forward Pricing Oracle — AI SmartCircuit
+# Proprietary — SynergyCarbon
+
+escir: "0.8.0"
+name: sc_forward_pricing_oracle
+version: "1.0.0"
+license: "Proprietary"
+
+metadata:
+  circuit_id: sc.ai.forward_pricing_oracle.v1
+  name: "SynergyCarbon Forward Pricing Oracle"
+  description: |
+    Produces a fair-value forward price curve for carbon credits across
+    8 tenors (1m to project-lifetime). Combines three pricing signals:
+    (1) cost-of-carry financial model (F = S * e^((r-y)*T)),
+    (2) AI supply adjustment from yield forecaster confidence intervals,
+    (3) vintage and methodology premiums. Published to lex topics for
+    consumption by the Forward Contract Engine and console widgets.
+  category: ai
+
+  implementation:
+    software:
+      runtime: estream-kernel
+      language: rust
+      estimated_memory_mb: 64
+
+# =============================================================================
+# Type Definitions
+# =============================================================================
+
+types:
+  OracleConfig:
+    kind: struct
+    fields:
+      - name: risk_free_rate_annual
+        type: f64
+        description: "Annual risk-free rate (e.g., 0.05 = 5%)"
+        default: 0.05
+      - name: convenience_yield_annual
+        type: f64
+        description: "Convenience yield for holding spot credits"
+        default: 0.02
+      - name: supply_elasticity
+        type: f32
+        description: "Price sensitivity to supply forecast (0-1)"
+        default: 0.3
+      - name: vintage_decay_per_year
+        type: f32
+        description: "Price discount per year of vintage aging"
+        default: 0.02
+      - name: update_interval_s
+        type: u32
+        description: "How often to refresh forward curve"
+        default: 60
+      - name: basis_alert_sigma
+        type: f32
+        description: "Alert when basis exceeds N standard deviations"
+        default: 2.0
+
+  MethodologyPremium:
+    kind: struct
+    description: "Price multiplier by methodology"
+    fields:
+      - name: methodology_id
+        type: "string(64)"
+      - name: premium_multiplier
+        type: f32
+        description: "1.0 = baseline, >1.0 = premium"
+
+  # --- Input types ---
+
+  SpotPrice:
+    kind: struct
+    description: "From sc.marketplace.market_data"
+    fields:
+      - name: price_per_tonne_usd
+        type: f64
+      - name: volume_24h_tco2e
+        type: f64
+      - name: bid_ask_spread_usd
+        type: f64
+      - name: timestamp
+        type: u64
+
+  YieldForecastInput:
+    kind: struct
+    description: "From sc.ai.forecasts.yield.{tenant}.fleet"
+    fields:
+      - name: tenant_id
+        type: "string(64)"
+      - name: horizons
+        type: "[HorizonSummary; 4]"
+      - name: forecast_time
+        type: u64
+
+  HorizonSummary:
+    kind: struct
+    fields:
+      - name: horizon_days
+        type: u16
+      - name: projected_tco2e
+        type: f64
+      - name: confidence_80_lo
+        type: f64
+      - name: confidence_80_hi
+        type: f64
+
+  HistoricalYield:
+    kind: struct
+    description: "Rolling average historical yield for supply ratio"
+    fields:
+      - name: avg_daily_tco2e_30d
+        type: f64
+      - name: avg_daily_tco2e_90d
+        type: f64
+      - name: avg_daily_tco2e_365d
+        type: f64
+      - name: timestamp
+        type: u64
+
+  # --- Output types ---
+
+  ForwardCurve:
+    kind: struct
+    description: "Forward price curve across all tenors"
+    fields:
+      - name: timestamp
+        type: u64
+      - name: spot_price_usd
+        type: f64
+      - name: tenors
+        type: "[TenorPrice; 8]"
+      - name: methodology_id
+        type: "string(64)"
+        description: "Methodology this curve is priced for"
+      - name: current_vintage_year
+        type: u16
+
+  TenorPrice:
+    kind: struct
+    fields:
+      - name: tenor
+        type: "string(16)"
+        description: "1m | 3m | 6m | 1y | 2y | 3y | 5y | lifetime"
+      - name: tenor_days
+        type: u16
+      - name: forward_price_usd
+        type: f64
+      - name: confidence_80_lo
+        type: f64
+      - name: confidence_80_hi
+        type: f64
+      - name: carry_component_usd
+        type: f64
+        description: "Cost-of-carry contribution"
+      - name: supply_adjustment_usd
+        type: f64
+        description: "AI supply forecast adjustment"
+      - name: premium_component_usd
+        type: f64
+        description: "Vintage + methodology premium"
+      - name: basis_vs_spot_usd
+        type: f64
+        description: "Forward price - spot price"
+
+  BasisAlert:
+    kind: struct
+    description: "Alert when basis deviates from historical norm"
+    fields:
+      - name: tenor
+        type: "string(16)"
+      - name: current_basis_usd
+        type: f64
+      - name: historical_mean_usd
+        type: f64
+      - name: historical_sigma_usd
+        type: f64
+      - name: sigma_deviation
+        type: f32
+      - name: timestamp
+        type: u64
+
+  OracleStatus:
+    kind: struct
+    fields:
+      - name: last_update
+        type: u64
+      - name: spot_price_usd
+        type: f64
+      - name: curves_published
+        type: u32
+        description: "Number of methodology-specific curves"
+      - name: avg_basis_1y_usd
+        type: f64
+
+# =============================================================================
+# Circuit Interface
+# =============================================================================
+
+inputs:
+  - name: config
+    type: OracleConfig
+
+  - name: spot_price
+    type: SpotPrice
+    description: "← sc.marketplace.market_data"
+  - name: spot_valid
+    type: bool
+
+  - name: yield_forecast
+    type: YieldForecastInput
+    description: "← sc.ai.forecasts.yield.{tenant}.fleet"
+  - name: forecast_valid
+    type: bool
+
+  - name: historical_yield
+    type: HistoricalYield
+    description: "← internal rolling average"
+  - name: historical_valid
+    type: bool
+
+  - name: methodology_premiums
+    type: "[MethodologyPremium; 8]"
+    description: "← sc.governance.methodology.approved"
+  - name: premiums_valid
+    type: bool
+
+outputs:
+  - name: forward_curve
+    type: ForwardCurve
+    description: "→ sc.ai.forecasts.price.forward_curve"
+  - name: curve_valid
+    type: bool
+
+  - name: basis_alert
+    type: BasisAlert
+    description: "→ sc.forwards.market.basis_alert"
+  - name: basis_alert_valid
+    type: bool
+
+  - name: status
+    type: OracleStatus
+
+# =============================================================================
+# Annotations
+# =============================================================================
+
+annotations:
+  deterministic: true
+  streamsight_emit: true
+  audit_trail: true
+  governance: "sc.governance"
+
+# =============================================================================
+# StreamSight Integration
+# =============================================================================
+
+streamsight:
+  namespace: "sc.ai.forecasts.price"
+
+  emit:
+    - event: "forward_curve_updated"
+      topic: "lex://sc/ai/forecasts/price/forward_curve"
+      severity: info
+      rate_limit_hz: 0.0167    # ~1/min
+      fields: ["spot_price_usd", "tenors.forward_price_usd", "tenors.basis_vs_spot_usd"]
+
+    - event: "basis_snapshot"
+      topic: "lex://sc/forwards/market/basis"
+      severity: info
+      rate_limit_hz: 0.0167
+      fields: ["tenor", "current_basis_usd"]
+
+    - event: "basis_alert"
+      topic: "lex://sc/forwards/market/basis_alert"
+      severity: warning
+      fields: ["tenor", "current_basis_usd", "sigma_deviation"]
+
+    - event: "oracle_status"
+      topic: "lex://sc/ai/forecasts/price/forward_curve"
+      severity: info
+      rate_limit_hz: 0.000278
+      fields: ["spot_price_usd", "avg_basis_1y_usd", "curves_published"]
+
+# =============================================================================
+# Compute Graph
+# =============================================================================
+
+compute:
+  nodes:
+    # Cost-of-carry model
+    - id: carry_calculator
+      type: transform
+      description: "F(T) = S × e^((r - y) × T) for each tenor"
+      operation: |
+        for each tenor T in [30, 90, 180, 365, 730, 1095, 1825, project_life]:
+          T_years = T / 365.0
+          carry_price = spot × exp((r - y) × T_years)
+
+    # AI supply adjustment
+    - id: supply_ratio_calculator
+      type: transform
+      description: "Compute supply factor from forecast vs. historical"
+      operation: |
+        for each tenor T:
+          forecast_daily = interpolate(yield_forecast.horizons, T) / T
+          historical_daily = interpolate(historical_yield, T)
+          supply_factor = forecast_daily / historical_daily
+          supply_adj = (1.0 / supply_factor) ^ config.supply_elasticity
+
+    - id: supply_adjuster
+      type: transform
+      description: "Apply supply adjustment to carry price"
+      operation: "adjusted_price = carry_price × supply_adj"
+
+    # Confidence intervals
+    - id: confidence_propagator
+      type: transform
+      description: "Propagate yield forecast CI to price CI"
+      operation: |
+        price_ci_lo = adjusted_price × (forecast_ci_lo / forecast_mean)
+        price_ci_hi = adjusted_price × (forecast_ci_hi / forecast_mean)
+
+    # Vintage premium
+    - id: vintage_adjuster
+      type: transform
+      description: "Apply vintage decay: premium = 1 + decay × (year - vintage)"
+      operation: |
+        vintage_premium = 1.0 + config.vintage_decay_per_year × (current_year - vintage_year)
+        vintage_adjusted = adjusted_price × vintage_premium
+
+    # Methodology premium
+    - id: methodology_adjuster
+      type: transform
+      description: "Apply methodology multiplier"
+      operation: |
+        final_price = vintage_adjusted × methodology_premium
+
+    # Curve assembly
+    - id: curve_builder
+      type: transform
+      description: "Assemble ForwardCurve with all tenor prices and components"
+
+    # Basis tracking
+    - id: basis_calculator
+      type: transform
+      description: "basis = forward_price - spot_price for each tenor"
+
+    - id: basis_history
+      type: window_aggregate
+      description: "Rolling 30-day basis statistics (mean, sigma)"
+      window: 2592000
+
+    - id: basis_alert_detector
+      type: comparator
+      description: "Alert when abs(basis - mean) > sigma × config.basis_alert_sigma"
+
+  flows:
+    # Carry calculation
+    - spot_price -> carry_calculator
+    - carry_calculator -> supply_adjuster
+
+    # Supply adjustment
+    - yield_forecast -> supply_ratio_calculator
+    - historical_yield -> supply_ratio_calculator
+    - supply_ratio_calculator -> supply_adjuster
+
+    # Confidence intervals
+    - supply_adjuster -> confidence_propagator
+    - yield_forecast -> confidence_propagator
+
+    # Premiums
+    - supply_adjuster -> vintage_adjuster
+    - vintage_adjuster -> methodology_adjuster
+    - methodology_premiums -> methodology_adjuster
+
+    # Output
+    - methodology_adjuster -> curve_builder
+    - confidence_propagator -> curve_builder
+    - carry_calculator -> curve_builder       # carry component
+    - supply_adjuster -> curve_builder        # supply component
+    - curve_builder -> forward_curve
+    - curve_builder -> curve_valid
+
+    # Basis monitoring
+    - curve_builder -> basis_calculator
+    - spot_price -> basis_calculator
+    - basis_calculator -> basis_history
+    - basis_history -> basis_alert_detector
+    - basis_alert_detector.triggered -> basis_alert
+    - basis_alert_detector.triggered -> basis_alert_valid
+
+# =============================================================================
+# Test Vectors
+# =============================================================================
+
+tests:
+  - name: "Basic forward curve generation"
+    steps:
+      - setup:
+          config: { risk_free_rate_annual: 0.05, convenience_yield_annual: 0.02, supply_elasticity: 0.3 }
+          methodology_premiums:
+            - { methodology_id: "EPA-AP42-CH4-FLARE", premium_multiplier: 1.0 }
+      - input:
+          spot_price: { price_per_tonne_usd: 25.0, volume_24h_tco2e: 100.0 }
+          spot_valid: true
+          yield_forecast:
+            horizons:
+              - { horizon_days: 7, projected_tco2e: 1.82 }
+              - { horizon_days: 30, projected_tco2e: 7.8 }
+              - { horizon_days: 90, projected_tco2e: 23.4 }
+              - { horizon_days: 365, projected_tco2e: 94.9 }
+          forecast_valid: true
+          historical_yield: { avg_daily_tco2e_30d: 0.26, avg_daily_tco2e_90d: 0.26, avg_daily_tco2e_365d: 0.26 }
+          historical_valid: true
+      - expect:
+          curve_valid: true
+          forward_curve:
+            spot_price_usd: 25.0
+            # 1-year carry: 25 × e^(0.03 × 1.0) ≈ 25.76
+            # With neutral supply (factor=1.0): stays at 25.76
+
+  - name: "Supply shortage increases forward price"
+    steps:
+      - setup:
+          config: { risk_free_rate_annual: 0.05, convenience_yield_annual: 0.02, supply_elasticity: 0.3 }
+      - input:
+          spot_price: { price_per_tonne_usd: 25.0 }
+          spot_valid: true
+          yield_forecast:
+            horizons:
+              - { horizon_days: 365, projected_tco2e: 47.5 }  # 50% of historical
+          forecast_valid: true
+          historical_yield: { avg_daily_tco2e_365d: 0.26 }
+          historical_valid: true
+      - expect:
+          curve_valid: true
+          # Supply factor = 0.5, adjustment = (1/0.5)^0.3 ≈ 1.23
+          # Forward 1y ≈ 25.76 × 1.23 ≈ 31.7

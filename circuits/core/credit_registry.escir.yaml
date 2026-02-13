@@ -1,0 +1,445 @@
+# SynergyCarbon Credit Registry — Core SmartCircuit
+# Proprietary — SynergyCarbon
+
+escir: "0.8.0"
+name: sc_credit_registry
+version: "1.0.0"
+license: "Proprietary"
+
+metadata:
+  circuit_id: sc.core.credit_registry.v1
+  name: "SynergyCarbon Credit Registry"
+  description: |
+    Issues, tracks, transfers, and retires carbon credit NFTs on eStream L2.
+    Receives verified attestations from the PoVCR Verifier, mints ERC-721
+    compatible NFTs using the esf-carbon CarbonCredit schema, and manages
+    the full credit lifecycle (Issued → Listed/Transferred/Retired/Cancelled).
+    Enforces double-spend prevention via unique serial numbers and
+    attestation dedup.
+  category: cloud
+
+  implementation:
+    software:
+      runtime: estream-kernel
+      language: rust
+      estimated_memory_mb: 512
+
+# =============================================================================
+# Type Definitions
+# =============================================================================
+
+types:
+  RegistryConfig:
+    kind: struct
+    fields:
+      - name: serial_prefix
+        type: "string(8)"
+        description: "Serial number prefix (e.g., 'SC')"
+        default: "SC"
+      - name: min_mint_tco2e
+        type: f32
+        description: "Minimum tCO2e to trigger mint"
+        default: 0.001
+      - name: batch_mint_max
+        type: u16
+        description: "Maximum credits per batch mint"
+        default: 100
+      - name: auto_list_threshold_tco2e
+        type: f32
+        description: "Auto-list credits above this threshold (0 = disabled)"
+        default: 0.0
+
+  CreditNFT:
+    kind: struct
+    description: "Carbon credit NFT (ERC-721 compatible on eStream L2)"
+    fields:
+      - name: credit_id
+        type: "bytes(32)"
+        description: "Unique credit ID: SHA3-256(attestation_id + serial)"
+      - name: serial_number
+        type: "string(128)"
+        description: "Human-readable serial: SC-{year}-{project}-{seq:06d}"
+      - name: project_id
+        type: "string(64)"
+        description: "Source project (e.g., 'tz-wellpad-alpha-01')"
+      - name: tenant_id
+        type: "string(64)"
+      - name: vintage_year
+        type: u16
+      - name: credit_type
+        type: CreditType
+      - name: methodology_id
+        type: "string(64)"
+      - name: tonnes_co2e
+        type: u64
+        description: "Fixed-point, 6 decimals (1,000,000 = 1.0 tCO2e)"
+      - name: attestation_id
+        type: "bytes(32)"
+      - name: merkle_root
+        type: "bytes(32)"
+      - name: evidence_hash
+        type: "bytes(32)"
+      - name: owner
+        type: "bytes(32)"
+        description: "Current owner (Spark-authenticated)"
+      - name: status
+        type: CreditStatus
+      - name: issued_at
+        type: u64
+      - name: retired_at
+        type: u64
+        description: "0 if not retired"
+      - name: retired_by
+        type: "bytes(32)"
+        description: "Zero if not retired"
+      - name: retirement_reason
+        type: "string(256)"
+
+  CreditType:
+    kind: enum
+    variants:
+      - Avoidance
+      - Removal
+      - Sequestration
+
+  CreditStatus:
+    kind: enum
+    variants:
+      - Issued
+      - Listed
+      - Sold
+      - Retired
+      - Cancelled
+
+  MintRequest:
+    kind: struct
+    description: "Request from PoVCR Verifier to mint a credit"
+    fields:
+      - name: attestation_id
+        type: "bytes(32)"
+      - name: tenant_id
+        type: "string(64)"
+      - name: project_id
+        type: "string(64)"
+      - name: tco2e
+        type: f32
+      - name: methodology_id
+        type: "string(64)"
+      - name: credit_type
+        type: CreditType
+      - name: merkle_root
+        type: "bytes(32)"
+      - name: evidence_hash
+        type: "bytes(32)"
+      - name: recipient
+        type: "bytes(32)"
+        description: "Initial owner (typically the tenant)"
+
+  TransferRequest:
+    kind: struct
+    fields:
+      - name: credit_id
+        type: "bytes(32)"
+      - name: from_owner
+        type: "bytes(32)"
+      - name: to_owner
+        type: "bytes(32)"
+      - name: signature
+        type: "bytes(2420)"
+        description: "ML-DSA-87 transfer authorization"
+
+  RetirementNotice:
+    kind: struct
+    description: "Notification from Retirement Engine that a credit was retired"
+    fields:
+      - name: credit_id
+        type: "bytes(32)"
+      - name: retired_by
+        type: "bytes(32)"
+      - name: retirement_reason
+        type: "string(256)"
+      - name: retired_at
+        type: u64
+
+  RegistryStats:
+    kind: struct
+    fields:
+      - name: total_credits_issued
+        type: u64
+      - name: total_credits_retired
+        type: u64
+      - name: total_credits_active
+        type: u64
+      - name: total_tco2e_issued
+        type: f64
+      - name: total_tco2e_retired
+        type: f64
+      - name: serial_counter
+        type: u64
+      - name: tenants_with_credits
+        type: u8
+
+# =============================================================================
+# Circuit Interface
+# =============================================================================
+
+inputs:
+  - name: config
+    type: RegistryConfig
+
+  - name: mint_request
+    type: MintRequest
+    description: "From PoVCR Verifier — mint a new credit"
+
+  - name: mint_valid
+    type: bool
+
+  - name: transfer_request
+    type: TransferRequest
+    description: "Transfer credit ownership"
+
+  - name: transfer_valid
+    type: bool
+
+  - name: retirement_notice
+    type: RetirementNotice
+    description: "From Retirement Engine — mark credit retired"
+
+  - name: retirement_valid
+    type: bool
+
+outputs:
+  - name: credit_issued
+    type: CreditNFT
+    description: "Newly minted credit → sc.credits.issued"
+
+  - name: credit_issued_valid
+    type: bool
+
+  - name: credit_transferred
+    type: CreditNFT
+    description: "Transferred credit → sc.credits.transferred"
+
+  - name: credit_transferred_valid
+    type: bool
+
+  - name: credit_retired
+    type: CreditNFT
+    description: "Retired credit → sc.credits.retired"
+
+  - name: credit_retired_valid
+    type: bool
+
+  - name: stats
+    type: RegistryStats
+
+# =============================================================================
+# Annotations
+# =============================================================================
+
+annotations:
+  witness_tier: "registry"
+  deterministic: true
+  streamsight_emit: true
+  audit_trail: true
+  governance: "sc.governance"
+  esf_schemas: ["CarbonCredit", "CarbonMint"]
+  visibility_profile: "carbon-credit"
+
+# =============================================================================
+# StreamSight Integration
+# =============================================================================
+
+streamsight:
+  namespace: "sc.credits"
+
+  emit:
+    - event: "credit_issued"
+      topic: "lex://sc/credits/issued"
+      severity: info
+      fields: ["credit_id", "serial_number", "tenant_id", "project_id", "tonnes_co2e", "methodology_id"]
+
+    - event: "credit_transferred"
+      topic: "lex://sc/credits/transferred"
+      severity: info
+      fields: ["credit_id", "from_owner", "to_owner"]
+
+    - event: "credit_retired"
+      topic: "lex://sc/credits/retired"
+      severity: info
+      fields: ["credit_id", "serial_number", "tonnes_co2e", "retired_by", "retirement_reason"]
+
+    - event: "credit_cancelled"
+      topic: "lex://sc/credits/cancelled"
+      severity: warning
+      fields: ["credit_id", "reason"]
+
+    - event: "duplicate_attestation"
+      topic: "lex://sc/audit/events"
+      severity: warning
+      fields: ["attestation_id", "existing_credit_id"]
+
+    - event: "registry_stats"
+      topic: "lex://sc/credits/registry"
+      severity: info
+      rate_limit_hz: 0.0167
+      fields: ["total_credits_issued", "total_credits_retired", "total_tco2e_issued", "total_tco2e_retired"]
+
+# =============================================================================
+# Compute Graph
+# =============================================================================
+
+compute:
+  nodes:
+    # Mint path
+    - id: attestation_dedup
+      type: lookup
+      description: "Check attestation_id not already minted"
+      key_type: "bytes(32)"
+
+    - id: min_threshold_check
+      type: comparator
+      description: "Verify tCO2e >= min_mint_tco2e"
+      operation: "request.tco2e >= config.min_mint_tco2e"
+
+    - id: serial_generator
+      type: counter
+      description: "Global sequential serial number counter"
+      width: 64
+
+    - id: credit_id_hasher
+      type: crypto_hash
+      description: "credit_id = SHA3-256(attestation_id + serial)"
+      algorithm: SHA3-256
+
+    - id: nft_builder
+      type: transform
+      description: "Assemble CreditNFT from mint request + serial + credit_id"
+
+    - id: nft_mint
+      type: l2_operation
+      description: "Mint ERC-721 NFT on eStream L2"
+      operation: nft_mint
+
+    # Transfer path
+    - id: ownership_verifier
+      type: crypto_verify
+      description: "Verify transfer signature from current owner"
+      algorithm: ML-DSA-87
+
+    - id: credit_lookup
+      type: lookup
+      description: "Look up credit by ID"
+      key_type: "bytes(32)"
+
+    - id: status_check_transfer
+      type: comparator
+      description: "Credit must be Issued or Sold for transfer"
+      operation: "credit.status in [Issued, Sold]"
+
+    - id: ownership_updater
+      type: transform
+      description: "Update owner field and emit transfer event"
+
+    # Retirement path
+    - id: status_check_retire
+      type: comparator
+      description: "Credit must not already be Retired/Cancelled"
+      operation: "credit.status in [Issued, Listed, Sold]"
+
+    - id: retirement_updater
+      type: transform
+      description: "Set status=Retired, retired_at, retired_by, reason"
+
+    # Stats
+    - id: issued_counter
+      type: counter
+      width: 64
+    - id: retired_counter
+      type: counter
+      width: 64
+    - id: tco2e_accumulator
+      type: accumulator
+      width: 64
+
+    # Audit
+    - id: audit_log
+      type: append_log
+      description: "All credit lifecycle events"
+      retention_days: 3650
+
+  flows:
+    # Mint flow
+    - mint_request -> attestation_dedup.check
+    - attestation_dedup.miss -> min_threshold_check
+    - attestation_dedup.hit -> streamsight.duplicate_attestation
+    - min_threshold_check.pass -> serial_generator.next
+    - serial_generator -> credit_id_hasher
+    - credit_id_hasher -> nft_builder
+    - mint_request -> nft_builder
+    - nft_builder -> nft_mint
+    - nft_mint.success -> credit_issued
+    - nft_mint.success -> credit_issued_valid
+    - nft_mint.success -> issued_counter.increment
+    - nft_mint.success -> tco2e_accumulator.add
+    - nft_mint.success -> audit_log
+
+    # Transfer flow
+    - transfer_request -> credit_lookup
+    - credit_lookup.hit -> status_check_transfer
+    - status_check_transfer.pass -> ownership_verifier
+    - ownership_verifier.valid -> ownership_updater
+    - ownership_updater -> credit_transferred
+    - ownership_updater -> credit_transferred_valid
+    - ownership_updater -> audit_log
+
+    # Retirement flow
+    - retirement_notice -> credit_lookup
+    - credit_lookup.hit -> status_check_retire
+    - status_check_retire.pass -> retirement_updater
+    - retirement_updater -> credit_retired
+    - retirement_updater -> credit_retired_valid
+    - retirement_updater -> retired_counter.increment
+    - retirement_updater -> audit_log
+
+# =============================================================================
+# Test Vectors
+# =============================================================================
+
+tests:
+  - name: "Mint credit from verified attestation"
+    steps:
+      - setup:
+          config: { serial_prefix: "SC", min_mint_tco2e: 0.001 }
+      - input:
+          mint_request:
+            attestation_id: "0xATT001"
+            tenant_id: "thermogenzero"
+            project_id: "tz-wellpad-alpha-01"
+            tco2e: 0.260
+            methodology_id: "EPA-AP42-CH4-FLARE"
+            credit_type: Avoidance
+            recipient: "0xOWNER001"
+          mint_valid: true
+      - expect:
+          credit_issued_valid: true
+          credit_issued:
+            tenant_id: "thermogenzero"
+            status: Issued
+            serial_number: "SC-2026-tz-wellpad-alpha-01-000001"
+
+  - name: "Duplicate attestation rejected"
+    steps:
+      - setup: { config: {} }
+      # First mint succeeds
+      - input: { mint_request: { attestation_id: "0xATT001", tco2e: 0.5 }, mint_valid: true }
+      - expect: { credit_issued_valid: true }
+      # Second mint with same attestation fails
+      - input: { mint_request: { attestation_id: "0xATT001", tco2e: 0.5 }, mint_valid: true }
+      - expect: { credit_issued_valid: false }
+
+  - name: "Below minimum threshold not minted"
+    steps:
+      - setup: { config: { min_mint_tco2e: 0.001 } }
+      - input: { mint_request: { attestation_id: "0xATT002", tco2e: 0.0001 }, mint_valid: true }
+      - expect: { credit_issued_valid: false }

@@ -1,0 +1,913 @@
+# SynergyCarbon Forward Contract Engine — Marketplace SmartCircuit
+# Proprietary — SynergyCarbon
+
+escir: "0.8.0"
+name: sc_forward_contracts
+version: "1.0.0"
+license: "Proprietary"
+
+metadata:
+  circuit_id: sc.marketplace.forward_contracts.v1
+  name: "SynergyCarbon Forward Contract Engine"
+  description: |
+    Manages the full lifecycle of carbon credit forward contracts (carbon
+    PPAs). Buyers lock in a price for future credits over fixed terms or
+    project lifetimes. All interactions are lex topic publications —
+    propose, counter, accept, settle, terminate. Settlement is automated:
+    on each credit mint event, the engine checks active forwards and
+    auto-delivers credits to buyers at the contracted price via L2
+    escrow operations. Risk monitoring tracks delivery ratios, escrow
+    levels, and collateral coverage via StreamSight.
+  category: cloud
+
+  implementation:
+    software:
+      runtime: estream-kernel
+      language: rust
+      estimated_memory_mb: 256
+
+# =============================================================================
+# Type Definitions
+# =============================================================================
+
+types:
+  ContractConfig:
+    kind: struct
+    fields:
+      - name: max_contracts_per_buyer
+        type: u16
+        default: 50
+      - name: min_contract_value_usd
+        type: f64
+        default: 100.0
+      - name: max_term_months
+        type: u16
+        default: 120
+      - name: default_collateral_pct
+        type: f32
+        description: "Seller collateral as % of remaining contract value"
+        default: 10.0
+      - name: default_prepay_months
+        type: u8
+        description: "Buyer escrow prepay horizon (months)"
+        default: 3
+      - name: under_delivery_threshold_pct
+        type: f32
+        description: "Under-delivery ratio to trigger default (e.g., 0.70 = 30% shortfall)"
+        default: 70.0
+      - name: under_delivery_periods
+        type: u8
+        description: "Consecutive periods below threshold before default"
+        default: 2
+      - name: grace_period_days
+        type: u16
+        description: "Grace period before default after suspension"
+        default: 30
+      - name: platform_fee_pct
+        type: f32
+        description: "Platform fee on forward settlements"
+        default: 0.25
+      - name: escrow_low_threshold_months
+        type: f32
+        description: "Alert when escrow covers fewer than N months"
+        default: 1.0
+
+  ContractType:
+    kind: enum
+    variants:
+      - FixedTerm
+      - ProjectLifetime
+      - VolumeCommitted
+      - Callable
+
+  ContractStatus:
+    kind: enum
+    variants:
+      - Proposed
+      - Negotiation
+      - Rejected
+      - Active
+      - Delivering
+      - Suspended
+      - Defaulted
+      - Terminated
+      - Completed
+
+  # --- Contract data ---
+
+  ForwardContract:
+    kind: struct
+    description: "Full forward contract state"
+    fields:
+      # Identity
+      - name: contract_id
+        type: "bytes(32)"
+        description: "SHA3-256(buyer + seller + terms + created_at)"
+      - name: contract_type
+        type: ContractType
+
+      # Parties
+      - name: buyer
+        type: "bytes(32)"
+      - name: seller
+        type: "bytes(32)"
+
+      # Terms
+      - name: project_id
+        type: "string(64)"
+      - name: tenant_id
+        type: "string(64)"
+      - name: methodology_id
+        type: "string(64)"
+      - name: credit_type
+        type: "string(16)"
+        description: "Avoidance | Removal | Sequestration"
+      - name: vintage_year_min
+        type: u16
+
+      # Pricing
+      - name: price_per_tonne_usd
+        type: f64
+      - name: oracle_price_at_execution
+        type: f64
+      - name: total_value_usd
+        type: f64
+
+      # Volume
+      - name: total_committed_tco2e
+        type: f64
+      - name: delivered_tco2e
+        type: f64
+      - name: settlement_frequency
+        type: "string(16)"
+        description: "on_mint | monthly | quarterly"
+
+      # Term
+      - name: start_date
+        type: u64
+      - name: end_date
+        type: u64
+        description: "0 for project_lifetime"
+      - name: term_months
+        type: u16
+        description: "0 for volume_committed"
+
+      # Callable option
+      - name: call_premium_pct
+        type: f32
+      - name: call_penalty_pct
+        type: f32
+      - name: call_notice_days
+        type: u16
+
+      # Escrow / collateral
+      - name: buyer_escrow_usd
+        type: f64
+      - name: seller_collateral_usd
+        type: f64
+      - name: collateral_pct
+        type: f32
+
+      # State
+      - name: status
+        type: ContractStatus
+      - name: created_at
+        type: u64
+      - name: activated_at
+        type: u64
+      - name: last_settlement_at
+        type: u64
+      - name: completed_at
+        type: u64
+      - name: consecutive_under_delivery
+        type: u8
+
+      # Signatures
+      - name: buyer_signature
+        type: "bytes(2420)"
+      - name: seller_signature
+        type: "bytes(2420)"
+
+  # --- Interaction types (lex topic inputs) ---
+
+  ForwardProposal:
+    kind: struct
+    description: "Buyer publishes to sc.forwards.propose"
+    fields:
+      - name: proposal_id
+        type: "bytes(32)"
+      - name: buyer
+        type: "bytes(32)"
+      - name: contract_type
+        type: ContractType
+      - name: project_id
+        type: "string(64)"
+      - name: tenant_id
+        type: "string(64)"
+      - name: methodology_id
+        type: "string(64)"
+      - name: credit_type
+        type: "string(16)"
+      - name: vintage_year_min
+        type: u16
+      - name: requested_tco2e
+        type: f64
+      - name: max_price_per_tonne_usd
+        type: f64
+        description: "Maximum price buyer will accept"
+      - name: term_months
+        type: u16
+      - name: settlement_frequency
+        type: "string(16)"
+      - name: call_premium_pct
+        type: f32
+        description: "For callable contracts only"
+      - name: buyer_signature
+        type: "bytes(2420)"
+      - name: proposed_at
+        type: u64
+
+  CounterOffer:
+    kind: struct
+    description: "Seller publishes to sc.forwards.counter"
+    fields:
+      - name: proposal_id
+        type: "bytes(32)"
+      - name: seller
+        type: "bytes(32)"
+      - name: counter_price_per_tonne_usd
+        type: f64
+      - name: counter_tco2e
+        type: f64
+      - name: counter_term_months
+        type: u16
+      - name: counter_collateral_pct
+        type: f32
+      - name: seller_signature
+        type: "bytes(2420)"
+      - name: countered_at
+        type: u64
+
+  AcceptContract:
+    kind: struct
+    description: "Either party publishes to sc.forwards.accept"
+    fields:
+      - name: proposal_id
+        type: "bytes(32)"
+      - name: acceptor
+        type: "bytes(32)"
+      - name: accepted_terms_hash
+        type: "bytes(32)"
+        description: "SHA3-256 of the final agreed terms"
+      - name: acceptor_signature
+        type: "bytes(2420)"
+      - name: accepted_at
+        type: u64
+
+  TerminateRequest:
+    kind: struct
+    description: "Either party publishes to sc.forwards.terminate"
+    fields:
+      - name: contract_id
+        type: "bytes(32)"
+      - name: requestor
+        type: "bytes(32)"
+      - name: reason
+        type: "string(256)"
+      - name: requestor_signature
+        type: "bytes(2420)"
+      - name: requested_at
+        type: u64
+
+  # --- Mint event (triggers settlement) ---
+
+  CreditMintEvent:
+    kind: struct
+    description: "From sc.credits.issued — triggers forward settlement check"
+    fields:
+      - name: credit_id
+        type: "bytes(32)"
+      - name: project_id
+        type: "string(64)"
+      - name: tenant_id
+        type: "string(64)"
+      - name: tco2e
+        type: f32
+      - name: methodology_id
+        type: "string(64)"
+      - name: vintage_year
+        type: u16
+      - name: minted_at
+        type: u64
+
+  # --- Settlement ---
+
+  SettlementRecord:
+    kind: struct
+    description: "Record of a forward contract settlement"
+    fields:
+      - name: settlement_id
+        type: "bytes(32)"
+      - name: contract_id
+        type: "bytes(32)"
+      - name: credit_ids
+        type: "list(bytes(32))"
+      - name: delivered_tco2e
+        type: f32
+      - name: price_per_tonne_usd
+        type: f64
+      - name: total_payment_usd
+        type: f64
+      - name: platform_fee_usd
+        type: f64
+      - name: cumulative_delivered_tco2e
+        type: f64
+      - name: remaining_tco2e
+        type: f64
+      - name: settled_at
+        type: u64
+
+  # --- Transfer request to Credit Registry ---
+
+  TransferRequest:
+    kind: struct
+    description: "→ Credit Registry to transfer ownership on settlement"
+    fields:
+      - name: credit_id
+        type: "bytes(32)"
+      - name: from_owner
+        type: "bytes(32)"
+      - name: to_owner
+        type: "bytes(32)"
+      - name: signature
+        type: "bytes(2420)"
+
+  # --- Risk ---
+
+  ContractRiskScore:
+    kind: struct
+    description: "Per-contract delivery risk assessment"
+    fields:
+      - name: contract_id
+        type: "bytes(32)"
+      - name: risk_score
+        type: u8
+        description: "0-100"
+      - name: delivery_ratio
+        type: f32
+      - name: forecast_delivery_ratio
+        type: f32
+      - name: escrow_months_remaining
+        type: f32
+      - name: collateral_coverage_pct
+        type: f32
+      - name: site_health_score
+        type: u8
+      - name: days_since_last_settlement
+        type: u16
+      - name: updated_at
+        type: u64
+
+  PortfolioRisk:
+    kind: struct
+    fields:
+      - name: total_contracts
+        type: u32
+      - name: total_committed_tco2e
+        type: f64
+      - name: total_delivered_tco2e
+        type: f64
+      - name: total_value_usd
+        type: f64
+      - name: weighted_avg_risk_score
+        type: f32
+      - name: contracts_at_risk
+        type: u32
+      - name: contracts_defaulted
+        type: u32
+      - name: total_escrow_locked_usd
+        type: f64
+      - name: total_collateral_locked_usd
+        type: f64
+      - name: updated_at
+        type: u64
+
+  EngineStats:
+    kind: struct
+    fields:
+      - name: total_contracts_created
+        type: u64
+      - name: active_contracts
+        type: u32
+      - name: total_settled_tco2e
+        type: f64
+      - name: total_settled_usd
+        type: f64
+      - name: total_fees_collected_usd
+        type: f64
+
+# =============================================================================
+# Circuit Interface
+# =============================================================================
+
+inputs:
+  - name: config
+    type: ContractConfig
+
+  # --- Lex topic inputs (user actions) ---
+
+  - name: proposal
+    type: ForwardProposal
+    description: "← sc.forwards.propose (buyer)"
+  - name: proposal_valid
+    type: bool
+
+  - name: counter_offer
+    type: CounterOffer
+    description: "← sc.forwards.counter (seller)"
+  - name: counter_valid
+    type: bool
+
+  - name: accept
+    type: AcceptContract
+    description: "← sc.forwards.accept (either party)"
+  - name: accept_valid
+    type: bool
+
+  - name: terminate_request
+    type: TerminateRequest
+    description: "← sc.forwards.terminate (either party)"
+  - name: terminate_valid
+    type: bool
+
+  # --- SmartCircuit-to-SmartCircuit inputs ---
+
+  - name: mint_event
+    type: CreditMintEvent
+    description: "← sc.credits.issued (triggers settlement)"
+  - name: mint_valid
+    type: bool
+
+  - name: forward_curve
+    type: ForwardCurve
+    description: "← sc.ai.forecasts.price.forward_curve (reference pricing)"
+  - name: curve_valid
+    type: bool
+
+  - name: yield_forecast
+    type: YieldForecastInput
+    description: "← sc.ai.forecasts.yield (for risk assessment)"
+  - name: forecast_valid
+    type: bool
+
+outputs:
+  # Contract lifecycle
+  - name: contract_state
+    type: ForwardContract
+    description: "→ sc.forwards.contracts.active (or .proposed, .completed, .defaulted)"
+  - name: state_valid
+    type: bool
+
+  # Settlement
+  - name: settlement
+    type: SettlementRecord
+    description: "→ sc.forwards.settlements.completed"
+  - name: settlement_valid
+    type: bool
+
+  # Transfer to Credit Registry
+  - name: transfer_request
+    type: TransferRequest
+    description: "→ Credit Registry to transfer ownership"
+  - name: transfer_valid
+    type: bool
+
+  # Risk
+  - name: contract_risk
+    type: ContractRiskScore
+    description: "→ sc.forwards.risk.delivery"
+  - name: risk_valid
+    type: bool
+
+  - name: portfolio_risk
+    type: PortfolioRisk
+    description: "→ sc.forwards.risk.portfolio"
+  - name: portfolio_risk_valid
+    type: bool
+
+  - name: stats
+    type: EngineStats
+
+# =============================================================================
+# Annotations
+# =============================================================================
+
+annotations:
+  deterministic: true
+  streamsight_emit: true
+  audit_trail: true
+  governance: "sc.governance"
+
+# =============================================================================
+# StreamSight Integration
+# =============================================================================
+
+streamsight:
+  namespace: "sc.forwards"
+
+  emit:
+    - event: "contract_proposed"
+      topic: "lex://sc/forwards/contracts/proposed"
+      severity: info
+      fields: ["contract_id", "buyer", "contract_type", "total_committed_tco2e", "price_per_tonne_usd"]
+
+    - event: "contract_activated"
+      topic: "lex://sc/forwards/contracts/active"
+      severity: info
+      fields: ["contract_id", "buyer", "seller", "total_committed_tco2e", "price_per_tonne_usd", "term_months"]
+
+    - event: "contract_completed"
+      topic: "lex://sc/forwards/contracts/completed"
+      severity: info
+      fields: ["contract_id", "total_delivered_tco2e", "total_value_usd"]
+
+    - event: "settlement_completed"
+      topic: "lex://sc/forwards/settlements/completed"
+      severity: info
+      fields: ["settlement_id", "contract_id", "delivered_tco2e", "total_payment_usd", "remaining_tco2e"]
+
+    - event: "delivery_warning"
+      topic: "lex://sc/forwards/risk/delivery_warning"
+      severity: warning
+      fields: ["contract_id", "risk_score", "delivery_ratio", "forecast_delivery_ratio"]
+
+    - event: "default_notice"
+      topic: "lex://sc/forwards/risk/default_notice"
+      severity: critical
+      fields: ["contract_id", "delivery_ratio", "consecutive_under_delivery"]
+
+    - event: "escrow_low"
+      topic: "lex://sc/forwards/risk/escrow_low"
+      severity: warning
+      fields: ["contract_id", "buyer", "escrow_months_remaining"]
+
+    - event: "collateral_call"
+      topic: "lex://sc/forwards/risk/collateral_call"
+      severity: critical
+      fields: ["contract_id", "seller", "collateral_coverage_pct", "required_pct"]
+
+    - event: "contract_terminated"
+      topic: "lex://sc/forwards/contracts/active"
+      severity: info
+      fields: ["contract_id", "reason", "requestor"]
+
+    - event: "portfolio_risk_update"
+      topic: "lex://sc/forwards/risk/portfolio"
+      severity: info
+      rate_limit_hz: 0.0167
+      fields: ["total_contracts", "weighted_avg_risk_score", "contracts_at_risk"]
+
+    - event: "engine_stats"
+      topic: "lex://sc/forwards/contracts/active"
+      severity: info
+      rate_limit_hz: 0.000278
+      fields: ["active_contracts", "total_settled_tco2e", "total_fees_collected_usd"]
+
+# =============================================================================
+# Compute Graph
+# =============================================================================
+
+compute:
+  nodes:
+    # --- Contract lifecycle ---
+
+    - id: proposal_validator
+      type: transform
+      description: "Validate proposal: buyer auth, limits, project exists, price within oracle range"
+
+    - id: signature_verifier
+      type: crypto_verify
+      description: "Verify ML-DSA-87 signatures on proposals/counters/accepts"
+      algorithm: ML-DSA-87
+
+    - id: contract_store
+      type: map
+      description: "Active contract state indexed by contract_id"
+      key_type: "bytes(32)"
+      value_type: ForwardContract
+      capacity: 10000
+
+    - id: contract_id_hasher
+      type: crypto_hash
+      description: "contract_id = SHA3-256(buyer + seller + terms + created_at)"
+      algorithm: SHA3-256
+
+    - id: terms_hasher
+      type: crypto_hash
+      description: "Hash of agreed terms for acceptance verification"
+      algorithm: SHA3-256
+
+    - id: negotiation_handler
+      type: transform
+      description: "Handle counter-offers: update proposed terms, re-validate"
+
+    - id: activation_handler
+      type: transform
+      description: "On accept: lock escrow, lock collateral, transition to Active"
+
+    # --- Escrow / Collateral ---
+
+    - id: buyer_escrow_lock
+      type: l2_operation
+      description: "Lock buyer prepay into eStream payment channel"
+      operation: escrow_lock
+
+    - id: seller_collateral_lock
+      type: l2_operation
+      description: "Lock seller collateral deposit"
+      operation: escrow_lock
+
+    - id: settlement_payment
+      type: l2_operation
+      description: "Debit buyer escrow, credit seller (minus fee)"
+      operation: escrow_release
+
+    - id: collateral_return
+      type: l2_operation
+      description: "Return seller collateral on completion"
+      operation: escrow_release
+
+    - id: collateral_forfeit
+      type: l2_operation
+      description: "Forfeit portion of seller collateral on default"
+      operation: escrow_release
+
+    - id: escrow_return
+      type: l2_operation
+      description: "Return unused buyer escrow on completion/termination"
+      operation: escrow_release
+
+    # --- Settlement engine ---
+
+    - id: forward_matcher
+      type: filter
+      description: "On mint event: find active contracts for this (project, tenant, methodology)"
+
+    - id: priority_sorter
+      type: sort
+      description: "Sort matching contracts: oldest first, then highest price"
+      sort_key: "activated_at"
+      order: ascending
+
+    - id: credit_allocator
+      type: transform
+      description: "Allocate minted credits to contracts (up to remaining commitment)"
+
+    - id: settlement_builder
+      type: transform
+      description: "Build settlement record and transfer request"
+
+    - id: fee_calculator
+      type: transform
+      description: "Platform fee = delivered_tco2e × price × config.platform_fee_pct / 100"
+
+    - id: delivery_tracker
+      type: transform
+      description: "Update delivered_tco2e, check for completion"
+
+    - id: completion_checker
+      type: comparator
+      description: "Check if delivered >= committed or end_date passed"
+      operation: |
+        if contract.delivered_tco2e >= contract.total_committed_tco2e:
+          transition(Completed)
+        elif now() >= contract.end_date AND contract.end_date > 0:
+          transition(Completed)
+
+    # --- Under-delivery detection ---
+
+    - id: pro_rata_calculator
+      type: transform
+      description: "Calculate expected delivery to date"
+      operation: |
+        elapsed_months = (now - start_date) / (30 * 86400)
+        expected = total_committed_tco2e * (elapsed_months / term_months)
+        ratio = delivered_tco2e / expected
+
+    - id: under_delivery_detector
+      type: comparator
+      description: "Detect sustained under-delivery"
+      operation: |
+        if ratio < config.under_delivery_threshold_pct / 100.0:
+          consecutive_under_delivery += 1
+        else:
+          consecutive_under_delivery = 0
+        if consecutive_under_delivery >= config.under_delivery_periods:
+          transition(Defaulted)
+
+    # --- Termination ---
+
+    - id: termination_handler
+      type: transform
+      description: "Handle termination: callable penalty, collateral settlement, escrow return"
+
+    - id: callable_penalty_calculator
+      type: transform
+      description: "For callable contracts: penalty = remaining_value × call_penalty_pct"
+
+    # --- Risk monitoring ---
+
+    - id: risk_scorer
+      type: transform
+      description: "Compute per-contract risk score (0-100)"
+      operation: |
+        risk = 0.25 * (1 - delivery_ratio)
+             + 0.20 * (1 - forecast_ratio)
+             + 0.15 * max(0, 1 - escrow_months / 3)
+             + 0.15 * max(0, 1 - collateral / required)
+             + 0.15 * (1 - site_health / 100)
+             + 0.10 * min(1, days_no_settlement / 30)
+        risk_score = clamp(risk * 100, 0, 100)
+
+    - id: portfolio_aggregator
+      type: aggregate
+      description: "Aggregate risk across all active contracts"
+
+    - id: escrow_monitor
+      type: comparator
+      description: "Alert when escrow covers < N months"
+      operation: |
+        monthly_cost = (total_committed / term_months) * price
+        months_remaining = escrow_balance / monthly_cost
+        if months_remaining < config.escrow_low_threshold_months:
+          emit escrow_low alert
+
+    - id: collateral_monitor
+      type: comparator
+      description: "Alert when collateral below required minimum"
+      operation: |
+        remaining_value = (total_committed - delivered) * price
+        required_collateral = remaining_value * config.default_collateral_pct / 100
+        if collateral < required_collateral:
+          emit collateral_call
+
+    # --- Audit ---
+
+    - id: audit_log
+      type: append_log
+      description: "All contract lifecycle and settlement events"
+      retention_days: 3650
+
+  flows:
+    # --- Proposal flow ---
+    - proposal -> signature_verifier
+    - signature_verifier.valid -> proposal_validator
+    - proposal_validator.valid -> contract_id_hasher
+    - contract_id_hasher -> contract_store.insert { status: Proposed }
+    - contract_store.inserted -> contract_state
+    - contract_store.inserted -> state_valid
+    - contract_store.inserted -> audit_log
+
+    # --- Counter-offer flow ---
+    - counter_offer -> signature_verifier
+    - signature_verifier.valid -> negotiation_handler
+    - negotiation_handler -> contract_store.update { status: Negotiation }
+    - contract_store.updated -> contract_state
+    - contract_store.updated -> audit_log
+
+    # --- Accept flow ---
+    - accept -> signature_verifier
+    - accept -> terms_hasher
+    - signature_verifier.valid -> activation_handler
+    - terms_hasher -> activation_handler
+    - activation_handler -> buyer_escrow_lock
+    - activation_handler -> seller_collateral_lock
+    - buyer_escrow_lock.success & seller_collateral_lock.success -> contract_store.update { status: Active }
+    - contract_store.updated -> contract_state
+    - contract_store.updated -> state_valid
+    - contract_store.updated -> audit_log
+
+    # --- Settlement flow (triggered by mint events) ---
+    - mint_event -> forward_matcher
+    - forward_matcher.matches -> priority_sorter
+    - priority_sorter -> credit_allocator
+    - credit_allocator -> settlement_builder
+    - settlement_builder -> fee_calculator
+    - settlement_builder -> transfer_request
+    - settlement_builder -> transfer_valid
+    - fee_calculator -> settlement_payment
+    - settlement_payment.success -> delivery_tracker
+    - delivery_tracker -> contract_store.update { status: Delivering }
+    - delivery_tracker -> settlement
+    - delivery_tracker -> settlement_valid
+    - delivery_tracker -> completion_checker
+    - completion_checker.completed -> collateral_return
+    - completion_checker.completed -> escrow_return
+    - completion_checker.completed -> contract_store.update { status: Completed }
+    - delivery_tracker -> audit_log
+
+    # --- Under-delivery detection ---
+    - delivery_tracker -> pro_rata_calculator
+    - pro_rata_calculator -> under_delivery_detector
+    - under_delivery_detector.defaulted -> contract_store.update { status: Defaulted }
+    - under_delivery_detector.defaulted -> collateral_forfeit
+    - under_delivery_detector.defaulted -> audit_log
+
+    # --- Termination flow ---
+    - terminate_request -> signature_verifier
+    - signature_verifier.valid -> termination_handler
+    - termination_handler -> callable_penalty_calculator
+    - callable_penalty_calculator -> settlement_payment
+    - termination_handler -> collateral_return
+    - termination_handler -> escrow_return
+    - termination_handler -> contract_store.update { status: Terminated }
+    - termination_handler -> audit_log
+
+    # --- Risk monitoring (continuous) ---
+    - contract_store.any_update -> risk_scorer
+    - yield_forecast -> risk_scorer
+    - risk_scorer -> contract_risk
+    - risk_scorer -> risk_valid
+    - contract_store.any_update -> portfolio_aggregator
+    - portfolio_aggregator -> portfolio_risk
+    - portfolio_aggregator -> portfolio_risk_valid
+    - contract_store.any_update -> escrow_monitor
+    - contract_store.any_update -> collateral_monitor
+
+# =============================================================================
+# Test Vectors
+# =============================================================================
+
+tests:
+  - name: "Full lifecycle: propose → accept → settle → complete"
+    steps:
+      - setup:
+          config: { default_collateral_pct: 10.0, default_prepay_months: 3, platform_fee_pct: 0.25 }
+      # Buyer proposes
+      - input:
+          proposal:
+            proposal_id: "0xPROP001"
+            buyer: "0xBUYER001"
+            contract_type: FixedTerm
+            project_id: "tz-wellpad-alpha-01"
+            tenant_id: "thermogenzero"
+            methodology_id: "EPA-AP42-CH4-FLARE"
+            requested_tco2e: 10.0
+            max_price_per_tonne_usd: 30.0
+            term_months: 12
+            settlement_frequency: "on_mint"
+          proposal_valid: true
+      - expect:
+          state_valid: true
+          contract_state: { status: Proposed }
+
+      # Seller accepts
+      - input:
+          accept:
+            proposal_id: "0xPROP001"
+            acceptor: "0xSELLER001"
+            acceptor_signature: "valid_ml_dsa_87"
+          accept_valid: true
+      - expect:
+          state_valid: true
+          contract_state: { status: Active }
+
+      # Credit minted → auto-settlement
+      - input:
+          mint_event:
+            credit_id: "0xCRED001"
+            project_id: "tz-wellpad-alpha-01"
+            tenant_id: "thermogenzero"
+            tco2e: 0.26
+            methodology_id: "EPA-AP42-CH4-FLARE"
+          mint_valid: true
+      - expect:
+          settlement_valid: true
+          transfer_valid: true
+          settlement:
+            delivered_tco2e: 0.26
+
+  - name: "Under-delivery triggers default"
+    steps:
+      - setup:
+          config: { under_delivery_threshold_pct: 70.0, under_delivery_periods: 2 }
+      # Contract active with 12-month term, 10 tCO2e committed
+      # After 6 months, only 2.0 tCO2e delivered (expected ~5.0)
+      # delivery_ratio = 2.0 / 5.0 = 0.40 < 0.70 threshold
+      # After 2 consecutive periods below threshold → Default
+      - expect:
+          contract_state: { status: Defaulted }
+
+  - name: "Callable contract early termination"
+    steps:
+      - setup:
+          config: {}
+      - input:
+          terminate_request:
+            contract_id: "0xCONTRACT_CALLABLE"
+            requestor: "0xBUYER001"
+            reason: "Demand reduction — exercising call option"
+          terminate_valid: true
+      - expect:
+          state_valid: true
+          contract_state: { status: Terminated }

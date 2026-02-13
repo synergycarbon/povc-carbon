@@ -1,0 +1,386 @@
+# SynergyCarbon PoVC-Carbon Platform — Top-Level Composition
+# Proprietary — SynergyCarbon
+
+escir: "0.8.0"
+name: sc_povc_carbon_platform
+version: "1.0.0"
+license: "Proprietary"
+
+metadata:
+  circuit_id: sc.platform.povc_carbon.v1
+  name: "SynergyCarbon PoVC-Carbon Platform"
+  description: |
+    Top-level ESCIR platform composition for SynergyCarbon. Registers
+    all core and marketplace SmartCircuits, defines connections between
+    them, and declares eStream platform dependencies (esf-carbon schemas,
+    carbon-credit visibility profile, PQ crypto primitives).
+  category: platform
+  platform: "eStream v0.8.1"
+  first_customer: "ThermogenZero (thermoelectric microgrid)"
+  carbon_platform: "SynergyCarbon povc-carbon"
+
+# =============================================================================
+# Component Registry
+# =============================================================================
+
+components:
+
+  # --- Core SmartCircuits ---
+
+  - id: povcr_verifier
+    circuit: sc.core.povcr_verifier.v1
+    source: circuits/core/povcr_verifier.escir.yaml
+    description: "PoVCR witness verification and attestation production"
+    tier: cloud
+    instances: 1
+
+  - id: credit_registry
+    circuit: sc.core.credit_registry.v1
+    source: circuits/core/credit_registry.escir.yaml
+    description: "Carbon credit NFT issuance, tracking, and lifecycle"
+    tier: cloud
+    instances: 1
+
+  - id: retirement_engine
+    circuit: sc.core.retirement_engine.v1
+    source: circuits/core/retirement_engine.escir.yaml
+    description: "Programmatic credit retirement with certificate generation"
+    tier: cloud
+    instances: 1
+
+  - id: audit_trail
+    circuit: sc.core.audit_trail.v1
+    source: circuits/core/audit_trail.escir.yaml
+    description: "Immutable audit log with regulatory export"
+    tier: cloud
+    instances: 1
+
+  # --- Marketplace SmartCircuits ---
+
+  - id: marketplace_orderbook
+    circuit: sc.marketplace.orderbook.v1
+    source: circuits/marketplace/orderbook.escir.yaml
+    description: "Credit listing, discovery, and trading"
+    tier: cloud
+    instances: 1
+
+  - id: impact_widget
+    circuit: sc.marketplace.impact_widget.v1
+    source: circuits/marketplace/impact_widget.escir.yaml
+    description: "Embeddable real-time impact visualization"
+    tier: cloud
+    instances: 1
+
+  - id: forward_contracts
+    circuit: sc.marketplace.forward_contracts.v1
+    source: circuits/marketplace/forward_contracts.escir.yaml
+    description: "Forward contract engine — carbon PPAs with auto-settlement"
+    tier: cloud
+    instances: 1
+
+  # --- AI SmartCircuits ---
+
+  - id: yield_forecaster
+    circuit: sc.ai.yield_forecaster.v1
+    source: circuits/ai/yield_forecaster.escir.yaml
+    description: "SLM-based carbon yield forecaster (Mamba/S4 SSM)"
+    tier: cloud
+    instances: 1
+
+  - id: forward_pricing_oracle
+    circuit: sc.ai.forward_pricing_oracle.v1
+    source: circuits/ai/forward_pricing_oracle.escir.yaml
+    description: "Forward pricing oracle — AI + cost-of-carry → forward curve"
+    tier: cloud
+    instances: 1
+
+  # --- External Dependencies ---
+
+  - id: tz_carbon_minter
+    circuit: tz.cloud.carbon_minter.v1
+    source: external
+    description: "ThermogenZero cloud carbon minter (witness source)"
+    tier: cloud
+    external: true
+    repo: thermogenzero/microgrid
+
+  - id: esf_carbon_schemas
+    circuit: estream.marketplace.esf_carbon.v1
+    source: external
+    description: "esf-carbon schema pack (CarbonCredit, CarbonAttestation, CarbonMint)"
+    tier: platform
+    external: true
+    repo: toddrooke/estream-io
+
+  - id: carbon_credit_visibility
+    circuit: estream.visibility.carbon_credit.v1
+    source: external
+    description: "carbon-credit visibility profile (tiered access)"
+    tier: platform
+    external: true
+    repo: toddrooke/estream-io
+
+# =============================================================================
+# Platform Connections
+# =============================================================================
+
+connections:
+
+  # --- Witness ingestion from tenant minters ---
+
+  - from: tz_carbon_minter.mint_request
+    to: povcr_verifier.witness_submission
+    description: "TZ carbon minter submits witness for SynergyCarbon verification"
+    protocol: lex
+    topic: "lex://sc/witnesses/submission"
+
+  # --- PoVCR Verifier → Credit Registry ---
+
+  - from: povcr_verifier.attestation
+    to: credit_registry.mint_request
+    description: "Verified attestation triggers credit minting"
+    protocol: lex
+    topic: "lex://sc/attestations/verified"
+
+  # --- Retirement Engine → Credit Registry ---
+
+  - from: retirement_engine.registry_notice
+    to: credit_registry.retirement_notice
+    description: "Retirement engine notifies registry to update credit status"
+    protocol: lex
+    topic: "lex://sc/retirements/completed"
+
+  # --- Marketplace → Credit Registry ---
+
+  - from: marketplace_orderbook.transfer_request
+    to: credit_registry.transfer_request
+    description: "Marketplace trade triggers ownership transfer"
+    protocol: lex
+    topic: "lex://sc/marketplace/listings/completed"
+
+  # --- Retirement Engine → Impact Widget ---
+
+  - from: retirement_engine.retirement_result
+    to: impact_widget.retirement_event
+    description: "Completed retirements update impact widget"
+    protocol: lex
+    topic: "lex://sc/retirements/completed"
+
+  # --- All circuits → Audit Trail ---
+
+  - from: povcr_verifier.attestation
+    to: audit_trail.event_in
+    description: "Verified attestations logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: povcr_verifier.rejection
+    to: audit_trail.event_in
+    description: "Rejected witnesses logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: credit_registry.credit_issued
+    to: audit_trail.event_in
+    description: "Credit issuance logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: credit_registry.credit_transferred
+    to: audit_trail.event_in
+    description: "Credit transfers logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: credit_registry.credit_retired
+    to: audit_trail.event_in
+    description: "Credit retirements logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: retirement_engine.retirement_result
+    to: audit_trail.event_in
+    description: "Retirement events logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: marketplace_orderbook.trade_completed
+    to: audit_trail.event_in
+    description: "Marketplace trades logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  # --- AI Forecasting connections ---
+
+  - from: credit_registry.credit_issued
+    to: yield_forecaster.mint_event
+    description: "Credit minting events feed AI corpus"
+    protocol: lex
+    topic: "lex://sc/credits/issued"
+
+  - from: marketplace_orderbook.market_data
+    to: yield_forecaster.market_snapshot
+    description: "Market data feeds AI corpus"
+    protocol: lex
+    topic: "lex://sc/marketplace/market_data"
+
+  - from: povcr_verifier.attestation
+    to: yield_forecaster.attestation_event
+    description: "Attestation rate feeds AI corpus"
+    protocol: lex
+    topic: "lex://sc/attestations/verified"
+
+  - from: forward_contracts.contract_state
+    to: yield_forecaster.forward_commitment
+    description: "Active forward commitments feed AI corpus"
+    protocol: lex
+    topic: "lex://sc/forwards/contracts/active"
+
+  # --- Forward Pricing Oracle connections ---
+
+  - from: yield_forecaster.yield_forecast
+    to: forward_pricing_oracle.yield_forecast
+    description: "AI yield forecasts feed pricing oracle"
+    protocol: lex
+    topic: "lex://sc/ai/forecasts/yield"
+
+  - from: marketplace_orderbook.market_data
+    to: forward_pricing_oracle.spot_price
+    description: "Spot prices feed pricing oracle"
+    protocol: lex
+    topic: "lex://sc/marketplace/market_data"
+
+  # --- Forward Contract Engine connections ---
+
+  - from: credit_registry.credit_issued
+    to: forward_contracts.mint_event
+    description: "Credit minting triggers forward settlement check"
+    protocol: lex
+    topic: "lex://sc/credits/issued"
+
+  - from: forward_pricing_oracle.forward_curve
+    to: forward_contracts.forward_curve
+    description: "Forward curve provides reference pricing for contracts"
+    protocol: lex
+    topic: "lex://sc/ai/forecasts/price/forward_curve"
+
+  - from: yield_forecaster.yield_forecast
+    to: forward_contracts.yield_forecast
+    description: "Yield forecasts feed contract risk assessment"
+    protocol: lex
+    topic: "lex://sc/ai/forecasts/yield"
+
+  - from: forward_contracts.transfer_request
+    to: credit_registry.transfer_request
+    description: "Forward settlement transfers credit ownership"
+    protocol: lex
+    topic: "lex://sc/forwards/settlements/completed"
+
+  - from: forward_contracts.settlement
+    to: impact_widget.retirement_event
+    description: "Forward deliveries update impact widget"
+    protocol: lex
+    topic: "lex://sc/forwards/settlements/completed"
+
+  # --- Forward Contract → Audit Trail ---
+
+  - from: forward_contracts.contract_state
+    to: audit_trail.event_in
+    description: "Contract lifecycle events logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: forward_contracts.settlement
+    to: audit_trail.event_in
+    description: "Settlement events logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+  - from: yield_forecaster.deviation_alert
+    to: audit_trail.event_in
+    description: "Yield deviation alerts logged"
+    protocol: lex
+    topic: "lex://sc/audit/events"
+
+# =============================================================================
+# Platform Dependencies
+# =============================================================================
+
+platform_dependencies:
+  estream_version: "0.8.1"
+
+  primitives:
+    - id: nft_mint
+      description: "L2 NFT minting for credit tokens"
+      used_by: [credit_registry]
+
+    - id: payment_channel
+      description: "Escrow-based payment for marketplace and forward contracts"
+      used_by: [marketplace_orderbook, forward_contracts]
+
+    - id: ml_dsa_87
+      description: "Post-quantum signatures for witnesses, audit events, and contracts"
+      used_by: [povcr_verifier, audit_trail, forward_contracts]
+
+    - id: vrf
+      description: "Verifiable Random Function for witness selection"
+      used_by: [povcr_verifier]
+
+    - id: sha3_256
+      description: "Hashing for Merkle roots, credit IDs, evidence, contract IDs"
+      used_by: [povcr_verifier, credit_registry, audit_trail, forward_contracts]
+
+    - id: bulletproofs
+      description: "ZK range proofs for quantity verification"
+      used_by: [credit_registry]
+
+    - id: groth16
+      description: "ZK set membership proofs for methodology verification"
+      used_by: [credit_registry]
+
+    - id: spark_auth
+      description: "PQ-authenticated identity"
+      used_by: [credit_registry, retirement_engine, marketplace_orderbook, forward_contracts]
+
+    - id: streamsight
+      description: "Observability and telemetry"
+      used_by: [povcr_verifier, credit_registry, retirement_engine, audit_trail, marketplace_orderbook, impact_widget, yield_forecaster, forward_pricing_oracle, forward_contracts]
+
+    - id: estream_slm
+      description: "StreamLM SLM inference engine for AI forecasting"
+      used_by: [yield_forecaster]
+
+    - id: escir_ml_extensions
+      description: "Tensor types, SSM primitives, ML annotations"
+      used_by: [yield_forecaster]
+
+  schemas:
+    - id: esf_carbon
+      description: "CarbonCredit, CarbonAttestation, CarbonMint ESF schemas"
+      source: estream-io/specs/marketplace/ESTREAM_MARKETPLACE_SPEC.md
+
+  visibility_profiles:
+    - id: carbon_credit
+      description: "Tiered visibility: public → buyer → auditor → owner"
+      source: estream-io/configs/visibility/profiles/carbon-credit.yaml
+
+# =============================================================================
+# Resource Budget (Cloud)
+# =============================================================================
+
+resources:
+  cloud:
+    estimated_memory_mb: 2112
+    estimated_vcpu: 6.5
+    estimated_storage_gb: 750
+    estimated_bandwidth_mbps: 150
+    components:
+      - { id: povcr_verifier, memory_mb: 256, vcpu: 1 }
+      - { id: credit_registry, memory_mb: 512, vcpu: 1 }
+      - { id: retirement_engine, memory_mb: 128, vcpu: 0.5 }
+      - { id: audit_trail, memory_mb: 64, vcpu: 0.25 }
+      - { id: marketplace_orderbook, memory_mb: 256, vcpu: 1 }
+      - { id: impact_widget, memory_mb: 64, vcpu: 0.25 }
+      - { id: yield_forecaster, memory_mb: 512, vcpu: 1 }
+      - { id: forward_pricing_oracle, memory_mb: 64, vcpu: 0.25 }
+      - { id: forward_contracts, memory_mb: 256, vcpu: 1.25 }
