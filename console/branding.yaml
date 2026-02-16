@@ -1,0 +1,55 @@
+# SynergyCarbon Console Kit Branding
+# See: @estream/sdk-browser/widgets — EStreamThemeProvider
+
+brand:
+  name: "SynergyCarbon"
+  tagline: "Proof-of-Verified-Carbon"
+  legal_entity: "SynergyCarbon Inc."
+
+logo:
+  primary: "/brand/synergy-carbon/logo/synergy-carbon-logo.svg"
+  icon: "/brand/synergy-carbon/logo/synergy-carbon-icon.svg"
+  wordmark: "/brand/synergy-carbon/logo/synergy-carbon-wordmark.svg"
+
+palette:
+  primary: "#16a34a"        # Green-600
+  primary_light: "#22c55e"  # Green-500
+  primary_dark: "#15803d"   # Green-700
+  secondary: "#0f766e"      # Teal-700
+  accent: "#eab308"         # Amber-500 (carbon gold)
+  surface: "#f0fdf4"        # Green-50
+  surface_dark: "#0a1f12"   # Dark green surface
+  text: "#1a2e1a"           # Dark green text
+  text_muted: "#6b7b6b"
+  error: "#dc2626"
+  warning: "#f59e0b"
+  success: "#16a34a"
+
+spark:
+  hue: 145                  # Green spectrum for visual challenge
+  saturation: 70
+  challenge_background: "#0a1f12"
+  challenge_accent: "#22c55e"
+
+tokens:
+  --es-color-primary: "#16a34a"
+  --es-color-primary-light: "#22c55e"
+  --es-color-primary-dark: "#15803d"
+  --es-color-secondary: "#0f766e"
+  --es-color-accent: "#eab308"
+  --es-color-surface: "#f0fdf4"
+  --es-color-surface-dark: "#0a1f12"
+  --es-color-text: "#1a2e1a"
+  --es-color-text-muted: "#6b7b6b"
+  --es-color-error: "#dc2626"
+  --es-color-warning: "#f59e0b"
+  --es-color-success: "#16a34a"
+  --es-font-family: "'Inter', system-ui, sans-serif"
+  --es-border-radius: "8px"
+  --es-shadow: "0 1px 3px rgba(0,0,0,0.12)"
+
+dark_mode:
+  --es-color-surface: "#0a1f12"
+  --es-color-surface-dark: "#061209"
+  --es-color-text: "#e5f5e5"
+  --es-color-text-muted: "#8fa88f"
