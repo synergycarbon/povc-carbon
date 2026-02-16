@@ -1,0 +1,15 @@
+{
+  "widget": "sc-audit-trail",
+  "description": "Sample audit trail events for demo mode",
+  "eslite_table": "audit_events",
+  "records": [
+    { "event_id": "EVT001", "action": "CreditIssued", "subject": "SC001", "actor": "sc_povcr_verifier", "timestamp": 1708000000, "details": "Credit SC-2026-tz-wellpad-alpha-01-000001 issued: 0.260 tCO2e Avoidance (EPA-AP42-CH4-FLARE)" },
+    { "event_id": "EVT002", "action": "CreditListed", "subject": "SC002", "actor": "thermogenzero", "timestamp": 1708003600, "details": "Listed on marketplace: 0.260 tCO2e at $25.00/tonne" },
+    { "event_id": "EVT003", "action": "CreditSold", "subject": "SC004", "actor": "global-logistics-inc", "timestamp": 1708010800, "details": "Sold 9.001 tCO2e to Global Logistics Inc at $22.00/tonne ($198.02)" },
+    { "event_id": "EVT004", "action": "CreditRetired", "subject": "SC005", "actor": "acme-corp", "timestamp": 1708050000, "details": "Retired 0.260 tCO2e: Q1 2026 Scope 2 emissions offset" },
+    { "event_id": "EVT005", "action": "AttestationVerified", "subject": "ATT003", "actor": "sc_povcr_verifier", "timestamp": 1708007200, "details": "Solar attestation verified: 1.983 tCO2e (IPCC-AR5-100Y), 3/3 quorum, 95% confidence" },
+    { "event_id": "EVT006", "action": "MethodologyApproved", "subject": "METH-TEG-v1", "actor": "sc_governance", "timestamp": 1707500000, "details": "Thermoelectric Waste Heat v1.0 approved (4 for, 1 against)" },
+    { "event_id": "EVT007", "action": "ContractProposed", "subject": "FWD001", "actor": "acme-corp", "timestamp": 1708000000, "details": "Forward contract proposed: 100 tCO2e over 12 months at $30.00/tonne" },
+    { "event_id": "EVT008", "action": "CertificateGenerated", "subject": "RET001", "actor": "sc_retirement_engine", "timestamp": 1708050100, "details": "Retirement certificate generated for Acme Corp: 0.260 tCO2e" }
+  ]
+}

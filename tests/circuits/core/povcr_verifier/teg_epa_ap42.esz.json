@@ -1,0 +1,51 @@
+{
+  "circuit": "sc_povcr_verifier",
+  "escir_version": "0.8.1",
+  "description": "Thermoelectric generator attestation with EPA AP42 CH4 flare methodology",
+  "vectors": [
+    {
+      "id": "teg-happy-path",
+      "description": "Valid TEG attestation from ThermogenZero wellpad",
+      "tags": ["thermoelectric", "epa-ap42", "happy-path"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "thermogenzero", "epoch_id": 100, "site_id": "0xABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001", "merkle_root": "0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", "total_energy_wh": 212.5, "avg_power_w": 212.5, "channel_count": 108, "gas_consumed_mcf": 0.5, "methodology_id": "EPA-AP42-CH4-FLARE", "vrf_proof": "0xaabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708000000000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "EPA-AP42-CH4-FLARE", "name": "EPA AP-42 Methane Flare Avoidance", "source_types": "thermoelectric", "gwp_factor": 28.0, "verification_discount": 0.05, "emission_factor": 0.0, "formula_id": "EPA-AP42-CH4-FLARE", "custom_formula": "", "registry_compatibility": "verra", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": true,
+        "attestation": {
+          "tenant_id": "thermogenzero",
+          "epoch_id": 100,
+          "witness_count": 3,
+          "total_energy_wh": 212.5,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "tco2e": 0.260,
+          "confidence_pct": 95
+        },
+        "rejection_valid": false
+      }
+    },
+    {
+      "id": "teg-energy-deviation",
+      "description": "TEG attestation rejected due to energy deviation >5% from baseline",
+      "tags": ["thermoelectric", "rejection", "deviation"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "thermogenzero", "epoch_id": 101, "site_id": "0xABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001", "merkle_root": "0x1111222233334444111122223333444411112222333344441111222233334444", "total_energy_wh": 500.0, "avg_power_w": 500.0, "channel_count": 108, "gas_consumed_mcf": 0.5, "methodology_id": "EPA-AP42-CH4-FLARE", "vrf_proof": "0xaabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708003600000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "EPA-AP42-CH4-FLARE", "name": "EPA AP-42 Methane Flare Avoidance", "source_types": "thermoelectric", "gwp_factor": 28.0, "verification_discount": 0.05, "emission_factor": 0.0, "formula_id": "EPA-AP42-CH4-FLARE", "custom_formula": "", "registry_compatibility": "verra", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": false,
+        "rejection_valid": true,
+        "rejection": { "tenant_id": "thermogenzero", "epoch_id": 101, "reason": "Energy deviation 135% exceeds maximum 5%", "rejection_code": 400 }
+      }
+    }
+  ]
+}

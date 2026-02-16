@@ -1,0 +1,33 @@
+{
+  "circuit": "sc_povcr_verifier",
+  "escir_version": "0.8.1",
+  "description": "Wind turbine attestation with VCS AMS-III-H methodology",
+  "vectors": [
+    {
+      "id": "wind-happy-path",
+      "description": "Valid wind turbine attestation with VCS AMS-III-H",
+      "tags": ["wind", "vcs-ams-iii-h", "happy-path"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "windco-north-01", "epoch_id": 500, "site_id": "0xWIND0001WIND0001WIND0001WIND0001WIND0001WIND0001WIND0001WIND0001", "merkle_root": "0xaabb0011aabb0011aabb0011aabb0011aabb0011aabb0011aabb0011aabb0011", "total_energy_wh": 25000.0, "avg_power_w": 25000.0, "channel_count": 3, "gas_consumed_mcf": 0.0, "methodology_id": "VCS-AMS-III-H", "vrf_proof": "0x5566778899001122556677889900112255667788990011225566778899001122556677889900112255667788990011225566778899001122556677889900112", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708000000000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "VCS-AMS-III-H", "name": "VCS AMS-III-H Methane Recovery", "source_types": "wind,solar", "gwp_factor": 28.0, "verification_discount": 0.05, "emission_factor": 0.379, "formula_id": "VCS-AMS-III-H", "custom_formula": "", "registry_compatibility": "verra", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": true,
+        "attestation": {
+          "tenant_id": "windco-north-01",
+          "epoch_id": 500,
+          "witness_count": 3,
+          "total_energy_wh": 25000.0,
+          "methodology_id": "VCS-AMS-III-H",
+          "tco2e": 9.001,
+          "confidence_pct": 95
+        },
+        "rejection_valid": false
+      }
+    }
+  ]
+}

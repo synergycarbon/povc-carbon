@@ -1,0 +1,9 @@
+{
+  "widget": "sc-impact-certificate",
+  "description": "Sample retirement certificates for demo mode",
+  "eslite_table": "retirements",
+  "certificates": [
+    { "certificate_id": "CERT-2026-001", "retirement_id": "RET001", "total_tco2e": 0.260, "vintage_year": 2026, "project_name": "ThermogenZero Alpha Wellpad", "methodology_id": "EPA-AP42-CH4-FLARE", "retired_by_name": "Acme Corporation", "reason": "Q1 2026 Scope 2 emissions offset", "verify_url": "https://sc.estream.dev/verify/CERT-2026-001", "qr_code_data": "https://sc.estream.dev/verify/CERT-2026-001" },
+    { "certificate_id": "CERT-2026-002", "retirement_id": "RET002", "total_tco2e": 9.001, "vintage_year": 2026, "project_name": "Northern Wind Cooperative", "methodology_id": "VCS-AMS-III-H", "retired_by_name": "Global Logistics Inc", "reason": "2025 annual carbon neutrality program", "verify_url": "https://sc.estream.dev/verify/CERT-2026-002", "qr_code_data": "https://sc.estream.dev/verify/CERT-2026-002" }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "circuit": "sc_audit_trail",
+  "escir_version": "0.8.1",
+  "description": "Full credit lifecycle audit events from mint to retirement",
+  "vectors": [
+    {
+      "id": "lifecycle-credit-issued",
+      "description": "Audit event for credit issuance",
+      "tags": ["lifecycle", "credit-issued"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "event_in": { "event_id": "0xEVT001EVT001EVT001EVT001EVT001EVT001EVT001EVT001EVT001EVT001EVT0", "timestamp_us": 1708000000000000, "actor": "0xSYSTEM00SYSTEM00SYSTEM00SYSTEM00SYSTEM00SYSTEM00SYSTEM00SYSTEM00SY", "actor_type": "SmartCircuit", "action": "CreditIssued", "subject_type": "credit", "subject_id": "0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C", "details": { "before_state": "", "after_state": "{\"status\":\"Issued\",\"tco2e\":0.260,\"serial\":\"SC-2026-tz-wellpad-alpha-01-000001\"}", "metadata": "{\"attestation_id\":\"0xATT001\",\"methodology\":\"EPA-AP42-CH4-FLARE\"}" }, "signature": "VALID_AUDIT_SIG", "prev_event_hash": "0x0000000000000000000000000000000000000000000000000000000000000000" },
+        "event_valid": true
+      },
+      "expected_outputs": {
+        "stored_valid": true,
+        "event_stored": {
+          "action": "CreditIssued",
+          "subject_type": "credit"
+        },
+        "stats": { "total_events": 1, "chain_valid": true }
+      }
+    },
+    {
+      "id": "lifecycle-credit-listed",
+      "description": "Audit event for credit listing on marketplace",
+      "tags": ["lifecycle", "credit-listed"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "event_in": { "event_id": "0xEVT002EVT002EVT002EVT002EVT002EVT002EVT002EVT002EVT002EVT002EVT0", "timestamp_us": 1708003600000000, "actor": "0xSELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SE", "actor_type": "User", "action": "CreditListed", "subject_type": "credit", "subject_id": "0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C", "details": { "before_state": "{\"status\":\"Issued\"}", "after_state": "{\"status\":\"Listed\",\"price_usd\":25.0}", "metadata": "{\"listing_id\":\"0xLIST001\"}" }, "signature": "VALID_AUDIT_SIG", "prev_event_hash": "0xEVT001_HASH_PLACEHOLDER" },
+        "event_valid": true
+      },
+      "expected_outputs": {
+        "stored_valid": true,
+        "event_stored": { "action": "CreditListed" },
+        "stats": { "total_events": 2, "chain_valid": true }
+      }
+    },
+    {
+      "id": "lifecycle-credit-sold",
+      "description": "Audit event for credit sale",
+      "tags": ["lifecycle", "credit-sold"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "event_in": { "event_id": "0xEVT003EVT003EVT003EVT003EVT003EVT003EVT003EVT003EVT003EVT003EVT0", "timestamp_us": 1708007200000000, "actor": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "actor_type": "User", "action": "CreditSold", "subject_type": "credit", "subject_id": "0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C", "details": { "before_state": "{\"status\":\"Listed\",\"owner\":\"0xSELLER1\"}", "after_state": "{\"status\":\"Sold\",\"owner\":\"0xBUYER01\"}", "metadata": "{\"trade_id\":\"0xTRADE001\",\"price_usd\":25.0,\"fee_usd\":0.125}" }, "signature": "VALID_AUDIT_SIG", "prev_event_hash": "0xEVT002_HASH_PLACEHOLDER" },
+        "event_valid": true
+      },
+      "expected_outputs": {
+        "stored_valid": true,
+        "event_stored": { "action": "CreditSold" },
+        "stats": { "total_events": 3, "chain_valid": true }
+      }
+    },
+    {
+      "id": "lifecycle-credit-retired",
+      "description": "Audit event for credit retirement",
+      "tags": ["lifecycle", "credit-retired"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "event_in": { "event_id": "0xEVT004EVT004EVT004EVT004EVT004EVT004EVT004EVT004EVT004EVT004EVT0", "timestamp_us": 1708010800000000, "actor": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "actor_type": "User", "action": "CreditRetired", "subject_type": "credit", "subject_id": "0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C", "details": { "before_state": "{\"status\":\"Sold\"}", "after_state": "{\"status\":\"Retired\"}", "metadata": "{\"retirement_id\":\"0xRET001\",\"reason\":\"Q1 2026 offset\",\"certificate_url\":\"https://sc.estream.dev/verify/RET001\"}" }, "signature": "VALID_AUDIT_SIG", "prev_event_hash": "0xEVT003_HASH_PLACEHOLDER" },
+        "event_valid": true
+      },
+      "expected_outputs": {
+        "stored_valid": true,
+        "event_stored": { "action": "CreditRetired" },
+        "stats": { "total_events": 4, "chain_valid": true }
+      }
+    }
+  ]
+}

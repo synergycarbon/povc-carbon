@@ -1,0 +1,15 @@
+{
+  "widget": "sc-credit-registry",
+  "description": "Sample credit registry data for demo mode",
+  "eslite_table": "carbon_credits",
+  "records": [
+    { "credit_id": "SC001", "serial_number": "SC-2026-tz-wellpad-alpha-01-000001", "tenant_id": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "tonnes_co2e": 0.260, "source_type": "thermoelectric", "project_name": "ThermogenZero Alpha Wellpad", "project_location": "Permian Basin, TX", "status": "Issued", "issued_at": 1708000000 },
+    { "credit_id": "SC002", "serial_number": "SC-2026-tz-wellpad-alpha-01-000002", "tenant_id": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "tonnes_co2e": 0.260, "source_type": "thermoelectric", "project_name": "ThermogenZero Alpha Wellpad", "project_location": "Permian Basin, TX", "status": "Listed", "issued_at": 1708003600 },
+    { "credit_id": "SC003", "serial_number": "SC-2026-solar-az-mesa-000001", "tenant_id": "synergy-solar-farm-01", "methodology_id": "IPCC-AR5-100Y", "vintage_year": 2026, "tonnes_co2e": 1.983, "source_type": "solar", "project_name": "Arizona Mesa Solar Farm", "project_location": "Mesa, AZ", "status": "Issued", "issued_at": 1708007200 },
+    { "credit_id": "SC004", "serial_number": "SC-2026-windco-north-000001", "tenant_id": "windco-north-01", "methodology_id": "VCS-AMS-III-H", "vintage_year": 2026, "tonnes_co2e": 9.001, "source_type": "wind", "project_name": "Northern Wind Cooperative", "project_location": "North Dakota", "status": "Sold", "issued_at": 1708010800 },
+    { "credit_id": "SC005", "serial_number": "SC-2026-tz-wellpad-alpha-01-000003", "tenant_id": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "tonnes_co2e": 0.260, "source_type": "thermoelectric", "project_name": "ThermogenZero Alpha Wellpad", "project_location": "Permian Basin, TX", "status": "Retired", "issued_at": 1707900000, "retired_at": 1708050000 },
+    { "credit_id": "SC006", "serial_number": "SC-2025-biogas-farm-000001", "tenant_id": "biogas-farm-01", "methodology_id": "GS-MICRO-SCALE", "vintage_year": 2025, "tonnes_co2e": 3.880, "source_type": "biogas", "project_name": "Midwest Biogas Capture", "project_location": "Iowa", "status": "Issued", "issued_at": 1706000000 },
+    { "credit_id": "SC007", "serial_number": "SC-2026-ccs-project-000001", "tenant_id": "ccs-project-01", "methodology_id": "CDM-ACM0001", "vintage_year": 2026, "tonnes_co2e": 0.900, "source_type": "ccs", "project_name": "Gulf Coast CCS Hub", "project_location": "Houston, TX", "status": "Issued", "issued_at": 1708100000 },
+    { "credit_id": "SC008", "serial_number": "SC-2026-tz-wellpad-beta-000001", "tenant_id": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "tonnes_co2e": 0.310, "source_type": "thermoelectric", "project_name": "ThermogenZero Beta Wellpad", "project_location": "Eagle Ford, TX", "status": "Issued", "issued_at": 1708200000 }
+  ]
+}

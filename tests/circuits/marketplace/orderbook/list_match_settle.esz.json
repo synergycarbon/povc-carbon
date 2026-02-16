@@ -1,0 +1,40 @@
+{
+  "circuit": "sc_marketplace_orderbook",
+  "escir_version": "0.8.1",
+  "description": "Full listing, matching, and settlement flow",
+  "vectors": [
+    {
+      "id": "list-and-buy",
+      "description": "Seller lists 10 tCO2e, buyer purchases 5 tCO2e",
+      "tags": ["listing", "buy", "settlement", "happy-path"],
+      "inputs": {
+        "config": { "listing_fee_pct": 0.5, "min_listing_tco2e": 0.001, "max_listing_duration_days": 365, "escrow_timeout_s": 86400 },
+        "new_listing": { "listing_id": "0xLIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LI", "seller": "0xSELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SE", "credit_ids": ["0xCRED010CRED010CRED010CRED010CRED010CRED010CRED010CRED010CRED010C", "0xCRED011CRED011CRED011CRED011CRED011CRED011CRED011CRED011CRED011C"], "total_tco2e": 10.0, "price_per_tonne_usd": 25.0, "min_purchase_tco2e": 1.0, "vintage_year": 2026, "credit_type": "Avoidance", "methodology_id": "EPA-AP42-CH4-FLARE", "project_id": "tz-wellpad-alpha-01", "tenant_id": "thermogenzero", "description": "Verified thermoelectric waste heat carbon credits from ThermogenZero", "status": "Active", "listed_at": 1708000000, "expires_at": 1739536000, "sold_tco2e": 0.0 },
+        "listing_valid": true,
+        "buy_order": { "order_id": "0xORDR001ORDR001ORDR001ORDR001ORDR001ORDR001ORDR001ORDR001ORDR001OR", "listing_id": "0xLIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LI", "buyer": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "quantity_tco2e": 5.0, "max_price_per_tonne_usd": 30.0, "ordered_at": 1708003600 },
+        "order_valid": true
+      },
+      "expected_outputs": {
+        "listing_created_valid": true,
+        "listing_created": { "status": "Active", "total_tco2e": 10.0, "price_per_tonne_usd": 25.0 },
+        "trade_valid": true,
+        "trade_completed": { "quantity_tco2e": 5.0, "price_per_tonne_usd": 25.0, "total_price_usd": 125.0, "fee_usd": 0.625 },
+        "transfer_valid": true,
+        "market_data": { "total_listed_tco2e": 5.0, "avg_price_per_tonne_usd": 25.0 }
+      }
+    },
+    {
+      "id": "buy-exceeds-listing",
+      "description": "Buy order for more than available quantity",
+      "tags": ["buy", "rejection", "quantity"],
+      "inputs": {
+        "config": { "listing_fee_pct": 0.5, "min_listing_tco2e": 0.001, "max_listing_duration_days": 365, "escrow_timeout_s": 86400 },
+        "buy_order": { "order_id": "0xORDR002ORDR002ORDR002ORDR002ORDR002ORDR002ORDR002ORDR002ORDR002OR", "listing_id": "0xLIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LI", "buyer": "0xBUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BU", "quantity_tco2e": 50.0, "max_price_per_tonne_usd": 30.0, "ordered_at": 1708007200 },
+        "order_valid": true
+      },
+      "expected_outputs": {
+        "trade_valid": false
+      }
+    }
+  ]
+}

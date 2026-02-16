@@ -1,0 +1,12 @@
+{
+  "widget": "sc-marketplace",
+  "description": "Sample marketplace listings for demo mode",
+  "eslite_table": "marketplace_listings",
+  "records": [
+    { "listing_id": "LIST001", "credit_id": "SC002", "seller": "thermogenzero", "price_usd": 25.0, "tonnes_co2e": 0.260, "vintage_year": 2026, "methodology_id": "EPA-AP42-CH4-FLARE", "source_type": "thermoelectric", "listed_at": 1708003600, "status": "Active" },
+    { "listing_id": "LIST002", "credit_id": "SC003", "seller": "synergy-solar-farm-01", "price_usd": 28.0, "tonnes_co2e": 1.983, "vintage_year": 2026, "methodology_id": "IPCC-AR5-100Y", "source_type": "solar", "listed_at": 1708010000, "status": "Active" },
+    { "listing_id": "LIST003", "credit_id": "SC006", "seller": "biogas-farm-01", "price_usd": 32.0, "tonnes_co2e": 3.880, "vintage_year": 2025, "methodology_id": "GS-MICRO-SCALE", "source_type": "biogas", "listed_at": 1708020000, "status": "Active" },
+    { "listing_id": "LIST004", "credit_id": "SC007", "seller": "ccs-project-01", "price_usd": 45.0, "tonnes_co2e": 0.900, "vintage_year": 2026, "methodology_id": "CDM-ACM0001", "source_type": "ccs", "listed_at": 1708100000, "status": "Active" },
+    { "listing_id": "LIST005", "credit_id": "SC004", "seller": "windco-north-01", "price_usd": 22.0, "tonnes_co2e": 9.001, "vintage_year": 2026, "methodology_id": "VCS-AMS-III-H", "source_type": "wind", "listed_at": 1707500000, "status": "Filled" }
+  ]
+}

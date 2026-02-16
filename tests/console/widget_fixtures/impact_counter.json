@@ -1,0 +1,12 @@
+{
+  "widget": "sc-impact-counter",
+  "description": "Sample impact counter data for demo mode",
+  "eslite_table": "entity_impacts",
+  "records": [
+    { "entity_id": "acme-corp", "entity_name": "Acme Corporation", "total_tco2e_retired": 47.3, "total_credits_retired": 182, "total_tco2e_this_year": 12.8, "total_tco2e_this_month": 2.1, "first_retirement_at": 1700000000, "last_retirement_at": 1708050000 },
+    { "entity_id": "global-logistics-inc", "entity_name": "Global Logistics Inc", "total_tco2e_retired": 234.7, "total_credits_retired": 850, "total_tco2e_this_year": 45.2, "total_tco2e_this_month": 9.0, "first_retirement_at": 1690000000, "last_retirement_at": 1708060000 },
+    { "entity_id": "green-tech-ltd", "entity_name": "GreenTech Ltd", "total_tco2e_retired": 89.1, "total_credits_retired": 340, "total_tco2e_this_year": 22.5, "total_tco2e_this_month": 4.3, "first_retirement_at": 1695000000, "last_retirement_at": 1708070000 },
+    { "entity_id": "eco-ventures", "entity_name": "Eco Ventures Capital", "total_tco2e_retired": 156.9, "total_credits_retired": 612, "total_tco2e_this_year": 38.1, "total_tco2e_this_month": 6.7, "first_retirement_at": 1692000000, "last_retirement_at": 1708040000 },
+    { "entity_id": "sustain-co", "entity_name": "SustainCo Industries", "total_tco2e_retired": 312.4, "total_credits_retired": 1205, "total_tco2e_this_year": 78.6, "total_tco2e_this_month": 12.4, "first_retirement_at": 1685000000, "last_retirement_at": 1708080000 }
+  ]
+}

@@ -3,89 +3,412 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Home">
-  <header style="background: linear-gradient(135deg, #0a1f12 0%, #15803d 100%); color: white; padding: 4rem 2rem; text-align: center;">
-    <img src="/brand/synergy-carbon-logo.svg" alt="SynergyCarbon" style="height: 48px; margin-bottom: 1.5rem; filter: brightness(10);" />
-    <h1 style="font-size: 3rem; font-weight: 800; margin-bottom: 1rem;">
-      Proof-of-Verified-Carbon
-    </h1>
-    <p style="font-size: 1.25rem; opacity: 0.9; max-width: 640px; margin: 0 auto 2rem;">
+
+  <!-- ===== Sticky Navigation ===== -->
+  <nav class="nav">
+    <a href="#" class="nav-brand">
+      <img src="/brand/synergy-carbon-logo.svg" alt="" />
+      SynergyCarbon
+    </a>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#why">Why Us</a></li>
+      <li><a href="#get-started">Get Started</a></li>
+      <li><a href="https://console.synergycarbon.io?demo=true" class="nav-cta">Try Demo</a></li>
+    </ul>
+  </nav>
+
+  <!-- ===== Hero ===== -->
+  <header class="hero">
+    <h1>Proof-of-Verified-Carbon</h1>
+    <p class="hero-sub">
       Transparent, verifiable carbon credits built on the eStream network.
-      Every tonne CO2e is witnessed, verified, and traceable — from source to retirement.
+      Every tonne CO2e is witnessed, verified, and traceable &mdash; from source to retirement.
     </p>
-    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-      <a href="#how-it-works" style="background: #22c55e; color: white; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; text-decoration: none;">
-        How It Works
-      </a>
-      <a href="https://console.synergycarbon.io" style="background: transparent; color: white; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; border: 2px solid rgba(255,255,255,0.3); text-decoration: none;">
-        Open Console
-      </a>
+    <div class="hero-buttons">
+      <a href="#how-it-works" class="btn-primary">How It Works</a>
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-outline">Try Demo Console</a>
     </div>
   </header>
 
-  <section id="how-it-works" style="padding: 4rem 2rem; max-width: 960px; margin: 0 auto;">
-    <h2 style="font-size: 2rem; text-align: center; margin-bottom: 3rem; color: #15803d;">
-      How PoVC Works
-    </h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem;">
-      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
-        <h3 style="color: #15803d; margin-bottom: 0.5rem;">1. Witness</h3>
-        <p style="color: #6b7b6b;">
-          Edge hardware nodes sample energy generation from solar, wind, thermoelectric, biogas, and CCS sources with cryptographic attestation.
-        </p>
-      </div>
-      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
-        <h3 style="color: #15803d; margin-bottom: 0.5rem;">2. Verify</h3>
-        <p style="color: #6b7b6b;">
-          The PoVCR Verifier checks ML-DSA-87 signatures, validates quorum consensus, and calculates carbon yield using approved methodologies.
-        </p>
-      </div>
-      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
-        <h3 style="color: #15803d; margin-bottom: 0.5rem;">3. Mint</h3>
-        <p style="color: #6b7b6b;">
-          Verified attestations are minted as ECC-1 carbon credit NFTs with full provenance chain, serial numbers, and visibility-tiered metadata.
-        </p>
-      </div>
-      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
-        <h3 style="color: #15803d; margin-bottom: 0.5rem;">4. Trade & Retire</h3>
-        <p style="color: #6b7b6b;">
-          Credits trade on the marketplace or via forward contracts. Retirement is permanent, with verifiable certificates and cross-registry sync.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <section style="padding: 4rem 2rem; background: #f0fdf4;">
-    <div style="max-width: 960px; margin: 0 auto; text-align: center;">
-      <h2 style="font-size: 2rem; margin-bottom: 1rem; color: #15803d;">Built on eStream</h2>
-      <p style="color: #6b7b6b; max-width: 640px; margin: 0 auto 2rem;">
-        SynergyCarbon runs on the eStream network — post-quantum secure, real-time data via WebTransport, and WASM-backed RBAC. No HTTP fallbacks. No intermediaries.
-      </p>
-      <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
-        <div>
-          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">14</div>
-          <div style="color: #6b7b6b; font-size: 0.875rem;">Console Widgets</div>
-        </div>
-        <div>
-          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">12</div>
-          <div style="color: #6b7b6b; font-size: 0.875rem;">SmartCircuits</div>
-        </div>
-        <div>
-          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">7</div>
-          <div style="color: #6b7b6b; font-size: 0.875rem;">Methodologies</div>
-        </div>
-        <div>
-          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">4</div>
-          <div style="color: #6b7b6b; font-size: 0.875rem;">Registry Bridges</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <footer style="padding: 2rem; text-align: center; color: #6b7b6b; font-size: 0.875rem;">
-    <p>&copy; 2026 SynergyCarbon Inc. All rights reserved.</p>
-    <p style="margin-top: 0.5rem;">
-      <a href="https://console.synergycarbon.io">Console</a> &middot;
-      <a href="https://github.com/synergycarbon">GitHub</a>
+  <!-- ===== How PoVC Works ===== -->
+  <section id="how-it-works" class="section">
+    <h2 class="section-title reveal">How PoVC Works</h2>
+    <p class="section-subtitle reveal delay-1">
+      Four cryptographically-linked steps transform raw energy measurements into
+      verified, tradeable carbon credits.
     </p>
+
+    <div class="steps-grid">
+      <div class="step-card reveal delay-1" style="position: relative;">
+        <div class="step-number">1</div>
+        <svg class="step-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="24" width="20" height="20" rx="2" stroke="#16a34a" stroke-width="2" fill="none" />
+          <path d="M14 24V8l10 8-10 8z" fill="#22c55e" opacity="0.5" />
+          <circle cx="36" cy="12" r="8" stroke="#16a34a" stroke-width="2" fill="none" />
+          <path d="M36 8v8" stroke="#16a34a" stroke-width="2" />
+          <path d="M32 12h8" stroke="#16a34a" stroke-width="2" />
+        </svg>
+        <h3>Witness</h3>
+        <p>
+          Edge hardware nodes sample energy generation from solar, wind, thermoelectric,
+          biogas, and CCS sources with ML-DSA-87 cryptographic attestation every epoch.
+        </p>
+        <span class="step-flow-arrow">&#8594;</span>
+      </div>
+
+      <div class="step-card reveal delay-2" style="position: relative;">
+        <div class="step-number">2</div>
+        <svg class="step-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="18" stroke="#16a34a" stroke-width="2" fill="none" />
+          <path d="M16 24l5 5 11-11" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3>Verify</h3>
+        <p>
+          The PoVCR Verifier validates quorum consensus, checks post-quantum signatures,
+          and calculates carbon yield using 7 approved methodologies.
+        </p>
+        <span class="step-flow-arrow">&#8594;</span>
+      </div>
+
+      <div class="step-card reveal delay-3" style="position: relative;">
+        <div class="step-number">3</div>
+        <svg class="step-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="4" width="32" height="40" rx="4" stroke="#16a34a" stroke-width="2" fill="none" />
+          <path d="M16 16h16M16 24h12M16 32h8" stroke="#22c55e" stroke-width="2" stroke-linecap="round" opacity="0.6" />
+          <circle cx="38" cy="38" r="8" fill="#22c55e" />
+          <path d="M35 38l2 2 4-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <h3>Mint</h3>
+        <p>
+          Verified attestations become carbon credit NFTs with full provenance chain,
+          serial numbers, and visibility-tiered metadata across 4 registries.
+        </p>
+        <span class="step-flow-arrow">&#8594;</span>
+      </div>
+
+      <div class="step-card reveal delay-4">
+        <div class="step-number">4</div>
+        <svg class="step-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 36V16a4 4 0 014-4h24a4 4 0 014 4v20a4 4 0 01-4 4H12a4 4 0 01-4-4z" stroke="#16a34a" stroke-width="2" fill="none" />
+          <path d="M18 20l6 6 6-6" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M24 26v8" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" />
+        </svg>
+        <h3>Trade &amp; Retire</h3>
+        <p>
+          Credits trade on the marketplace or via forward contracts. Retirement is permanent
+          with verifiable certificates and cross-registry sync to Verra, Gold Standard, and more.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Platform Features with Mockup Images ===== -->
+  <section id="features" class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Platform Features</h2>
+      <p class="section-subtitle reveal delay-1">
+        A complete carbon credit lifecycle platform with 14 real-time widgets,
+        AI-powered forecasting, and enterprise-grade compliance tools.
+      </p>
+
+      <div class="features-grid">
+        <!-- Dashboard -->
+        <div class="feature-row">
+          <div class="feature-text reveal-left">
+            <h3>Real-Time Dashboard</h3>
+            <p>
+              Monitor your entire carbon credit portfolio at a glance. Live attestation
+              tracking, yield forecasts with confidence intervals, and credit distribution
+              across 5 source types &mdash; all updating via WebTransport in real-time.
+            </p>
+            <div class="feature-tags">
+              <span class="feature-tag">14 Widgets</span>
+              <span class="feature-tag">WebTransport</span>
+              <span class="feature-tag">Real-Time</span>
+            </div>
+          </div>
+          <div class="feature-image-wrap reveal-right">
+            <img src="/mockups/dashboard-mockup.png" alt="SynergyCarbon Dashboard" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Marketplace -->
+        <div class="feature-row reverse">
+          <div class="feature-text reveal-right">
+            <h3>Carbon Credit Marketplace</h3>
+            <p>
+              Browse, filter, and trade verified carbon credits from multiple source types.
+              Smart matching engine, escrow-protected transactions, and transparent pricing
+              with 0.5% listing fees. Forward contracts for guaranteed supply.
+            </p>
+            <div class="feature-tags">
+              <span class="feature-tag">Orderbook</span>
+              <span class="feature-tag">Forward Contracts</span>
+              <span class="feature-tag">Escrow</span>
+            </div>
+          </div>
+          <div class="feature-image-wrap reveal-left">
+            <img src="/mockups/marketplace-mockup.png" alt="Carbon Credit Marketplace" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Impact Dashboard -->
+        <div class="feature-row">
+          <div class="feature-text reveal-left">
+            <h3>Impact Dashboard &amp; Certificates</h3>
+            <p>
+              Embeddable impact widgets showcase your organization's carbon reduction
+              achievements. Live power meters, animated counters, retirement certificates
+              with QR verification, and public leaderboards.
+            </p>
+            <div class="feature-tags">
+              <span class="feature-tag">Embeddable</span>
+              <span class="feature-tag">Certificates</span>
+              <span class="feature-tag">Leaderboard</span>
+            </div>
+          </div>
+          <div class="feature-image-wrap reveal-right">
+            <img src="/mockups/impact-mockup.png" alt="Impact Dashboard" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Credit Registry -->
+        <div class="feature-row reverse">
+          <div class="feature-text reveal-right">
+            <h3>Transparent Credit Registry</h3>
+            <p>
+              Every credit has a verifiable provenance chain from witness node to retirement.
+              Full serial number tracking, status lifecycle management, and one-click
+              exports to GHG Protocol, Verra VCS, Gold Standard, and SOC2 formats.
+            </p>
+            <div class="feature-tags">
+              <span class="feature-tag">Provenance</span>
+              <span class="feature-tag">Audit Trail</span>
+              <span class="feature-tag">Multi-Registry</span>
+            </div>
+          </div>
+          <div class="feature-image-wrap reveal-left">
+            <img src="/mockups/registry-mockup.png" alt="Credit Registry" loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Stats Bar ===== -->
+  <section class="section-surface" style="padding-top: 0;">
+    <div style="max-width: 1100px; margin: 0 auto;">
+      <div class="stats-bar reveal">
+        <div class="stat-item">
+          <div class="stat-value" data-target="14">0</div>
+          <div class="stat-label">Console Widgets</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" data-target="13">0</div>
+          <div class="stat-label">SmartCircuits</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" data-target="7">0</div>
+          <div class="stat-label">Methodologies</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" data-target="4">0</div>
+          <div class="stat-label">Registry Bridges</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" data-target="5">0</div>
+          <div class="stat-label">Source Types</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Why SynergyCarbon ===== -->
+  <section id="why" class="section-dark">
+    <div style="max-width: 1100px; margin: 0 auto;">
+      <h2 class="section-title reveal">Why SynergyCarbon</h2>
+      <p class="section-subtitle reveal delay-1">
+        Purpose-built for the next generation of carbon markets &mdash; no legacy shortcuts.
+      </p>
+
+      <div class="advantages-grid">
+        <div class="advantage-card reveal delay-1">
+          <span class="advantage-icon">&#x1f512;</span>
+          <h3>Post-Quantum Security</h3>
+          <p>
+            ML-DSA-87 signatures and Spark visual authentication protect every transaction.
+            No classical crypto vulnerabilities. Future-proof from day one.
+          </p>
+        </div>
+
+        <div class="advantage-card reveal delay-2">
+          <span class="advantage-icon">&#x26a1;</span>
+          <h3>Real-Time Verification</h3>
+          <p>
+            WebTransport delivers sub-second attestation verification and live telemetry.
+            No polling, no batching, no HTTP fallbacks.
+          </p>
+        </div>
+
+        <div class="advantage-card reveal delay-3">
+          <span class="advantage-icon">&#x1f310;</span>
+          <h3>Multi-Registry Compatible</h3>
+          <p>
+            Cross-registry deduplication prevents double counting across Verra, Gold Standard,
+            ISCC, and CDM. Automatic retirement sync.
+          </p>
+        </div>
+
+        <div class="advantage-card reveal delay-4">
+          <span class="advantage-icon">&#x1f916;</span>
+          <h3>AI-Powered Forecasting</h3>
+          <p>
+            ML yield forecasts with RLHF operator corrections predict production across
+            7, 30, 90, and 365-day horizons. Forward pricing oracle with supply elasticity.
+          </p>
+        </div>
+
+        <div class="advantage-card reveal delay-5">
+          <span class="advantage-icon">&#x1f4ca;</span>
+          <h3>Complete Audit Trail</h3>
+          <p>
+            Immutable hash-chained audit log with 10-year retention. One-click exports
+            to GHG Protocol, SOC2, and all major registry formats.
+          </p>
+        </div>
+
+        <div class="advantage-card reveal delay-1">
+          <span class="advantage-icon">&#x2699;</span>
+          <h3>Automated Retirement</h3>
+          <p>
+            Five trigger types &mdash; API, stream, schedule, threshold, and circuit invocation &mdash;
+            automate retirement workflows with idempotency guarantees.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Get Started (Partner Integration Timeline) ===== -->
+  <section id="get-started" class="section">
+    <h2 class="section-title reveal">Get Started</h2>
+    <p class="section-subtitle reveal delay-1">
+      Integrate your carbon credit minting operation in five steps.
+      From Spark authentication to live production in weeks, not months.
+    </p>
+
+    <div class="timeline">
+      <div class="timeline-item reveal delay-1">
+        <div class="timeline-dot">1</div>
+        <h3>Spark Authentication &amp; Onboarding</h3>
+        <p>
+          Register your organization via Spark visual challenge. Receive your ML-DSA-87
+          key pair, tenant ID, and Console Kit access credentials. Configure branding.yaml
+          with your corporate identity.
+        </p>
+        <span class="timeline-duration">Day 1</span>
+      </div>
+
+      <div class="timeline-item reveal delay-2">
+        <div class="timeline-dot">2</div>
+        <h3>Deploy Witness Nodes</h3>
+        <p>
+          Install the Universal Witness Node adapter at your generation sites. Configure
+          sensor endpoints (Modbus, OPC-UA, or custom), set sampling intervals, and
+          register your nodes through governance.
+        </p>
+        <span class="timeline-duration">Week 1&ndash;2</span>
+      </div>
+
+      <div class="timeline-item reveal delay-3">
+        <div class="timeline-dot">3</div>
+        <h3>Select &amp; Configure Methodology</h3>
+        <p>
+          Choose from 7 pre-approved methodologies (EPA AP-42, IPCC AR5, VCS AMS-III-H,
+          Gold Standard, CDM ACM0001, and more) or propose a custom methodology through
+          the governance circuit.
+        </p>
+        <span class="timeline-duration">Week 2</span>
+      </div>
+
+      <div class="timeline-item reveal delay-4">
+        <div class="timeline-dot">4</div>
+        <h3>Validate &amp; Start Minting</h3>
+        <p>
+          Run validation attestations to confirm witness node data quality. Once quorum
+          is established and verification passes, credits mint automatically. Configure
+          marketplace listings or forward contract terms.
+        </p>
+        <span class="timeline-duration">Week 3&ndash;4</span>
+      </div>
+
+      <div class="timeline-item reveal delay-5">
+        <div class="timeline-dot">5</div>
+        <h3>Go Live &amp; Scale</h3>
+        <p>
+          Enable B2B API webhooks for buyer integrations, set up automated retirement
+          triggers, and deploy embeddable impact widgets. Scale by adding sites &mdash;
+          each new witness node joins the existing verification quorum.
+        </p>
+        <span class="timeline-duration">Ongoing</span>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 3rem;" class="reveal">
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-primary" style="margin-right: 0.75rem;">
+        Try Demo Console
+      </a>
+      <a href="https://github.com/synergycarbon/povc-carbon/blob/main/api/README.md" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">
+        View B2B API Docs
+      </a>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="#" class="nav-brand" style="color: white;">
+          <img src="/brand/synergy-carbon-logo.svg" alt="" style="height: 24px; filter: brightness(10);" />
+          SynergyCarbon
+        </a>
+        <p>
+          Transparent, verifiable carbon credits. Every tonne witnessed, verified, and
+          traceable from source to retirement.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h4>Platform</h4>
+        <ul>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="https://console.synergycarbon.io?demo=true">Demo Console</a></li>
+          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/api/openapi.yaml">API Spec</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/api/README.md">B2B API Docs</a></li>
+          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/docs/DESIGN.md">Design Document</a></li>
+          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/hardware/WITNESS_NODE_SPEC.md">Hardware Spec</a></li>
+          <li><a href="#get-started">Integration Guide</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <ul>
+          <li><a href="https://github.com/synergycarbon">GitHub</a></li>
+          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/docs/specs/governance/SPEC.md">Governance</a></li>
+          <li><a href="https://estream.dev">eStream Network</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2026 SynergyCarbon Inc. All rights reserved. Built on the eStream network.
+    </div>
   </footer>
+
 </Base>

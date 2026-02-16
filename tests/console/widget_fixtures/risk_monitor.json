@@ -1,0 +1,10 @@
+{
+  "widget": "sc-risk-monitor",
+  "description": "Sample risk monitoring data for demo mode",
+  "eslite_table": "forward_contracts",
+  "risk_overlay": [
+    { "contract_id": "FWD001", "risk_score": 15, "delivery_ratio": 0.125, "forecast_delivery_ratio": 0.95, "escrow_months_remaining": 9.5, "collateral_coverage_pct": 100.0, "site_health_score": 95 },
+    { "contract_id": "FWD002", "risk_score": 25, "delivery_ratio": 0.0, "forecast_delivery_ratio": 0.88, "escrow_months_remaining": 12.0, "collateral_coverage_pct": 100.0, "site_health_score": 90 },
+    { "contract_id": "FWD003", "risk_score": 0, "delivery_ratio": 1.0, "forecast_delivery_ratio": 1.0, "escrow_months_remaining": 0.0, "collateral_coverage_pct": 100.0, "site_health_score": 95 }
+  ]
+}

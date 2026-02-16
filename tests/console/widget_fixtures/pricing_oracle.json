@@ -1,0 +1,8 @@
+{
+  "widget": "sc-pricing-oracle",
+  "description": "Sample pricing oracle data for demo mode",
+  "eslite_table": "forward_curves",
+  "records": [
+    { "spot_price_usd": 25.0, "curve": [{ "tenor_months": 1, "price_usd": 25.06, "confidence_interval": 0.50 }, { "tenor_months": 3, "price_usd": 25.19, "confidence_interval": 1.20 }, { "tenor_months": 6, "price_usd": 25.37, "confidence_interval": 2.10 }, { "tenor_months": 12, "price_usd": 25.75, "confidence_interval": 3.50 }], "generated_at": 1708000000 }
+  ]
+}

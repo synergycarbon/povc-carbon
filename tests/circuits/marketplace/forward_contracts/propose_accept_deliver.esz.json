@@ -1,0 +1,30 @@
+{
+  "circuit": "sc_forward_contracts",
+  "escir_version": "0.8.1",
+  "description": "Full forward contract lifecycle: propose, accept, deliver, settle",
+  "vectors": [
+    {
+      "id": "fixed-term-lifecycle",
+      "description": "12-month fixed-term forward contract with settlement on mint",
+      "tags": ["fixed-term", "lifecycle", "happy-path"],
+      "inputs": {
+        "config": { "max_contracts_per_buyer": 50, "min_contract_value_usd": 100.0, "max_term_months": 60, "default_collateral_pct": 10.0, "default_prepay_months": 3, "under_delivery_threshold_pct": 70.0, "under_delivery_periods": 2, "grace_period_days": 30, "platform_fee_pct": 0.25, "escrow_low_threshold_months": 1.0 },
+        "proposal": { "proposal_id": "0xPROP001PROP001PROP001PROP001PROP001PROP001PROP001PROP001PROP001PR", "buyer": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "contract_type": "FixedTerm", "project_id": "tz-wellpad-alpha-01", "tenant_id": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "credit_type": "Avoidance", "vintage_year_min": 2026, "requested_tco2e": 100.0, "max_price_per_tonne_usd": 30.0, "term_months": 12, "settlement_frequency": "on_mint", "call_premium_pct": 0.0, "buyer_signature": "VALID_BUYER_SIG", "proposed_at": 1708000000 },
+        "proposal_valid": true,
+        "accept": { "proposal_id": "0xPROP001PROP001PROP001PROP001PROP001PROP001PROP001PROP001PROP001PR", "acceptor": "0xSELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SE", "accepted_terms_hash": "0xTERMSHASHTERMSHASHTERMSHASHTERMSHASHTERMSHASHTERMSHASHTERMSHASHTE", "acceptor_signature": "VALID_SELLER_SIG", "accepted_at": 1708086400 },
+        "accept_valid": true,
+        "mint_event": { "credit_id": "0xCRED020CRED020CRED020CRED020CRED020CRED020CRED020CRED020CRED020C", "project_id": "tz-wellpad-alpha-01", "tenant_id": "thermogenzero", "tco2e": 0.260, "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "minted_at": 1708090000 },
+        "mint_valid": true
+      },
+      "expected_outputs": {
+        "state_valid": true,
+        "contract_state": { "status": "Delivering", "delivered_tco2e": 0.260, "total_committed_tco2e": 100.0 },
+        "settlement_valid": true,
+        "settlement": { "delivered_tco2e": 0.260, "price_per_tonne_usd": 30.0, "total_payment_usd": 7.80, "platform_fee_usd": 0.0195 },
+        "transfer_valid": true,
+        "risk_valid": true,
+        "contract_risk": { "delivery_ratio": 0.0026, "risk_score": 15 }
+      }
+    }
+  ]
+}

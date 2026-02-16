@@ -1,0 +1,30 @@
+{
+  "circuit": "sc_povc_carbon_platform",
+  "escir_version": "0.8.1",
+  "description": "End-to-end platform flow: witness -> verify -> mint -> list -> trade -> retire",
+  "vectors": [
+    {
+      "id": "full-lifecycle",
+      "description": "Complete credit lifecycle from TEG telemetry to retirement certificate",
+      "tags": ["end-to-end", "lifecycle", "happy-path"],
+      "inputs": {
+        "step_1_witness": { "source_type": "thermoelectric", "tenant_id": "thermogenzero", "site_id": "tz-wellpad-alpha-01", "epoch_id": 100, "total_energy_wh": 212.5, "gas_consumed_mcf": 0.5 },
+        "step_2_verify": { "methodology_id": "EPA-AP42-CH4-FLARE", "quorum_size": 3, "expected_tco2e": 0.260 },
+        "step_3_mint": { "credit_type": "Avoidance", "expected_serial": "SC-2026-tz-wellpad-alpha-01-000001" },
+        "step_4_list": { "price_per_tonne_usd": 25.0, "min_purchase_tco2e": 0.1 },
+        "step_5_trade": { "buyer_id": "acme-corp", "quantity_tco2e": 0.260, "max_price_usd": 30.0 },
+        "step_6_retire": { "reason": "Acme Corp Q1 2026 Scope 2 offset", "trigger_type": "ApiCall" }
+      },
+      "expected_outputs": {
+        "witness_submitted": true,
+        "attestation_verified": true,
+        "credit_minted": { "serial_number": "SC-2026-tz-wellpad-alpha-01-000001", "tonnes_co2e": 0.260, "status": "Issued" },
+        "credit_listed": { "price_per_tonne_usd": 25.0, "status": "Active" },
+        "trade_settled": { "total_price_usd": 6.50, "fee_usd": 0.0325 },
+        "credit_retired": { "status": "Retired", "certificate_generated": true },
+        "audit_events_count": 6,
+        "registries_synced": ["verra"]
+      }
+    }
+  ]
+}

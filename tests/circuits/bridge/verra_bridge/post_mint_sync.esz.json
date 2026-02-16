@@ -1,0 +1,31 @@
+{
+  "circuit": "sc_verra_registry_bridge",
+  "escir_version": "0.8.1",
+  "description": "Post-mint registration and retirement sync to external registries",
+  "vectors": [
+    {
+      "id": "register-on-verra",
+      "description": "Register minted credit on Verra registry",
+      "tags": ["registration", "verra", "happy-path"],
+      "inputs": {
+        "config": { "registries_enabled": ["verra", "gold_standard"], "dedup_timeout_ms": 5000, "sync_interval_s": 3600, "retry_max": 3 },
+        "register_credit": { "credit_id": "0xCRED042CRED042CRED042CRED042CRED042CRED042CRED042CRED042CRED042C", "serial_number": "SC-2026-tz-wellpad-alpha-01-000042", "registry": "Verra", "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "tonnes_co2e": 0.260, "project_name": "ThermogenZero Alpha Wellpad - TEG Waste Heat Recovery", "project_location": "Permian Basin, TX, USA" }
+      },
+      "expected_outputs": {
+        "registration_result": { "registry": "verra", "external_id": "VCS-2026-SC-000042", "status": "registered" }
+      }
+    },
+    {
+      "id": "sync-retirement-to-verra",
+      "description": "Sync credit retirement to Verra registry",
+      "tags": ["retirement", "sync", "verra"],
+      "inputs": {
+        "config": { "registries_enabled": ["verra", "gold_standard"], "dedup_timeout_ms": 5000, "sync_interval_s": 3600, "retry_max": 3 },
+        "sync_retirement": { "credit_id": "0xCRED042CRED042CRED042CRED042CRED042CRED042CRED042CRED042CRED042C", "retirement_id": "0xRET042RET042RET042RET042RET042RET042RET042RET042RET042RET042RET0", "registry": "Verra", "external_id": "VCS-2026-SC-000042", "beneficiary_name": "Acme Corp", "retirement_reason": "Scope 2 emissions offset Q1 2026" }
+      },
+      "expected_outputs": {
+        "retirement_synced": { "registry": "verra", "external_id": "VCS-2026-SC-000042", "status": "retired" }
+      }
+    }
+  ]
+}

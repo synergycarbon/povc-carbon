@@ -1,0 +1,31 @@
+{
+  "circuit": "sc_yield_forecaster",
+  "escir_version": "0.8.1",
+  "description": "Yield deviation alert when actual drops below forecast",
+  "vectors": [
+    {
+      "id": "yield-drop-alert",
+      "description": "Actual yield drops to 50% of forecast, triggering alert",
+      "tags": ["alert", "deviation", "drop"],
+      "inputs": {
+        "config": { "inference_interval_s": 3600, "feature_window_s": 3600, "ewma_alpha": 0.1, "baseline_window_days": 30, "deviation_alert_pct": 20.0, "deviation_alert_hours": 48, "confidence_levels": [0.80, 0.95], "rlhf_operator_weight_max": 2.0 },
+        "mint_event": { "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "tco2e": 0.050, "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "timestamp": 1708200000 },
+        "mint_valid": true,
+        "tenant_telemetry": { "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "power_mean_w": 80.0, "capacity_factor": 0.30, "gas_flow_mcf_hour": 0.2, "timestamp": 1708200000 },
+        "telemetry_valid": true
+      },
+      "expected_outputs": {
+        "alert_valid": true,
+        "deviation_alert": {
+          "tenant_id": "thermogenzero",
+          "project_id": "tz-wellpad-alpha-01",
+          "forecast_tco2e_day": 0.260,
+          "actual_tco2e_day": 0.050,
+          "deviation_pct": 80.8,
+          "severity": 2,
+          "possible_causes": ["equipment_degradation", "fuel_supply_reduction", "sensor_malfunction"]
+        }
+      }
+    }
+  ]
+}

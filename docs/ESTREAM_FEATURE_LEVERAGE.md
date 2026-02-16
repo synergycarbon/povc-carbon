@@ -165,6 +165,29 @@ Each eStream feature is rated on its impact to SynergyCarbon across three dimens
 
 ---
 
-## 5. Conclusion
+## 5. Additional Deliverables Leveraging eStream
+
+### 5.1 Marketing Website with Demo Mode
+
+The SynergyCarbon marketing website (`website/`) showcases the platform with animated feature sections, mockup screenshots of the Console Kit dashboard, marketplace, impact dashboard, and credit registry. The site links directly to a **demo console** activated via `?demo=true`, which loads ESZ fixture data into ESLite tables so all 14 widgets render with realistic sample data — no backend required.
+
+This demo mode capability is a direct benefit of eStream's architecture:
+- **ESLite local-first storage** allows the console to operate entirely offline with fixture data
+- **Console Kit widget isolation** means each widget renders independently from its ESLite table
+- **Lex topic pattern matching** allows the DemoProvider to intercept subscriptions and serve fixtures
+
+### 5.2 ESZ Test Fixtures (Dual-Purpose)
+
+We created **29 ESZ fixture files** covering all 13 SmartCircuits with realistic test vectors. These fixtures serve two purposes simultaneously:
+1. **Circuit validation**: Input/output test vectors for SmartCircuit verification (used in CI)
+2. **Console demo mode**: Widget-specific fixture data seeded into ESLite for interactive demos
+
+This dual-purpose approach — made possible by eStream's unified data model — eliminates the need for separate test data and demo data pipelines.
+
+---
+
+## 6. Conclusion
 
 eStream's feature set allowed SynergyCarbon to be built as a **9,567-line codebase** that delivers the functionality of a **91,000–143,000-line traditional platform**. The upfront savings exceed **$330K**, and the 5-year total cost of ownership is reduced by approximately **$1.4M** compared to a conventional cloud stack. The lightweight codebase, zero-infrastructure operational model, and built-in security primitives make eStream the optimal foundation for vertical SaaS applications in regulated markets like carbon credits.
+
+The marketing website and demo mode (Section 5) further demonstrate eStream's leverage: a complete interactive product demo powered by ESLite and Console Kit, with zero infrastructure cost, deployable as a static site.

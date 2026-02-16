@@ -1,0 +1,10 @@
+{
+  "widget": "sc-forward-contracts",
+  "description": "Sample forward contracts for demo mode",
+  "eslite_table": "forward_contracts",
+  "records": [
+    { "contract_id": "FWD001", "buyer": "acme-corp", "seller": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "source_type": "thermoelectric", "total_tonnes": 100.0, "delivered_tonnes": 12.5, "price_per_tonne_usd": 30.0, "start_epoch": 1708000000, "end_epoch": 1739536000, "delivery_schedule": "on_mint", "status": "Delivering", "created_at": 1708000000 },
+    { "contract_id": "FWD002", "buyer": "global-logistics-inc", "seller": "synergy-solar-farm-01", "methodology_id": "IPCC-AR5-100Y", "source_type": "solar", "total_tonnes": 500.0, "delivered_tonnes": 0.0, "price_per_tonne_usd": 28.0, "start_epoch": 1709000000, "end_epoch": 1740536000, "delivery_schedule": "monthly", "status": "Proposed", "created_at": 1708500000 },
+    { "contract_id": "FWD003", "buyer": "green-tech-ltd", "seller": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "source_type": "thermoelectric", "total_tonnes": 50.0, "delivered_tonnes": 50.0, "price_per_tonne_usd": 25.0, "start_epoch": 1700000000, "end_epoch": 1708000000, "delivery_schedule": "on_mint", "status": "Settled", "created_at": 1700000000 }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "widget": "sc-impact-leaderboard",
+  "description": "Sample leaderboard rankings for demo mode",
+  "eslite_table": "entity_impacts",
+  "leaderboard": {
+    "period": "all_time",
+    "entries": [
+      { "rank": 1, "entity_id": "sustain-co", "entity_name": "SustainCo Industries", "total_tco2e": 312.4, "trend_pct": 5.2 },
+      { "rank": 2, "entity_id": "global-logistics-inc", "entity_name": "Global Logistics Inc", "total_tco2e": 234.7, "trend_pct": 8.1 },
+      { "rank": 3, "entity_id": "eco-ventures", "entity_name": "Eco Ventures Capital", "total_tco2e": 156.9, "trend_pct": 3.4 },
+      { "rank": 4, "entity_id": "green-tech-ltd", "entity_name": "GreenTech Ltd", "total_tco2e": 89.1, "trend_pct": 12.3 },
+      { "rank": 5, "entity_id": "acme-corp", "entity_name": "Acme Corporation", "total_tco2e": 47.3, "trend_pct": 6.7 }
+    ]
+  }
+}

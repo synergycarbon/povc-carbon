@@ -1,0 +1,20 @@
+{
+  "circuit": "sc_governance",
+  "escir_version": "0.8.1",
+  "description": "Verifier node registration",
+  "vectors": [
+    {
+      "id": "register-witness-node",
+      "description": "Register a new ThermogenZero witness node",
+      "tags": ["verifier", "registration", "happy-path"],
+      "inputs": {
+        "config": { "governance_quorum": 3, "proposal_voting_window_s": 604800, "max_active_proposals": 10 },
+        "register_verifier": { "verifier_id": "0xVERF001VERF001VERF001VERF001VERF001VERF001VERF001VERF001VERF001VE", "public_key": "ML_DSA_87_PUBLIC_KEY_1952_BYTES_PLACEHOLDER", "name": "ThermogenZero Primary Witness Node - Alpha Site", "capabilities": ["thermoelectric", "solar"], "max_attestation_rate": 100, "registered_at": 1708000000, "status": "active" }
+      },
+      "expected_outputs": {
+        "verifier_registered": { "name": "ThermogenZero Primary Witness Node - Alpha Site", "status": "active" },
+        "governance_event": { "event_type": "verifier.registered" }
+      }
+    }
+  ]
+}

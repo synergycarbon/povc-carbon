@@ -1,0 +1,52 @@
+{
+  "circuit": "sc_impact_widget",
+  "escir_version": "0.8.1",
+  "description": "Impact widget aggregate statistics and updates",
+  "vectors": [
+    {
+      "id": "counter-single-retirement",
+      "description": "Counter widget updates after single retirement",
+      "tags": ["counter", "retirement", "happy-path"],
+      "inputs": {
+        "config": { "update_debounce_ms": 500, "leaderboard_max_entries": 100, "history_retention_days": 365 },
+        "retirement_event": { "retirement_id": "0xRET001RET001RET001RET001RET001RET001RET001RET001RET001RET001RET0", "credit_ids": ["0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C"], "total_tco2e": 1.5, "retired_by": "0xENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1EN", "reason": "Annual ESG offset", "certificate_url": "https://sc.estream.dev/verify/RET001", "certificate_hash": "0xCERTHASHCERTHASHCERTHASHCERTHASHCERTHASHCERTHASHCERTHASHCERTHASH", "on_chain_tx": "0xTXHASHTXHASHTXHASHTXHASHTXHASHTXHASHTXHASHTXHASHTXHASHTXHASHTXHA", "retired_at": 1708000000 },
+        "retirement_valid": true
+      },
+      "expected_outputs": {
+        "counter_data": { "total_tco2e": 1.5, "display_unit": "tonnes", "animation_target": 1.5 },
+        "certificate_data": { "total_tco2e": 1.5, "verify_url": "https://sc.estream.dev/verify/RET001" },
+        "ws_update_valid": true,
+        "ws_update": { "event_type": "retirement.completed", "delta_tco2e": 1.5, "new_total_tco2e": 1.5 }
+      }
+    },
+    {
+      "id": "counter-accumulated",
+      "description": "Counter accumulates across multiple retirements",
+      "tags": ["counter", "accumulation"],
+      "inputs": {
+        "config": { "update_debounce_ms": 500, "leaderboard_max_entries": 100, "history_retention_days": 365 },
+        "retirement_event": { "retirement_id": "0xRET002RET002RET002RET002RET002RET002RET002RET002RET002RET002RET0", "credit_ids": ["0xCRED002CRED002CRED002CRED002CRED002CRED002CRED002CRED002CRED002C", "0xCRED003CRED003CRED003CRED003CRED003CRED003CRED003CRED003CRED003C"], "total_tco2e": 2.5, "retired_by": "0xENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1EN", "reason": "Q2 offset", "certificate_url": "https://sc.estream.dev/verify/RET002", "certificate_hash": "0xCERTHSH2CERTHSH2CERTHSH2CERTHSH2CERTHSH2CERTHSH2CERTHSH2CERTHSH2", "on_chain_tx": "0xTXHASH2TXHASH2TXHASH2TXHASH2TXHASH2TXHASH2TXHASH2TXHASH2TXHASH2TX", "retired_at": 1708100000 },
+        "retirement_valid": true
+      },
+      "expected_outputs": {
+        "counter_data": { "total_tco2e": 4.0, "display_unit": "tonnes", "animation_target": 4.0 },
+        "leaderboard_data": { "entry_count": 1, "entries": [{ "rank": 1, "entity_name": "Entity One", "total_tco2e": 4.0 }] },
+        "ws_update_valid": true,
+        "ws_update": { "event_type": "retirement.completed", "delta_tco2e": 2.5, "new_total_tco2e": 4.0 }
+      }
+    },
+    {
+      "id": "live-meter-streaming",
+      "description": "Live meter updates from real-time telemetry",
+      "tags": ["live-meter", "streaming"],
+      "inputs": {
+        "config": { "update_debounce_ms": 500, "leaderboard_max_entries": 100, "history_retention_days": 365 },
+        "live_telemetry": { "entity_id": "0xENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1ENTITY1EN", "current_power_w": 212.5, "current_rate_tco2e_per_hour": 0.0108, "today_tco2e": 0.130, "lifetime_tco2e": 94.7, "source_type": "thermoelectric" },
+        "telemetry_valid": true
+      },
+      "expected_outputs": {
+        "live_meter_data": { "current_power_w": 212.5, "current_rate_tco2e_per_hour": 0.0108, "today_tco2e": 0.130, "lifetime_tco2e": 94.7, "source_type": "thermoelectric" }
+      }
+    }
+  ]
+}

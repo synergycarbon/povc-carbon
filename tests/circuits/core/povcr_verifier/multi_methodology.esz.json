@@ -1,0 +1,75 @@
+{
+  "circuit": "sc_povcr_verifier",
+  "escir_version": "0.8.1",
+  "description": "Multi-methodology verification across all 7 supported methodologies",
+  "vectors": [
+    {
+      "id": "biogas-gs-micro",
+      "description": "Biogas attestation with Gold Standard Micro-Scale",
+      "tags": ["biogas", "gs-micro-scale", "happy-path"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "biogas-farm-01", "epoch_id": 200, "site_id": "0xBIOG0001BIOG0001BIOG0001BIOG0001BIOG0001BIOG0001BIOG0001BIOG0001", "merkle_root": "0xccdd0011ccdd0011ccdd0011ccdd0011ccdd0011ccdd0011ccdd0011ccdd0011", "total_energy_wh": 8000.0, "avg_power_w": 8000.0, "channel_count": 1, "gas_consumed_mcf": 2.5, "methodology_id": "GS-MICRO-SCALE", "vrf_proof": "0x1122334455667788112233445566778811223344556677881122334455667788112233445566778811223344556677881122334455667788112233445566778", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708000000000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "GS-MICRO-SCALE", "name": "Gold Standard Micro-Scale", "source_types": "biogas,solar", "gwp_factor": 28.0, "verification_discount": 0.03, "emission_factor": 0.5, "formula_id": "GS-MICRO-SCALE", "custom_formula": "", "registry_compatibility": "gold_standard", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": true,
+        "attestation": {
+          "tenant_id": "biogas-farm-01",
+          "epoch_id": 200,
+          "witness_count": 3,
+          "total_energy_wh": 8000.0,
+          "methodology_id": "GS-MICRO-SCALE",
+          "tco2e": 3.880,
+          "confidence_pct": 95
+        },
+        "rejection_valid": false
+      }
+    },
+    {
+      "id": "ccs-cdm-acm0001",
+      "description": "CCS attestation with CDM ACM0001 methodology",
+      "tags": ["ccs", "cdm-acm0001", "happy-path"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "ccs-project-01", "epoch_id": 300, "site_id": "0xCCS00001CCS00001CCS00001CCS00001CCS00001CCS00001CCS00001CCS00001", "merkle_root": "0xeeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011", "total_energy_wh": 0.0, "avg_power_w": 0.0, "channel_count": 1, "gas_consumed_mcf": 0.0, "methodology_id": "CDM-ACM0001", "vrf_proof": "0x9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aabb9900aab", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708000000000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "CDM-ACM0001", "name": "CDM Consolidated Methodology ACM0001", "source_types": "ccs", "gwp_factor": 1.0, "verification_discount": 0.10, "emission_factor": 1.0, "formula_id": "CDM-ACM0001", "custom_formula": "", "registry_compatibility": "cdm,iscc", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": true,
+        "attestation": {
+          "tenant_id": "ccs-project-01",
+          "epoch_id": 300,
+          "witness_count": 3,
+          "total_energy_wh": 0.0,
+          "methodology_id": "CDM-ACM0001",
+          "tco2e": 0.900,
+          "confidence_pct": 90
+        },
+        "rejection_valid": false
+      }
+    },
+    {
+      "id": "unapproved-methodology",
+      "description": "Attestation rejected due to unapproved methodology",
+      "tags": ["rejection", "methodology"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "test-project", "epoch_id": 999, "site_id": "0xTEST0001TEST0001TEST0001TEST0001TEST0001TEST0001TEST0001TEST0001", "merkle_root": "0x0000111100001111000011110000111100001111000011110000111100001111", "total_energy_wh": 1000.0, "avg_power_w": 1000.0, "channel_count": 1, "gas_consumed_mcf": 0.0, "methodology_id": "CUSTOM-UNAPPROVED", "vrf_proof": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708000000000000 },
+        "witness_valid": true,
+        "methodology_registry": []
+      },
+      "expected_outputs": {
+        "attestation_valid": false,
+        "rejection_valid": true,
+        "rejection": { "tenant_id": "test-project", "epoch_id": 999, "reason": "Methodology CUSTOM-UNAPPROVED not found or not approved", "rejection_code": 301 }
+      }
+    }
+  ]
+}

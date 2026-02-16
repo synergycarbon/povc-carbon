@@ -1,0 +1,11 @@
+{
+  "widget": "sc-governance",
+  "description": "Sample governance proposals for demo mode",
+  "eslite_table": "governance_proposals",
+  "records": [
+    { "proposal_id": "PROP001", "proposal_type": "methodology_approval", "title": "Approve Thermoelectric Waste Heat v1.0", "description": "New methodology for thermoelectric generators converting waste heat from gas flares to electricity", "proposer": "thermogenzero", "votes_for": 4, "votes_against": 1, "status": "approved", "created_at": 1707400000, "expires_at": 1708004800 },
+    { "proposal_id": "PROP002", "proposal_type": "parameter_change", "title": "Increase verifier quorum to 5", "description": "Proposal to increase the minimum witness quorum from 3 to 5 for enhanced security", "proposer": "synergy-solar-farm-01", "votes_for": 2, "votes_against": 3, "status": "rejected", "created_at": 1707600000, "expires_at": 1708204800 },
+    { "proposal_id": "PROP003", "proposal_type": "verifier_registration", "title": "Register CCS-Hub-01 Witness Node", "description": "New CCS witness node for Gulf Coast Carbon Capture Hub", "proposer": "ccs-project-01", "votes_for": 3, "votes_against": 0, "status": "approved", "created_at": 1708000000, "expires_at": 1708604800 },
+    { "proposal_id": "PROP004", "proposal_type": "methodology_approval", "title": "Approve Direct Air Capture v0.1", "description": "Experimental DAC methodology for pilot projects", "proposer": "dac-labs", "votes_for": 1, "votes_against": 0, "status": "pending", "created_at": 1708100000, "expires_at": 1708704800 }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "circuit": "sc_universal_witness_node",
+  "escir_version": "0.8.1",
+  "description": "Thermoelectric generator epoch aggregation",
+  "vectors": [
+    {
+      "id": "teg-1hr-epoch",
+      "description": "Aggregate 60 one-minute TEG readings into epoch with gas consumption",
+      "tags": ["thermoelectric", "epoch", "happy-path"],
+      "inputs": {
+        "config": { "source_type": "thermoelectric", "site_id": "0xABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001ABCD0001", "tenant_id": "thermogenzero", "methodology_id": "EPA-AP42-CH4-FLARE", "sampling_interval_s": 60, "epoch_duration_s": 3600, "sensor_protocol": "modbus_rtu", "sensor_endpoints": ["/dev/ttyUSB0"] },
+        "thermoelectric_reading": { "hot_side_temp_c": 450.0, "cold_side_temp_c": 35.0, "teg_power_w": 212.5, "gas_consumed_mcf": 0.0083, "flare_temp_c": 800.0, "grid_export_wh": 212.5, "timestamp_us": 1708000000000000 }
+      },
+      "expected_outputs": {
+        "witness_submission": { "total_energy_wh": 212.5, "total_gas_mcf": 0.5, "total_co2_captured_kg": 0.0, "reading_count": 60 },
+        "telemetry_log": { "source_type": "thermoelectric", "energy_wh": 212.5, "gas_mcf": 0.0083, "co2_captured_kg": 0.0, "efficiency_pct": 5.1 }
+      }
+    }
+  ]
+}

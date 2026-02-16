@@ -1,0 +1,43 @@
+{
+  "circuit": "sc_credit_registry",
+  "escir_version": "0.8.1",
+  "description": "Single credit minting from verified attestation",
+  "vectors": [
+    {
+      "id": "mint-avoidance-credit",
+      "description": "Mint a single Avoidance credit from TEG attestation",
+      "tags": ["mint", "avoidance", "happy-path"],
+      "inputs": {
+        "config": { "serial_prefix": "SC", "min_mint_tco2e": 0.001, "batch_mint_max": 100, "auto_list_threshold_tco2e": 0.0 },
+        "mint_request": { "attestation_id": "0xATT001ATT001ATT001ATT001ATT001ATT001ATT001ATT001ATT001ATT001ATT0", "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "tco2e": 0.260, "methodology_id": "EPA-AP42-CH4-FLARE", "credit_type": "Avoidance", "merkle_root": "0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", "evidence_hash": "0x1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd", "recipient": "0xOWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OW" },
+        "mint_valid": true
+      },
+      "expected_outputs": {
+        "credit_issued_valid": true,
+        "credit_issued": {
+          "serial_number": "SC-2026-tz-wellpad-alpha-01-000001",
+          "tenant_id": "thermogenzero",
+          "project_id": "tz-wellpad-alpha-01",
+          "vintage_year": 2026,
+          "credit_type": "Avoidance",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "tonnes_co2e": 260000,
+          "status": "Issued"
+        }
+      }
+    },
+    {
+      "id": "mint-below-minimum",
+      "description": "Reject mint request below minimum threshold",
+      "tags": ["mint", "rejection", "threshold"],
+      "inputs": {
+        "config": { "serial_prefix": "SC", "min_mint_tco2e": 0.001, "batch_mint_max": 100, "auto_list_threshold_tco2e": 0.0 },
+        "mint_request": { "attestation_id": "0xATT002ATT002ATT002ATT002ATT002ATT002ATT002ATT002ATT002ATT002ATT0", "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "tco2e": 0.0001, "methodology_id": "EPA-AP42-CH4-FLARE", "credit_type": "Avoidance", "merkle_root": "0x0000000000000000000000000000000000000000000000000000000000000000", "evidence_hash": "0x0000000000000000000000000000000000000000000000000000000000000000", "recipient": "0xOWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OWNER01OW" },
+        "mint_valid": true
+      },
+      "expected_outputs": {
+        "credit_issued_valid": false
+      }
+    }
+  ]
+}

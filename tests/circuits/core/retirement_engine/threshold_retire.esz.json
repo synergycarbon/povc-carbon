@@ -1,0 +1,25 @@
+{
+  "circuit": "sc_retirement_engine",
+  "escir_version": "0.8.1",
+  "description": "Threshold-triggered automatic retirement",
+  "vectors": [
+    {
+      "id": "threshold-trigger-fires",
+      "description": "Retirement fires when accumulated credits exceed threshold",
+      "tags": ["threshold", "automatic", "happy-path"],
+      "inputs": {
+        "config": { "idempotency_window_s": 86400, "max_retry_attempts": 5, "retry_base_delay_ms": 1000, "batch_max_size": 1000, "certificate_base_url": "https://sc.estream.dev/verify", "retirement_fee_usd": 0.10 },
+        "trigger_create": { "trigger_id": "trigger-acme-monthly", "owner": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "trigger_type": "Threshold", "config": { "stream_topic": "", "stream_predicate": "", "cron_expression": "", "cron_timezone": "", "threshold_metric": "portfolio.tco2e_available", "threshold_condition": "gte", "threshold_value": 10.0, "quantity_tco2e": 10.0, "credit_selection": "oldest_first", "reason_template": "Monthly auto-retirement: {quantity} tCO2e" }, "status": "active", "created_at": 1707000000, "last_fired_at": 0, "fire_count": 0 },
+        "trigger_valid": true
+      },
+      "expected_outputs": {
+        "result_valid": true,
+        "retirement_result": {
+          "total_tco2e": 10.0,
+          "reason": "Monthly auto-retirement: 10.0 tCO2e"
+        },
+        "certificate_valid": true
+      }
+    }
+  ]
+}

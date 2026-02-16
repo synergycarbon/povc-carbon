@@ -1,0 +1,25 @@
+{
+  "circuit": "sc_retirement_engine",
+  "escir_version": "0.8.1",
+  "description": "Schedule-triggered retirement via cron expression",
+  "vectors": [
+    {
+      "id": "cron-monthly-retirement",
+      "description": "Cron-scheduled retirement fires at start of each month",
+      "tags": ["schedule", "cron", "happy-path"],
+      "inputs": {
+        "config": { "idempotency_window_s": 86400, "max_retry_attempts": 5, "retry_base_delay_ms": 1000, "batch_max_size": 1000, "certificate_base_url": "https://sc.estream.dev/verify", "retirement_fee_usd": 0.10 },
+        "trigger_create": { "trigger_id": "trigger-corp-monthly", "owner": "0xCORP001CORP001CORP001CORP001CORP001CORP001CORP001CORP001CORP001CO", "trigger_type": "Schedule", "config": { "stream_topic": "", "stream_predicate": "", "cron_expression": "0 0 1 * *", "cron_timezone": "America/New_York", "threshold_metric": "", "threshold_condition": "", "threshold_value": 0.0, "quantity_tco2e": 5.0, "credit_selection": "oldest_first", "reason_template": "Scheduled monthly offset: {month} {year}" }, "status": "active", "created_at": 1707000000, "last_fired_at": 0, "fire_count": 0 },
+        "trigger_valid": true
+      },
+      "expected_outputs": {
+        "result_valid": true,
+        "retirement_result": {
+          "total_tco2e": 5.0,
+          "reason": "Scheduled monthly offset: February 2026"
+        },
+        "certificate_valid": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "circuit": "sc_credit_registry",
+  "escir_version": "0.8.1",
+  "description": "Credit transfer chain between multiple owners",
+  "vectors": [
+    {
+      "id": "transfer-happy-path",
+      "description": "Transfer credit from seller to buyer with valid signature",
+      "tags": ["transfer", "happy-path"],
+      "inputs": {
+        "config": { "serial_prefix": "SC", "min_mint_tco2e": 0.001, "batch_mint_max": 100, "auto_list_threshold_tco2e": 0.0 },
+        "transfer_request": { "credit_id": "0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C", "from_owner": "0xSELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SELLER1SE", "to_owner": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "signature": "VALID_ML_DSA_87_TRANSFER_SIG" },
+        "transfer_valid": true
+      },
+      "expected_outputs": {
+        "credit_transferred_valid": true,
+        "credit_transferred": {
+          "owner": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU",
+          "status": "Issued"
+        }
+      }
+    },
+    {
+      "id": "transfer-invalid-owner",
+      "description": "Reject transfer from non-owner",
+      "tags": ["transfer", "rejection", "authorization"],
+      "inputs": {
+        "config": { "serial_prefix": "SC", "min_mint_tco2e": 0.001, "batch_mint_max": 100, "auto_list_threshold_tco2e": 0.0 },
+        "transfer_request": { "credit_id": "0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C", "from_owner": "0xIMPOSTRIMPOSTRIMPOSTRIMPOSTRIMPOSTRIMPOSTRIMPOSTRIMPOSTRIMPOSTRIM", "to_owner": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "signature": "INVALID_SIGNATURE_WRONG_KEY" },
+        "transfer_valid": false
+      },
+      "expected_outputs": {
+        "credit_transferred_valid": false
+      }
+    }
+  ]
+}

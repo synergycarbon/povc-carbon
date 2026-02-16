@@ -1,0 +1,67 @@
+{
+  "circuit": "sc_povcr_verifier",
+  "escir_version": "0.8.1",
+  "description": "Solar panel attestation with IPCC AR5-100Y methodology",
+  "vectors": [
+    {
+      "id": "solar-happy-path",
+      "description": "Valid solar attestation from 3 witnesses with IPCC AR5-100Y",
+      "tags": ["solar", "ipcc-ar5-100y", "happy-path"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "synergy-solar-farm-01", "epoch_id": 1001, "site_id": "0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "merkle_root": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "total_energy_wh": 5000.0, "avg_power_w": 5000.0, "channel_count": 20, "gas_consumed_mcf": 0.0, "methodology_id": "IPCC-AR5-100Y", "vrf_proof": "0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708000000000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "IPCC-AR5-100Y", "name": "IPCC Fifth Assessment 100-Year GWP", "source_types": "solar,wind,hydro", "gwp_factor": 28.0, "verification_discount": 0.05, "emission_factor": 0.417, "formula_id": "IPCC-AR5-100Y", "custom_formula": "", "registry_compatibility": "verra,gold_standard", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": true,
+        "attestation": {
+          "tenant_id": "synergy-solar-farm-01",
+          "epoch_id": 1001,
+          "witness_count": 3,
+          "total_energy_wh": 5000.0,
+          "methodology_id": "IPCC-AR5-100Y",
+          "tco2e": 1.983,
+          "confidence_pct": 95
+        },
+        "rejection_valid": false
+      }
+    },
+    {
+      "id": "solar-insufficient-quorum",
+      "description": "Solar attestation rejected due to insufficient quorum (1 of 3 required)",
+      "tags": ["solar", "ipcc-ar5-100y", "rejection", "quorum"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "synergy-solar-farm-01", "epoch_id": 1002, "site_id": "0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "merkle_root": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "total_energy_wh": 4800.0, "avg_power_w": 4800.0, "channel_count": 20, "gas_consumed_mcf": 0.0, "methodology_id": "IPCC-AR5-100Y", "vrf_proof": "0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", "signature": "VALID_ML_DSA_87_SIG_PLACEHOLDER", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708003600000000 },
+        "witness_valid": true,
+        "methodology_registry": [
+          { "methodology_id": "IPCC-AR5-100Y", "name": "IPCC Fifth Assessment 100-Year GWP", "source_types": "solar,wind,hydro", "gwp_factor": 28.0, "verification_discount": 0.05, "emission_factor": 0.417, "formula_id": "IPCC-AR5-100Y", "custom_formula": "", "registry_compatibility": "verra,gold_standard", "status": "approved", "approved_at": 1700000000 }
+        ]
+      },
+      "expected_outputs": {
+        "attestation_valid": false,
+        "rejection_valid": true,
+        "rejection": { "tenant_id": "synergy-solar-farm-01", "epoch_id": 1002, "reason": "Insufficient quorum: 1 of 3 required witnesses", "rejection_code": 201 }
+      }
+    },
+    {
+      "id": "solar-invalid-signature",
+      "description": "Solar attestation rejected due to invalid ML-DSA-87 signature",
+      "tags": ["solar", "rejection", "signature"],
+      "inputs": {
+        "config": { "quorum_size": 3, "quorum_window_s": 300, "max_energy_deviation_pct": 5.0, "baseline_deviation_pct": 20.0, "baseline_window_days": 30, "audit_retention_days": 3650 },
+        "witness_submission": { "tenant_id": "synergy-solar-farm-01", "epoch_id": 1003, "site_id": "0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "merkle_root": "0xbadcafebadcafebadcafebadcafebadcafebadcafebadcafebadcafebadcafe", "total_energy_wh": 5000.0, "avg_power_w": 5000.0, "channel_count": 20, "gas_consumed_mcf": 0.0, "methodology_id": "IPCC-AR5-100Y", "vrf_proof": "0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", "signature": "INVALID_SIGNATURE_TAMPERED", "public_key": "VALID_ML_DSA_87_PK_PLACEHOLDER", "timestamp_us": 1708007200000000 },
+        "witness_valid": false,
+        "methodology_registry": []
+      },
+      "expected_outputs": {
+        "attestation_valid": false,
+        "rejection_valid": true,
+        "rejection": { "tenant_id": "synergy-solar-farm-01", "epoch_id": 1003, "reason": "ML-DSA-87 signature verification failed", "rejection_code": 101 }
+      }
+    }
+  ]
+}

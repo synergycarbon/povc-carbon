@@ -1,0 +1,10 @@
+{
+  "widget": "sc-impact-live-meter",
+  "description": "Sample live meter streaming data for demo mode",
+  "eslite_table": "attestations",
+  "live_data": [
+    { "entity_id": "thermogenzero", "current_power_w": 212.5, "current_rate_tco2e_per_hour": 0.0108, "today_tco2e": 0.130, "lifetime_tco2e": 94.7, "source_type": "thermoelectric" },
+    { "entity_id": "synergy-solar-farm-01", "current_power_w": 5000.0, "current_rate_tco2e_per_hour": 0.0826, "today_tco2e": 0.991, "lifetime_tco2e": 723.8, "source_type": "solar" },
+    { "entity_id": "windco-north-01", "current_power_w": 25000.0, "current_rate_tco2e_per_hour": 0.375, "today_tco2e": 4.500, "lifetime_tco2e": 3285.0, "source_type": "wind" }
+  ]
+}

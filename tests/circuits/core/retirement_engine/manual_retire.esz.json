@@ -1,0 +1,57 @@
+{
+  "circuit": "sc_retirement_engine",
+  "escir_version": "0.8.1",
+  "description": "Manual retirement triggered by API call",
+  "vectors": [
+    {
+      "id": "manual-single-credit",
+      "description": "Retire a single credit via API call with certificate generation",
+      "tags": ["manual", "api-call", "certificate", "happy-path"],
+      "inputs": {
+        "config": { "idempotency_window_s": 86400, "max_retry_attempts": 5, "retry_base_delay_ms": 1000, "batch_max_size": 1000, "certificate_base_url": "https://sc.estream.dev/verify", "retirement_fee_usd": 0.10 },
+        "retirement_request": { "request_id": "0xRET001RET001RET001RET001RET001RET001RET001RET001RET001RET001RET0", "trigger_type": "ApiCall", "trigger_id": "api-acme-q1-2026", "credit_ids": ["0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C"], "requester": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "reason": "Acme Corp Q1 2026 Scope 2 emissions offset", "idempotency_key": "acme-q1-2026-001", "webhook_url": "https://api.acmecorp.com/webhooks/carbon", "requested_at": 1708000000000000 },
+        "request_valid": true
+      },
+      "expected_outputs": {
+        "result_valid": true,
+        "retirement_result": {
+          "total_tco2e": 0.260,
+          "reason": "Acme Corp Q1 2026 Scope 2 emissions offset"
+        },
+        "certificate_valid": true,
+        "certificate": {
+          "total_tco2e": 0.260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "retired_by_name": "Acme Corp",
+          "reason": "Acme Corp Q1 2026 Scope 2 emissions offset"
+        },
+        "webhook_valid": true,
+        "webhook_out": {
+          "event_type": "credit.retired",
+          "total_tco2e": 0.260
+        },
+        "registry_notice_valid": true
+      }
+    },
+    {
+      "id": "idempotent-retry",
+      "description": "Idempotent retry returns cached result without re-retirement",
+      "tags": ["manual", "idempotency"],
+      "inputs": {
+        "config": { "idempotency_window_s": 86400, "max_retry_attempts": 5, "retry_base_delay_ms": 1000, "batch_max_size": 1000, "certificate_base_url": "https://sc.estream.dev/verify", "retirement_fee_usd": 0.10 },
+        "retirement_request": { "request_id": "0xRET002RET002RET002RET002RET002RET002RET002RET002RET002RET002RET0", "trigger_type": "ApiCall", "trigger_id": "api-acme-q1-2026", "credit_ids": ["0xCRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001CRED001C"], "requester": "0xBUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BUYER01BU", "reason": "Acme Corp Q1 2026 Scope 2 emissions offset", "idempotency_key": "acme-q1-2026-001", "webhook_url": "https://api.acmecorp.com/webhooks/carbon", "requested_at": 1708000100000000 },
+        "request_valid": true
+      },
+      "expected_outputs": {
+        "result_valid": true,
+        "retirement_result": {
+          "total_tco2e": 0.260,
+          "reason": "Acme Corp Q1 2026 Scope 2 emissions offset"
+        },
+        "certificate_valid": false,
+        "webhook_valid": false,
+        "registry_notice_valid": false
+      }
+    }
+  ]
+}

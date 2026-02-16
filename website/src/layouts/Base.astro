@@ -14,43 +14,74 @@ const { title, description = 'Proof-of-Verified-Carbon — transparent, verifiab
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/brand/synergy-carbon-icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <title>{title} | SynergyCarbon</title>
     <style is:global>
-      :root {
-        --sc-primary: #16a34a;
-        --sc-primary-light: #22c55e;
-        --sc-primary-dark: #15803d;
-        --sc-secondary: #0f766e;
-        --sc-accent: #eab308;
-        --sc-surface: #f0fdf4;
-        --sc-text: #1a2e1a;
-        --sc-text-muted: #6b7b6b;
-      }
-
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family: 'Inter', system-ui, sans-serif;
-        color: var(--sc-text);
-        background: white;
-        line-height: 1.6;
-      }
-
-      a {
-        color: var(--sc-primary);
-        text-decoration: none;
-      }
-
-      a:hover {
-        text-decoration: underline;
-      }
+      @import '../styles/global.css';
     </style>
   </head>
   <body>
     <slot />
+    <script>
+      // Scroll-triggered reveal animations
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+            }
+          });
+        },
+        { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+      );
+
+      document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-scale').forEach((el) => {
+        observer.observe(el);
+      });
+
+      // Sticky nav scroll effect
+      const nav = document.querySelector('.nav');
+      if (nav) {
+        window.addEventListener('scroll', () => {
+          nav.classList.toggle('scrolled', window.scrollY > 40);
+        });
+      }
+
+      // Animated counter for stats
+      function animateCounter(el) {
+        const target = parseInt(el.dataset.target, 10);
+        if (isNaN(target)) return;
+        const duration = 2000;
+        const start = performance.now();
+        const startVal = 0;
+
+        function update(now) {
+          const elapsed = now - start;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          el.textContent = Math.round(startVal + (target - startVal) * eased).toLocaleString();
+          if (progress < 1) requestAnimationFrame(update);
+        }
+        requestAnimationFrame(update);
+      }
+
+      const counterObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              animateCounter(entry.target);
+              counterObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.5 }
+      );
+
+      document.querySelectorAll('.stat-value[data-target]').forEach((el) => {
+        counterObserver.observe(el);
+      });
+    </script>
   </body>
 </html>

@@ -1,0 +1,35 @@
+{
+  "circuit": "sc_audit_trail",
+  "escir_version": "0.8.1",
+  "description": "Governance-related audit events",
+  "vectors": [
+    {
+      "id": "methodology-approved",
+      "description": "Audit event for new methodology approval via governance",
+      "tags": ["governance", "methodology-approved"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "event_in": { "event_id": "0xGOVE001GOVE001GOVE001GOVE001GOVE001GOVE001GOVE001GOVE001GOVE001G", "timestamp_us": 1708000000000000, "actor": "0xGOVSYSTGOVSYSTGOVSYSTGOVSYSTGOVSYSTGOVSYSTGOVSYSTGOVSYSTGOVSYST", "actor_type": "SmartCircuit", "action": "MethodologyApproved", "subject_type": "methodology", "subject_id": "0xMETH001METH001METH001METH001METH001METH001METH001METH001METH001M", "details": { "before_state": "{\"status\":\"proposed\"}", "after_state": "{\"status\":\"approved\",\"votes_for\":4,\"votes_against\":1}", "metadata": "{\"methodology_name\":\"Thermoelectric Waste Heat v1.0\",\"proposal_id\":\"0xPROP001\"}" }, "signature": "VALID_AUDIT_SIG", "prev_event_hash": "0xPREV_HASH_PLACEHOLDER" },
+        "event_valid": true
+      },
+      "expected_outputs": {
+        "stored_valid": true,
+        "event_stored": { "action": "MethodologyApproved" }
+      }
+    },
+    {
+      "id": "vote-cast",
+      "description": "Audit event for governance vote",
+      "tags": ["governance", "vote-cast"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "event_in": { "event_id": "0xGOVE002GOVE002GOVE002GOVE002GOVE002GOVE002GOVE002GOVE002GOVE002G", "timestamp_us": 1707999000000000, "actor": "0xVOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VO", "actor_type": "User", "action": "VoteCast", "subject_type": "proposal", "subject_id": "0xPROP001PROP001PROP001PROP001PROP001PROP001PROP001PROP001PROP001PR", "details": { "before_state": "{\"votes_for\":3,\"votes_against\":1}", "after_state": "{\"votes_for\":4,\"votes_against\":1}", "metadata": "{\"vote\":true,\"voter_weight\":1}" }, "signature": "VALID_AUDIT_SIG", "prev_event_hash": "0xGOVE001_HASH_PLACEHOLDER" },
+        "event_valid": true
+      },
+      "expected_outputs": {
+        "stored_valid": true,
+        "event_stored": { "action": "VoteCast" }
+      }
+    }
+  ]
+}

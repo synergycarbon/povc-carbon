@@ -1,0 +1,10 @@
+{
+  "widget": "sc-retirement-engine",
+  "description": "Sample retirement data for demo mode",
+  "eslite_table": "retirements",
+  "records": [
+    { "retirement_id": "RET001", "credit_id": "SC005", "retired_by": "acme-corp", "tonnes_co2e": 0.260, "beneficiary_name": "Acme Corporation", "retirement_reason": "Q1 2026 Scope 2 emissions offset", "retired_at": 1708050000, "trigger_type": "api_call" },
+    { "retirement_id": "RET002", "credit_id": "SC004", "retired_by": "global-logistics-inc", "tonnes_co2e": 9.001, "beneficiary_name": "Global Logistics Inc", "retirement_reason": "2025 annual carbon neutrality program", "retired_at": 1708060000, "trigger_type": "api_call" },
+    { "retirement_id": "RET003", "credit_id": "SC009", "retired_by": "green-tech-ltd", "tonnes_co2e": 1.500, "beneficiary_name": "GreenTech Ltd", "retirement_reason": "Monthly automatic offset", "retired_at": 1708070000, "trigger_type": "threshold" }
+  ]
+}

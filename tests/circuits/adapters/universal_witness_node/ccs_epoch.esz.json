@@ -1,0 +1,33 @@
+{
+  "circuit": "sc_universal_witness_node",
+  "escir_version": "0.8.1",
+  "description": "Carbon capture and storage epoch aggregation",
+  "vectors": [
+    {
+      "id": "ccs-1hr-epoch",
+      "description": "Aggregate 60 one-minute CCS readings into epoch",
+      "tags": ["ccs", "epoch", "happy-path"],
+      "inputs": {
+        "config": { "source_type": "ccs", "site_id": "0xCCS00001CCS00001CCS00001CCS00001CCS00001CCS00001CCS00001CCS00001", "tenant_id": "ccs-project-01", "methodology_id": "CDM-ACM0001", "sampling_interval_s": 60, "epoch_duration_s": 3600, "sensor_protocol": "opc_ua", "sensor_endpoints": ["opc.tcp://192.168.2.100:4840"] },
+        "ccs_reading": { "co2_captured_kg": 16.67, "injection_pressure_bar": 150.0, "injection_rate_kg_h": 1000.0, "storage_integrity_pct": 99.8, "compressor_power_wh": 833.0, "timestamp_us": 1708000000000000 }
+      },
+      "expected_outputs": {
+        "witness_submission": { "total_energy_wh": 0.0, "total_gas_mcf": 0.0, "total_co2_captured_kg": 1000.0, "reading_count": 60 },
+        "telemetry_log": { "source_type": "ccs", "energy_wh": 0.0, "gas_mcf": 0.0, "co2_captured_kg": 16.67, "efficiency_pct": 99.8 }
+      }
+    },
+    {
+      "id": "ccs-integrity-alarm",
+      "description": "CCS reading rejected due to low storage integrity",
+      "tags": ["ccs", "rejection", "integrity"],
+      "inputs": {
+        "config": { "source_type": "ccs", "site_id": "0xCCS00001CCS00001CCS00001CCS00001CCS00001CCS00001CCS00001CCS00001", "tenant_id": "ccs-project-01", "methodology_id": "CDM-ACM0001", "sampling_interval_s": 60, "epoch_duration_s": 3600, "sensor_protocol": "opc_ua", "sensor_endpoints": ["opc.tcp://192.168.2.100:4840"] },
+        "ccs_reading": { "co2_captured_kg": 16.67, "injection_pressure_bar": 50.0, "injection_rate_kg_h": 200.0, "storage_integrity_pct": 85.0, "compressor_power_wh": 833.0, "timestamp_us": 1708003600000000 }
+      },
+      "expected_outputs": {
+        "witness_submission": { "reading_count": 0 },
+        "telemetry_log": { "source_type": "ccs", "efficiency_pct": 85.0 }
+      }
+    }
+  ]
+}

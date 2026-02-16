@@ -1,0 +1,23 @@
+{
+  "circuit": "sc_forward_contracts",
+  "escir_version": "0.8.1",
+  "description": "Under-delivery triggers contract default",
+  "vectors": [
+    {
+      "id": "under-delivery-default",
+      "description": "Contract defaults after 2 consecutive under-delivery periods (<70%)",
+      "tags": ["default", "under-delivery"],
+      "inputs": {
+        "config": { "max_contracts_per_buyer": 50, "min_contract_value_usd": 100.0, "max_term_months": 60, "default_collateral_pct": 10.0, "default_prepay_months": 3, "under_delivery_threshold_pct": 70.0, "under_delivery_periods": 2, "grace_period_days": 30, "platform_fee_pct": 0.25, "escrow_low_threshold_months": 1.0 },
+        "proposal": { "proposal_id": "0xPROP002PROP002PROP002PROP002PROP002PROP002PROP002PROP002PROP002PR", "buyer": "0xBUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BUYER02BU", "contract_type": "FixedTerm", "project_id": "failing-project-01", "tenant_id": "struggling-tenant", "methodology_id": "IPCC-AR5-100Y", "credit_type": "Avoidance", "vintage_year_min": 2026, "requested_tco2e": 50.0, "max_price_per_tonne_usd": 25.0, "term_months": 6, "settlement_frequency": "monthly", "call_premium_pct": 0.0, "buyer_signature": "VALID_BUYER_SIG", "proposed_at": 1708000000 },
+        "proposal_valid": true
+      },
+      "expected_outputs": {
+        "state_valid": true,
+        "contract_state": { "status": "Defaulted", "consecutive_under_delivery": 2 },
+        "risk_valid": true,
+        "contract_risk": { "delivery_ratio": 0.15, "risk_score": 95 }
+      }
+    }
+  ]
+}

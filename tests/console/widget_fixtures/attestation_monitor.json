@@ -1,0 +1,12 @@
+{
+  "widget": "sc-attestation-monitor",
+  "description": "Sample attestation data for demo mode",
+  "eslite_table": "attestations",
+  "records": [
+    { "attestation_id": "ATT001", "tenant_id": "thermogenzero", "epoch_id": 100, "merkle_root": "0xfedcba98", "total_energy_wh": 212.5, "methodology_id": "EPA-AP42-CH4-FLARE", "tonnes_co2e": 0.260, "quorum_count": 3, "confidence": 95, "created_at": 1708000000 },
+    { "attestation_id": "ATT002", "tenant_id": "thermogenzero", "epoch_id": 101, "merkle_root": "0x12345678", "total_energy_wh": 215.0, "methodology_id": "EPA-AP42-CH4-FLARE", "tonnes_co2e": 0.263, "quorum_count": 3, "confidence": 95, "created_at": 1708003600 },
+    { "attestation_id": "ATT003", "tenant_id": "synergy-solar-farm-01", "epoch_id": 1001, "merkle_root": "0xaabbccdd", "total_energy_wh": 5000.0, "methodology_id": "IPCC-AR5-100Y", "tonnes_co2e": 1.983, "quorum_count": 3, "confidence": 95, "created_at": 1708007200 },
+    { "attestation_id": "ATT004", "tenant_id": "windco-north-01", "epoch_id": 500, "merkle_root": "0x99887766", "total_energy_wh": 25000.0, "methodology_id": "VCS-AMS-III-H", "tonnes_co2e": 9.001, "quorum_count": 3, "confidence": 95, "created_at": 1708010800 },
+    { "attestation_id": "ATT005", "tenant_id": "thermogenzero", "epoch_id": 102, "merkle_root": "0xdeadbeef", "total_energy_wh": 208.0, "methodology_id": "EPA-AP42-CH4-FLARE", "tonnes_co2e": 0.254, "quorum_count": 3, "confidence": 93, "created_at": 1708014400 }
+  ]
+}

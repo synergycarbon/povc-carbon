@@ -132,8 +132,34 @@ Our platform is multi-tenant (ThermogenZero is the first tenant). Console Kit's 
 
 Some of our widgets need to coordinate (e.g., clicking a credit in the registry widget should open the certificate widget for that credit). There is no built-in widget-to-widget event bus in Console Kit. We would implement this with shared lex topics, but a lightweight client-side event channel would be more appropriate.
 
+### 3.7 Astro Static Site Integration Pattern
+
+**Priority: LOW**
+
+We built the marketing website with Astro (static site generator) alongside the Console Kit SPA. There is no eStream-blessed pattern for combining a static marketing site with a Console Kit console app. We ended up with two separate build pipelines (`website/` for Astro, `console/` for Vite+React). A recommended integration pattern — or an Astro adapter for Console Kit — would help teams ship marketing sites with embedded demo widgets without maintaining two disconnected builds.
+
+### 3.8 Widget Embed SDK for External Sites
+
+**Priority: MEDIUM**
+
+SynergyCarbon's impact widgets (counter, certificate, live meter, leaderboard) need to be embeddable on customer websites outside the Console Kit shell. Currently there is no lightweight embed SDK that loads a single widget with authentication context. We would propose an `@estream/widget-embed` package that provides a `<script>` tag loader with Spark session token injection, similar to how analytics or chat widgets are embedded.
+
+### 3.9 ESZ Demo Fixture Standard
+
+**Priority: MEDIUM**
+
+We created ESZ-format JSON fixtures (`tests/circuits/` and `tests/console/widget_fixtures/`) for circuit validation and console demo mode. These fixtures serve dual purpose: SmartCircuit test vectors and UI demo data. eStream should standardize a `*.esz.json` fixture format specification that includes circuit ID, ESCIR version, tagged test vectors with inputs/expected outputs, and ESLite table seeding metadata. This would allow any eStream application to ship demo mode with `?demo=true` URL activation using a common fixture loader pattern.
+
+### 3.10 Console Kit Demo Mode Toggle
+
+**Priority: MEDIUM**
+
+We implemented a DemoProvider + DemoBanner pattern that intercepts ESLite queries and lex topic subscriptions to return fixture data when demo mode is active. This pattern should be a first-class Console Kit feature: `<ConsoleKit demoFixtures={fixtures} />` that automatically switches between live and demo data sources. The demo banner, URL parameter handling, and fixture loading boilerplate should be provided by `@estream/sdk-browser/demo`.
+
 ---
 
 ## 4. Summary
 
 eStream is the right foundation for SynergyCarbon. The combination of ESCIR declarative circuits, Console Kit widgets, Spark wire protocol auth, and WebTransport transport allowed us to build a full-stack carbon credit platform — from edge witness nodes to marketplace UI — in a fraction of the time and code that a traditional stack would require. The areas for improvement are tooling and documentation gaps, not architectural shortcomings. The core abstractions are sound.
+
+The additional work on the marketing website, ESZ demo fixtures, and console demo mode surfaced four new upstream opportunities (Sections 3.7–3.10) that would benefit any team building an eStream vertical application with both a marketing presence and interactive demo capabilities.

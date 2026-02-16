@@ -1,0 +1,23 @@
+{
+  "circuit": "sc_credit_registry",
+  "escir_version": "0.8.1",
+  "description": "Governance-initiated credit cancellation",
+  "vectors": [
+    {
+      "id": "cancel-governance",
+      "description": "Cancel credit via governance decision (fraudulent project)",
+      "tags": ["cancel", "governance", "happy-path"],
+      "inputs": {
+        "config": { "serial_prefix": "SC", "min_mint_tco2e": 0.001, "batch_mint_max": 100, "auto_list_threshold_tco2e": 0.0 },
+        "cancel_request": { "credit_id": "0xCRED005CRED005CRED005CRED005CRED005CRED005CRED005CRED005CRED005C", "reason": "Governance vote: project verification data found to be fabricated", "governance_signature": "VALID_GOVERNANCE_MULTISIG_PLACEHOLDER" }
+      },
+      "expected_outputs": {
+        "credit_retired_valid": true,
+        "credit_retired": {
+          "status": "Cancelled",
+          "retirement_reason": "Governance vote: project verification data found to be fabricated"
+        }
+      }
+    }
+  ]
+}

@@ -26,6 +26,8 @@ import {
 
 import { WIDGET_CATALOG } from './widgets';
 import { ESLITE_SCHEMAS } from './eslite/schemas';
+import { DemoProvider } from './demo/DemoProvider';
+import { DemoBanner } from './demo/DemoBanner';
 
 const BRANDING_URL = '/branding.yaml';
 
@@ -36,15 +38,18 @@ const TRANSPORT_CONFIG = {
 
 export function App(): React.ReactElement {
   return (
-    <EStreamThemeProvider brandingUrl={BRANDING_URL}>
-      <SparkAuthProvider transport={TRANSPORT_CONFIG}>
-        <EsliteProvider schemas={ESLITE_SCHEMAS}>
-          <WidgetDataGateway>
-            <AppShell />
-          </WidgetDataGateway>
-        </EsliteProvider>
-      </SparkAuthProvider>
-    </EStreamThemeProvider>
+    <DemoProvider>
+      <EStreamThemeProvider brandingUrl={BRANDING_URL}>
+        <SparkAuthProvider transport={TRANSPORT_CONFIG}>
+          <EsliteProvider schemas={ESLITE_SCHEMAS}>
+            <WidgetDataGateway>
+              <DemoBanner />
+              <AppShell />
+            </WidgetDataGateway>
+          </EsliteProvider>
+        </SparkAuthProvider>
+      </EStreamThemeProvider>
+    </DemoProvider>
   );
 }
 

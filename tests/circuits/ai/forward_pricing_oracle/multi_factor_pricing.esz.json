@@ -1,0 +1,66 @@
+{
+  "circuit": "sc_forward_pricing_oracle",
+  "escir_version": "0.8.1",
+  "description": "Multi-factor forward curve generation",
+  "vectors": [
+    {
+      "id": "standard-curve",
+      "description": "Generate forward curve with standard market conditions",
+      "tags": ["forward-curve", "standard", "happy-path"],
+      "inputs": {
+        "config": { "risk_free_rate_annual": 0.05, "convenience_yield_annual": 0.02, "supply_elasticity": 0.3, "vintage_decay_per_year": 0.02, "update_interval_s": 60, "basis_alert_sigma": 2.0 },
+        "spot_price": { "price_per_tonne_usd": 25.0, "volume_24h_tco2e": 1500.0, "bid_ask_spread_usd": 0.50, "timestamp": 1708000000 },
+        "spot_valid": true,
+        "yield_forecast": { "tenant_id": "thermogenzero", "horizons": [{ "horizon_days": 7, "projected_tco2e": 1.82, "confidence_80_lo": 1.46, "confidence_80_hi": 2.18 }, { "horizon_days": 30, "projected_tco2e": 7.8, "confidence_80_lo": 6.24, "confidence_80_hi": 9.36 }, { "horizon_days": 90, "projected_tco2e": 23.4, "confidence_80_lo": 18.72, "confidence_80_hi": 28.08 }, { "horizon_days": 365, "projected_tco2e": 94.9, "confidence_80_lo": 75.92, "confidence_80_hi": 113.88 }], "forecast_time": 1708000000 },
+        "forecast_valid": true,
+        "historical_yield": { "avg_daily_tco2e_30d": 0.260, "avg_daily_tco2e_90d": 0.255, "avg_daily_tco2e_365d": 0.250, "timestamp": 1708000000 },
+        "historical_valid": true,
+        "methodology_premiums": [{ "methodology_id": "EPA-AP42-CH4-FLARE", "premium_multiplier": 1.0 }, { "methodology_id": "IPCC-AR5-100Y", "premium_multiplier": 1.05 }, { "methodology_id": "VCS-AMS-III-H", "premium_multiplier": 0.98 }, { "methodology_id": "GS-MICRO-SCALE", "premium_multiplier": 1.10 }],
+        "premiums_valid": true
+      },
+      "expected_outputs": {
+        "curve_valid": true,
+        "forward_curve": {
+          "spot_price_usd": 25.0,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "current_vintage_year": 2026,
+          "tenors": [
+            { "tenor": "1M", "tenor_days": 30, "forward_price_usd": 25.06 },
+            { "tenor": "3M", "tenor_days": 90, "forward_price_usd": 25.19 },
+            { "tenor": "6M", "tenor_days": 180, "forward_price_usd": 25.37 },
+            { "tenor": "1Y", "tenor_days": 365, "forward_price_usd": 25.75 }
+          ]
+        },
+        "basis_alert_valid": false,
+        "status": { "spot_price_usd": 25.0, "curves_published": 1 }
+      }
+    },
+    {
+      "id": "supply-shortage-premium",
+      "description": "Forward price increases when yield forecast is 50% below historical",
+      "tags": ["forward-curve", "supply-shortage"],
+      "inputs": {
+        "config": { "risk_free_rate_annual": 0.05, "convenience_yield_annual": 0.02, "supply_elasticity": 0.3, "vintage_decay_per_year": 0.02, "update_interval_s": 60, "basis_alert_sigma": 2.0 },
+        "spot_price": { "price_per_tonne_usd": 25.0, "volume_24h_tco2e": 800.0, "bid_ask_spread_usd": 1.20, "timestamp": 1708100000 },
+        "spot_valid": true,
+        "yield_forecast": { "tenant_id": "thermogenzero", "horizons": [{ "horizon_days": 30, "projected_tco2e": 3.9, "confidence_80_lo": 2.34, "confidence_80_hi": 5.46 }, { "horizon_days": 90, "projected_tco2e": 11.7, "confidence_80_lo": 7.02, "confidence_80_hi": 16.38 }, { "horizon_days": 365, "projected_tco2e": 47.45, "confidence_80_lo": 28.47, "confidence_80_hi": 66.43 }], "forecast_time": 1708100000 },
+        "forecast_valid": true,
+        "historical_yield": { "avg_daily_tco2e_30d": 0.260, "avg_daily_tco2e_90d": 0.255, "avg_daily_tco2e_365d": 0.250, "timestamp": 1708100000 },
+        "historical_valid": true,
+        "methodology_premiums": [{ "methodology_id": "EPA-AP42-CH4-FLARE", "premium_multiplier": 1.0 }],
+        "premiums_valid": true
+      },
+      "expected_outputs": {
+        "curve_valid": true,
+        "forward_curve": {
+          "spot_price_usd": 25.0,
+          "tenors": [
+            { "tenor": "1Y", "tenor_days": 365, "forward_price_usd": 30.75 }
+          ]
+        },
+        "basis_alert_valid": true,
+        "basis_alert": { "tenor": "1Y", "sigma_deviation": 2.5 }
+      }
+    }
+  ]
+}

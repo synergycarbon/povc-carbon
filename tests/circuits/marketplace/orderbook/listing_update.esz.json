@@ -1,0 +1,20 @@
+{
+  "circuit": "sc_marketplace_orderbook",
+  "escir_version": "0.8.1",
+  "description": "Listing price and parameter updates",
+  "vectors": [
+    {
+      "id": "update-price",
+      "description": "Seller updates listing price",
+      "tags": ["update", "price", "happy-path"],
+      "inputs": {
+        "config": { "listing_fee_pct": 0.5, "min_listing_tco2e": 0.001, "max_listing_duration_days": 365, "escrow_timeout_s": 86400 },
+        "update_listing": { "listing_id": "0xLIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LIST001LI", "new_price_per_tonne_usd": 28.0, "new_min_quantity_tco2e": 2.0, "new_expiry_epoch": 1740000000, "seller_signature": "VALID_SELLER_SIG_PLACEHOLDER" }
+      },
+      "expected_outputs": {
+        "listing_created_valid": true,
+        "listing_created": { "price_per_tonne_usd": 28.0, "min_purchase_tco2e": 2.0 }
+      }
+    }
+  ]
+}

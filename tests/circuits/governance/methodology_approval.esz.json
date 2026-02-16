@@ -1,0 +1,36 @@
+{
+  "circuit": "sc_governance",
+  "escir_version": "0.8.1",
+  "description": "Governance methodology approval workflow",
+  "vectors": [
+    {
+      "id": "methodology-approved-by-quorum",
+      "description": "New methodology approved via governance vote (4 for, 1 against)",
+      "tags": ["methodology", "approval", "happy-path"],
+      "inputs": {
+        "config": { "governance_quorum": 3, "proposal_voting_window_s": 604800, "max_active_proposals": 10 },
+        "propose_methodology": { "methodology_id": "0xMETH001METH001METH001METH001METH001METH001METH001METH001METH001M", "name": "Thermoelectric Waste Heat v1.0", "version": "1.0.0", "source_types": ["thermoelectric"], "emission_factor_model": "EPA-AP42-CH4", "baseline_algorithm": "rolling-30d-average", "validation_rules": [{ "field": "energy_kwh", "operator": "gt", "value": "0", "error_code": "M001" }, { "field": "gas_mcf", "operator": "gt", "value": "0", "error_code": "M002" }], "registry_compatibility": ["verra", "gold_standard"], "approved_at": 0, "approved_by": [] },
+        "cast_vote": { "proposal_id": "0xPROPGV1PROPGV1PROPGV1PROPGV1PROPGV1PROPGV1PROPGV1PROPGV1PROPGV1PR", "voter": "0xVOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VO", "vote": true, "signature": "VALID_VOTE_SIG" }
+      },
+      "expected_outputs": {
+        "methodology_approved": { "name": "Thermoelectric Waste Heat v1.0", "version": "1.0.0" },
+        "proposal_result": { "status": "approved" },
+        "governance_event": { "event_type": "methodology.approved" }
+      }
+    },
+    {
+      "id": "quorum-not-met",
+      "description": "Proposal expires without reaching quorum",
+      "tags": ["methodology", "expired", "quorum"],
+      "inputs": {
+        "config": { "governance_quorum": 3, "proposal_voting_window_s": 604800, "max_active_proposals": 10 },
+        "propose_methodology": { "methodology_id": "0xMETH002METH002METH002METH002METH002METH002METH002METH002METH002M", "name": "Experimental Carbon Capture v0.1", "version": "0.1.0", "source_types": ["ccs"], "emission_factor_model": "custom", "baseline_algorithm": "static", "validation_rules": [], "registry_compatibility": [], "approved_at": 0, "approved_by": [] },
+        "cast_vote": { "proposal_id": "0xPROPGV2PROPGV2PROPGV2PROPGV2PROPGV2PROPGV2PROPGV2PROPGV2PROPGV2PR", "voter": "0xVOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VOTER01VO", "vote": true, "signature": "VALID_VOTE_SIG" }
+      },
+      "expected_outputs": {
+        "proposal_result": { "status": "expired" },
+        "governance_event": { "event_type": "proposal.expired" }
+      }
+    }
+  ]
+}

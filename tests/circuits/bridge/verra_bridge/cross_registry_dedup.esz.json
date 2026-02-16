@@ -1,0 +1,31 @@
+{
+  "circuit": "sc_verra_registry_bridge",
+  "escir_version": "0.8.1",
+  "description": "Cross-registry serial number deduplication",
+  "vectors": [
+    {
+      "id": "unique-credit",
+      "description": "Credit passes dedup check across all registries",
+      "tags": ["dedup", "unique", "happy-path"],
+      "inputs": {
+        "config": { "registries_enabled": ["verra", "gold_standard", "iscc", "cdm"], "dedup_timeout_ms": 5000, "sync_interval_s": 3600, "retry_max": 3 },
+        "dedup_check": { "attestation_id": "0xATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT0", "serial_number": "SC-2026-tz-wellpad-alpha-01-000042", "methodology_id": "EPA-AP42-CH4-FLARE", "vintage_year": 2026, "tonnes_co2e": 0.260, "source_type": "thermoelectric" }
+      },
+      "expected_outputs": {
+        "dedup_result": { "is_unique": true, "conflicts": [], "checked_registries": ["verra", "gold_standard", "iscc", "cdm"] }
+      }
+    },
+    {
+      "id": "duplicate-detected",
+      "description": "Credit serial number already registered on Verra",
+      "tags": ["dedup", "conflict", "verra"],
+      "inputs": {
+        "config": { "registries_enabled": ["verra", "gold_standard"], "dedup_timeout_ms": 5000, "sync_interval_s": 3600, "retry_max": 3 },
+        "dedup_check": { "attestation_id": "0xATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT0", "serial_number": "VERRA-DUP-2026-000123", "methodology_id": "VCS-AMS-III-H", "vintage_year": 2026, "tonnes_co2e": 5.0, "source_type": "wind" }
+      },
+      "expected_outputs": {
+        "dedup_result": { "is_unique": false, "conflicts": [{ "registry": "verra", "external_serial": "VCS-2026-000123", "reason": "Serial number already registered under VCS project 4521" }], "checked_registries": ["verra", "gold_standard"] }
+      }
+    }
+  ]
+}

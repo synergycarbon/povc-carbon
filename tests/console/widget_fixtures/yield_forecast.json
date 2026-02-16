@@ -1,0 +1,13 @@
+{
+  "widget": "sc-yield-forecast",
+  "description": "Sample yield forecast data for demo mode",
+  "eslite_table": "yield_forecasts",
+  "records": [
+    { "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "horizon": "7d", "point_estimate": 1.82, "confidence_lower": 1.46, "confidence_upper": 2.18, "model_version": "v2.1.0", "generated_at": 1708000000 },
+    { "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "horizon": "30d", "point_estimate": 7.80, "confidence_lower": 6.24, "confidence_upper": 9.36, "model_version": "v2.1.0", "generated_at": 1708000000 },
+    { "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "horizon": "90d", "point_estimate": 23.40, "confidence_lower": 18.72, "confidence_upper": 28.08, "model_version": "v2.1.0", "generated_at": 1708000000 },
+    { "tenant_id": "thermogenzero", "project_id": "tz-wellpad-alpha-01", "horizon": "365d", "point_estimate": 94.90, "confidence_lower": 75.92, "confidence_upper": 113.88, "model_version": "v2.1.0", "generated_at": 1708000000 },
+    { "tenant_id": "synergy-solar-farm-01", "project_id": "solar-az-mesa-01", "horizon": "30d", "point_estimate": 59.49, "confidence_lower": 50.57, "confidence_upper": 68.41, "model_version": "v2.1.0", "generated_at": 1708000000 },
+    { "tenant_id": "synergy-solar-farm-01", "project_id": "solar-az-mesa-01", "horizon": "365d", "point_estimate": 723.80, "confidence_lower": 506.66, "confidence_upper": 940.94, "model_version": "v2.1.0", "generated_at": 1708000000 }
+  ]
+}

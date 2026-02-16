@@ -1,0 +1,41 @@
+{
+  "circuit": "sc_audit_trail",
+  "escir_version": "0.8.1",
+  "description": "GHG Protocol export request and result",
+  "vectors": [
+    {
+      "id": "ghg-csv-export",
+      "description": "Export audit trail in GHG Protocol CSV format",
+      "tags": ["export", "ghg-protocol", "csv"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "export_request": { "export_id": "0xEXPT001EXPT001EXPT001EXPT001EXPT001EXPT001EXPT001EXPT001EXPT001E", "format": "GHGProtocol_CSV", "start_time": 1707000000, "end_time": 1708100000, "filter_actions": ["CreditIssued", "CreditRetired"], "filter_subjects": [], "requester": "0xAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRA", "requested_at": 1708100000000000 },
+        "export_valid": true
+      },
+      "expected_outputs": {
+        "export_result_valid": true,
+        "export_result": {
+          "format": "GHGProtocol_CSV",
+          "event_count": 150
+        }
+      }
+    },
+    {
+      "id": "verra-json-export",
+      "description": "Export audit trail in Verra VCS JSON format",
+      "tags": ["export", "verra", "json"],
+      "inputs": {
+        "config": { "retention_days": 3650, "signing_key_id": "sc-audit-key-001", "export_batch_size": 10000 },
+        "export_request": { "export_id": "0xEXPT002EXPT002EXPT002EXPT002EXPT002EXPT002EXPT002EXPT002EXPT002E", "format": "VerraVCS_JSON", "start_time": 1707000000, "end_time": 1708100000, "filter_actions": [], "filter_subjects": [], "requester": "0xAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRAAUDITRA", "requested_at": 1708100000000000 },
+        "export_valid": true
+      },
+      "expected_outputs": {
+        "export_result_valid": true,
+        "export_result": {
+          "format": "VerraVCS_JSON",
+          "event_count": 500
+        }
+      }
+    }
+  ]
+}
