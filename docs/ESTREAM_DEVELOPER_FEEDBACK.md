@@ -163,3 +163,12 @@ We implemented a DemoProvider + DemoBanner pattern that intercepts ESLite querie
 eStream is the right foundation for SynergyCarbon. The combination of ESCIR declarative circuits, Console Kit widgets, Spark wire protocol auth, and WebTransport transport allowed us to build a full-stack carbon credit platform — from edge witness nodes to marketplace UI — in a fraction of the time and code that a traditional stack would require. The areas for improvement are tooling and documentation gaps, not architectural shortcomings. The core abstractions are sound.
 
 The additional work on the marketing website, ESZ demo fixtures, and console demo mode surfaced four new upstream opportunities (Sections 3.7–3.10) that would benefit any team building an eStream vertical application with both a marketing presence and interactive demo capabilities.
+
+---
+
+## 5. Upstream Epic Tracking
+
+The upstream proposals from this document have been accepted and tracked in the eStream repository:
+
+- **[#555 — EPIC: Developer Experience](https://github.com/polyquantum/estream-io/issues/555)** — ESCIR Migration CLI, TypeScript Codegen from Circuit Types, JSON Schema for IDE Validation, ESLite Schema Migration, Widget Scaffold CLI, Carbon ESF Schema Pack (`esf-carbon`), Console Kit Developer Guide, ESCIR Test Runner, Widget Event Bus, Multi-Tenant Data Gateway
+- **[#556 — EPIC: eStream Website + Platform Impact Case Study](https://github.com/polyquantum/estream-io/issues/556)** — Public estream.io website with testimonials section, platform impact white paper based on SynergyCarbon build metrics
