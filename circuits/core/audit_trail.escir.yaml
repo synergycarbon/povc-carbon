@@ -13,7 +13,7 @@ metadata:
     Immutable, ML-DSA-87-signed audit log for all platform operations.
     Captures credit issuance, transfers, retirements, marketplace activity,
     access events, and governance actions. Supports regulatory export to
-    GHG Protocol, Verra VCS, Gold Standard, and SOC2 formats. Enforces
+    GHG Protocol, Verra VCS, Gold Standard, ISCC, and SOC2 formats. Enforces
     10-year retention for compliance.
   category: cloud
 
@@ -100,6 +100,27 @@ types:
       - AccessGranted
       - AccessDenied
       - ExportRequested
+      # Forward contract events
+      - ContractProposed
+      - ContractAccepted
+      - ContractTerminated
+      - ContractSettled
+      - ContractDefaulted
+      # Marketplace events
+      - OrderPlaced
+      - EscrowLocked
+      - FundsReleased
+      # Governance voting
+      - ProposalCreated
+      - VoteCast
+      # AI events
+      - ForecastGenerated
+      - RLHFFeedbackReceived
+      # Certificate
+      - CertificateGenerated
+      # Auditor access
+      - AuditorAccessGranted
+      - AuditorAccessRevoked
 
   EventDetails:
     kind: struct
