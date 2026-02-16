@@ -4,7 +4,8 @@
 > **Implementation Phase:** Phase 1 (Weeks 1-6)  
 > **SmartCircuits:** `sc.core.povcr_verifier.v1`, `sc.core.audit_trail.v1`  
 > **Design Reference:** [DESIGN.md](../../DESIGN.md) Sections 3, 10.2-10.3  
-> **Patent Reference:** [PATENTS.md](PATENTS.md)
+> **Patent Reference:** [PATENTS.md](PATENTS.md)  
+> **ESCIR Version:** 0.8.1 — verified complete against DESIGN.md Section 3.2 pipeline (all 8 stages)
 
 ---
 
