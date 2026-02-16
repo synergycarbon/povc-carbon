@@ -161,6 +161,18 @@ types:
       - name: retired_at
         type: u64
 
+  CancelRequest:
+    kind: struct
+    description: "Governance-initiated credit cancellation request"
+    fields:
+      - name: credit_id
+        type: "bytes(32)"
+      - name: reason
+        type: "string(256)"
+      - name: governance_signature
+        type: "bytes(4627)"
+        description: "ML-DSA-87 governance signature authorizing cancellation"
+
   RegistryStats:
     kind: struct
     fields:
@@ -207,6 +219,11 @@ inputs:
 
   - name: retirement_valid
     type: bool
+
+  - name: cancel_request
+    type: CancelRequest
+    description: "Governance-initiated credit cancellation"
+    source: "lex://sc/credits/cancel"
 
 outputs:
   - name: credit_issued
@@ -321,6 +338,8 @@ compute:
       type: lookup
       description: "Check attestation_id not already minted"
       key_type: "bytes(32)"
+      # NOTE: Cross-registry dedup (Verra/GS/CDM serial check) will be handled by
+      # the verra_registry_bridge circuit (Issue #5) as a pre-mint validation step
 
     - id: min_threshold_check
       type: comparator
@@ -426,6 +445,13 @@ compute:
     - retirement_updater -> credit_retired_valid
     - retirement_updater -> retired_counter.increment
     - retirement_updater -> audit_log
+
+    # Cancel flow (governance-initiated)
+    - cancel_request -> credit_lookup
+    - credit_lookup.found & cancel_request -> cancel_validator
+    - cancel_validator: { check: "credit.status in [Issued, Listed, Sold]", check: "ml_dsa87_verify(cancel_request.governance_signature)" }
+    - cancel_validator.valid -> cancel_updater { action: "set_status(Cancelled)", reason: cancel_request.reason }
+    - cancel_updater -> audit_emitter { action: CreditCancelled }
 
 # =============================================================================
 # Test Vectors
