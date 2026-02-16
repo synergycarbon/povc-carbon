@@ -1,7 +1,7 @@
 # SynergyCarbon Retirement Engine — Core SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_retirement_engine
 version: "1.0.0"
 license: "Proprietary"
@@ -313,6 +313,31 @@ annotations:
   streamsight_emit: true
   audit_trail: true
   governance: "sc.governance"
+  precision_class: C
+  alert_on_error: E7020
+  resource_metering:
+    hardware_base: 0.005
+    operations_base: 0.008
+    budget: 300000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: CREDIT_RETIRED
+    code: "0x74"
+    payload:
+      credit_id: output.retirement.credit_id
+      retired_by: output.retirement.retired_by
+      tonnes_co2e: output.retirement.tonnes_co2e
+  on_error:
+    type: RETIREMENT_FAILED
+    code: "0x75"
+    payload:
+      error_code: output.error_code
+      credit_id: input.credit_id
 
 # =============================================================================
 # StreamSight Integration

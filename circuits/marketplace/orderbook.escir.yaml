@@ -1,7 +1,7 @@
 # SynergyCarbon Marketplace Orderbook — Marketplace SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_marketplace_orderbook
 version: "1.0.0"
 license: "Proprietary"
@@ -277,6 +277,31 @@ annotations:
   streamsight_emit: true
   audit_trail: true
   governance: "sc.governance"
+  precision_class: C
+  alert_on_error: E7040
+  resource_metering:
+    hardware_base: 0.007
+    operations_base: 0.011
+    budget: 450000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: ORDER_SETTLED
+    code: "0x78"
+    payload:
+      listing_id: output.settlement.listing_id
+      buyer: output.settlement.buyer
+      total_tonnes: output.settlement.total_tonnes
+  on_error:
+    type: ORDER_FAILED
+    code: "0x79"
+    payload:
+      error_code: output.error_code
+      listing_id: input.listing_id
 
 # =============================================================================
 # StreamSight Integration

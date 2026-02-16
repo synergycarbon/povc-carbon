@@ -1,7 +1,7 @@
 # SynergyCarbon Credit Registry — Core SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_credit_registry
 version: "1.0.0"
 license: "Proprietary"
@@ -245,6 +245,31 @@ annotations:
   governance: "sc.governance"
   esf_schemas: ["CarbonCredit", "CarbonMint"]
   visibility_profile: "carbon-credit"
+  precision_class: C
+  alert_on_error: E7010
+  resource_metering:
+    hardware_base: 0.006
+    operations_base: 0.010
+    budget: 400000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: CREDIT_ISSUED
+    code: "0x72"
+    payload:
+      credit_id: output.credit.credit_id
+      serial_number: output.credit.serial_number
+      tonnes_co2e: output.credit.tonnes_co2e
+  on_error:
+    type: CREDIT_MINT_FAILED
+    code: "0x73"
+    payload:
+      error_code: output.error_code
+      attestation_id: input.attestation_id
 
 # =============================================================================
 # StreamSight Integration

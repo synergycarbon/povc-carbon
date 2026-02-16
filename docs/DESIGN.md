@@ -1,9 +1,9 @@
 # SynergyCarbon PoVC-Carbon — Platform Design
 
-> **Version:** 1.0.0  
-> **Date:** 2026-02-11  
+> **Version:** 1.1.0  
+> **Date:** 2026-02-15  
 > **Status:** Draft  
-> **Platform:** eStream v0.8.1  
+> **Platform:** eStream v0.8.1 + Console Kit (`@estream/sdk-browser/widgets`)  
 > **First Customer:** ThermogenZero (thermoelectric microgrid)  
 > **Compliance Targets:** GHG Protocol, Verra VCS, Gold Standard, ISCC
 
@@ -35,15 +35,36 @@ SynergyCarbon is a **verified carbon credit platform** that provides cryptograph
 │  │  │              Lex Topics (sc.*)                              │ │    │
 │  │  │  sc.credits.* | sc.attestations.* | sc.retirements.*      │ │    │
 │  │  │  sc.marketplace.* | sc.audit.* | sc.governance.*          │ │    │
-│  │  └───────────────────────────────────────────────────────────┘ │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
+│  │  └──────────────────────────┬────────────────────────────────┘ │    │
+│  └─────────────────────────────┼───────────────────────────────────┘    │
+│                                │                                         │
+│  ┌─────────────────────────────┼──────────────────────────────────┐     │
+│  │          @estream/transport │ (WebTransport / HTTP/3)           │     │
+│  │     Wire protocol datagrams │ + Spark auth (0x50–0x54)         │     │
+│  └─────────────────────────────┼──────────────────────────────────┘     │
+│                                │                                         │
+│  ┌─────────────────────────────┼──────────────────────────────────┐     │
+│  │            Console Kit  (@estream/sdk-browser/widgets)          │     │
+│  │                             │                                   │     │
+│  │  ┌──────────────────────────┴───────────────────────────────┐  │     │
+│  │  │  WASM Data Gateway (gateway_authorize, rbac_verify)      │  │     │
+│  │  └──────────────────────────┬───────────────────────────────┘  │     │
+│  │                             │                                   │     │
+│  │  ┌──────────┐  ┌───────────┴──┐  ┌────────────┐  ┌─────────┐ │     │
+│  │  │EStream   │  │useWidgetData │  │WidgetGrid  │  │Widget   │ │     │
+│  │  │Theme     │  │useWidgetSub  │  │WidgetFrame │  │Picker   │ │     │
+│  │  │Provider  │  │useEsliteQuery│  │(drag+drop) │  │(RBAC)   │ │     │
+│  │  └──────────┘  └──────────────┘  └────────────┘  └─────────┘ │     │
+│  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │
-│  │  Console UI       │  │  REST/GraphQL API │  │  Embeddable      │      │
-│  │  (estream-app)    │  │  (B2B integration)│  │  Impact Widget   │      │
-│  │  Credit mgmt,     │  │  Retirement,      │  │  Counter, cert,  │      │
-│  │  marketplace,     │  │  listing, query   │  │  live meter      │      │
-│  │  analytics        │  │                   │  │                  │      │
+│  │  SynergyCarbon    │  │  Edge Proxy       │  │  Impact Widgets  │      │
+│  │  Console          │  │  (B2B only)       │  │  (embeddable)    │      │
+│  │  (Console Kit     │  │  REST API for     │  │  Counter, cert,  │      │
+│  │   deployment      │  │  external services│  │  live meter,     │      │
+│  │   w/ branding.yaml│  │  API Key + OAuth2 │  │  leaderboard     │      │
+│  │   + sc-* widgets) │  │  No browser SDK   │  │  (standalone     │      │
+│  │  [WebTransport]   │  │  clients          │  │   widget routes)  │      │
 │  └──────────────────┘  └──────────────────┘  └──────────────────┘      │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
@@ -109,6 +130,182 @@ sc.
     ├── tz.*                         # ThermogenZero
     ├── solar.*                      # Future solar tenants
     └── wind.*                       # Future wind tenants
+```
+
+### 2.3 Console Kit Foundation
+
+The SynergyCarbon Console is a **Console Kit deployment** — not a standalone app. Console Kit (`@estream/sdk-browser/widgets`) is eStream's framework for building widget-based dashboards with built-in security, theming, and real-time data access.
+
+**Deployment model:**
+
+```
+SynergyCarbon Console
+├── branding.yaml                  # Green palette, Spark config, logos
+├── src/
+│   ├── index.ts                   # EStreamThemeProvider + WidgetGrid bootstrap
+│   ├── widgets/                   # sc-* widget manifests + components
+│   │   ├── index.ts               # registerWidget() calls for all sc-* widgets
+│   │   ├── credit-registry/
+│   │   ├── marketplace/
+│   │   ├── retirement-engine/
+│   │   ├── impact-counter/
+│   │   └── ...
+│   └── eslite/                    # ESLite table schemas
+├── public/brand/                  # SynergyCarbon logo SVGs
+└── test/
+```
+
+**Key integration points:**
+
+| Concern | Console Kit API | SynergyCarbon Usage |
+|---------|----------------|---------------------|
+| Real-time data | `useWidgetSubscription(topic)` | Subscribe to `sc.credits.*`, `sc.retirements.*`, etc. |
+| Local-first cache | `useEsliteQuery(table, opts)` | Cache credits, attestations, retirements in ESLite WASM store |
+| Circuit interaction | `useCircuit(circuitId)` | Submit governance proposals, trigger retirements |
+| Authentication | `useSpark()` | Wire protocol Spark auth (datagrams 0x50–0x54, per estream-io#551) |
+| Data authorization | WASM data gateway | `gateway_authorize()` enforces per-widget lex topic + ESLite table scoping |
+| RBAC | WASM RBAC module | `rbac_can_access_widget()` verifies ML-DSA-87 signed role tokens |
+| Theming | `useEStreamTheme()`, `useBranding()` | SynergyCarbon green palette, dark mode, custom Spark hue |
+| Layout | `WidgetGrid`, `WidgetFrame` | Drag-and-drop dashboard with collapsible widget chrome |
+| Discovery | `WidgetPicker` | Role-filtered widget picker (viewer sees impact, operator sees attestation monitor) |
+| Transport state | `useTransportState()` | Connection status indicator (WebTransport only, no HTTP fallback) |
+
+**Data flow (all WASM-enforced):**
+
+```
+Widget component
+    │ useWidgetSubscription('sc.credits.issued')
+    ▼
+WASM Data Gateway
+    │ gateway_authorize(widget.lexStreams, topic) → allow/deny
+    ▼
+EstreamClient (WebTransport)
+    │ Wire protocol datagram subscription
+    ▼
+eStream Edge Node
+    │ Lex topic routing
+    ▼
+SmartCircuit (sc.core.credit_registry.v1)
+```
+
+**Scaffolding new widgets:**
+
+```bash
+estream-dev init --template widget sc-my-widget
+```
+
+### 2.4 Widget Catalog
+
+Each SynergyCarbon UI surface is a registered Console Kit widget with a typed manifest. Widgets declare their data dependencies (`lexStreams`, `esliteTables`), access requirements (`requiredRoles`, `requiredSparkActions`), and layout preferences (`defaultSize`).
+
+| Widget ID | Category | Roles | Data Source | Lex Streams | ESLite Tables | Size | Spark Actions |
+|-----------|----------|-------|-------------|-------------|---------------|------|---------------|
+| `sc-credit-registry` | `registry` | `viewer` | subscription | `sc.credits.*` | `carbon_credits` | 6×4 | — |
+| `sc-attestation-monitor` | `observability` | `operator` | subscription | `sc.attestations.*` | `attestations` | 6×3 | — |
+| `sc-marketplace` | `economics` | `buyer` | subscription | `sc.marketplace.*` | `marketplace_listings` | 8×5 | — |
+| `sc-retirement-engine` | `governance` | `operator` | subscription | `sc.retirements.*` | `retirements` | 6×4 | `retire_credits` |
+| `sc-audit-trail` | `governance` | `auditor` | subscription | `sc.audit.*` | `audit_events` | 8×4 | — |
+| `sc-governance` | `governance` | `governance` | subscription | `sc.governance.*` | — | 6×3 | `governance_vote` |
+| `sc-impact-counter` | `economics` | (public) | subscription | `sc.retirements.completed` | — | 3×2 | — |
+| `sc-impact-certificate` | `economics` | (public) | eslite | — | `retirements` | 4×3 | — |
+| `sc-impact-live-meter` | `observability` | `viewer` | subscription | `sc.credits.issued`, `tz.teg.power` | — | 4×2 | — |
+| `sc-impact-leaderboard` | `economics` | (public) | polling | — | — | 4×4 | — |
+| `sc-yield-forecast` | `observability` | `operator` | subscription | `sc.ai.forecasts.*` | — | 6×4 | — |
+| `sc-forward-contracts` | `economics` | `buyer` | subscription | `sc.forwards.*` | `forward_contracts` | 8×5 | `sign_contract` |
+| `sc-risk-monitor` | `observability` | `operator` | subscription | `sc.forwards.risk.*` | — | 6×3 | — |
+| `sc-pricing-oracle` | `economics` | `viewer` | subscription | `sc.ai.forecasts.price.*` | — | 4×3 | — |
+
+**Example widget manifest:**
+
+```typescript
+import { lazy } from 'react';
+import { registerWidget } from '@estream/sdk-browser/widgets';
+import { CreditRegistryIcon } from './icons';
+
+registerWidget({
+  id: 'sc-credit-registry',
+  title: 'Credit Registry',
+  category: 'registry',
+  icon: CreditRegistryIcon,
+  component: lazy(() => import('./CreditRegistryWidget')),
+  defaultSize: { cols: 6, rows: 4 },
+  dataSource: 'subscription',
+  lexStreams: ['sc.credits.*'],
+  esliteTables: ['carbon_credits'],
+  requiredRoles: ['viewer'],
+  customAccent: '#00AA55',
+});
+```
+
+**Example widget component:**
+
+```typescript
+import { useWidgetSubscription, useEsliteQuery } from '@estream/sdk-browser/widgets';
+import { useEStreamTheme } from '@estream/sdk-browser/theme';
+import type { CarbonCredit } from '../types';
+
+export function CreditRegistryWidget() {
+  const theme = useEStreamTheme();
+  const { data: liveCredits, loading } = useWidgetSubscription<CarbonCredit[]>('sc.credits.registry');
+  const { data: cached } = useEsliteQuery<CarbonCredit>('carbon_credits', { limit: 100, order: 'desc' });
+
+  const credits = liveCredits ?? cached;
+  // Render credit table with theme tokens (--es-surface-primary, --es-text-primary, etc.)
+}
+```
+
+### 2.5 Branding
+
+SynergyCarbon uses a `branding.yaml` following the Console Kit brand preset pattern (see `apps/console/branding.yaml` in estream-io). The `EStreamThemeProvider` reads this at startup and resolves all `--es-*` CSS design tokens, logo variants, and Spark animation configuration.
+
+```yaml
+brand:
+  name: "synergy-carbon"
+  display_name: "Synergy Carbon"
+
+  colors:
+    primary: "#00AA55"       # SynergyCarbon Green
+    secondary: "#00CC66"     # Light green — hover, links
+    success: "#22C55E"       # Green 500
+    warning: "#F59E0B"       # Amber 500
+    error: "#EF4444"         # Red 500
+
+  logos:
+    wordmark:
+      light: "/brand/synergy-carbon/logo/sc-logo-color.svg"
+      dark: "/brand/synergy-carbon/logo/sc-logo-white.svg"
+    icon:
+      light: "/brand/synergy-carbon/icon/sc-icon-color.svg"
+      dark: "/brand/synergy-carbon/icon/sc-icon-white.svg"
+
+  spark:
+    primary_hue: 145           # Green hue for Spark visual auth
+    primary_saturation: 0.8
+    primary_lightness: 0.4
+    accent_hue: 180            # Cyan accent for particle trails
+    background_color: [8, 20, 12]
+    logo_opacity: 0.85
+    logo_size: 0.2
+
+  font_family: "Inter, system-ui, -apple-system, sans-serif"
+  mode: "dark"
+```
+
+**Bootstrap:**
+
+```typescript
+import { EStreamThemeProvider } from '@estream/sdk-browser/theme';
+import { WidgetGrid } from '@estream/sdk-browser/widgets';
+import brand from '../branding.yaml';
+import './widgets'; // Side-effect: registers all sc-* widgets
+
+export function SynergyCarbonConsole() {
+  return (
+    <EStreamThemeProvider mode="dark" brand={brand}>
+      <WidgetGrid />
+    </EStreamThemeProvider>
+  );
+}
 ```
 
 ---
@@ -239,6 +436,19 @@ Using the eStream `carbon-credit` visibility profile:
 | **auditor** | + site_location, device_ids, raw_telemetry_sample | Third-party verification (90-day access) |
 | **owner** | + cost_data, revenue, business_metrics | Credit originator internals |
 
+#### Console Kit RBAC Mapping
+
+The credit visibility tiers above map directly to Console Kit widget roles. Role tokens are issued by the `estream.ops.rbac.assign.v1` governance circuit, signed with ML-DSA-87, and verified in WASM (`rbac_verify_token()`). The WASM data gateway enforces that each widget can only access lex topics and ESLite tables declared in its manifest.
+
+| Visibility Tier | Console Kit Role | Widgets Accessible | Lex Topic Scope | Enforcement |
+|-----------------|------------------|--------------------|-----------------|-------------|
+| **public** | (empty roles / `viewer`) | `sc-impact-counter`, `sc-impact-certificate`, `sc-impact-leaderboard`, `sc-credit-registry`, `sc-pricing-oracle` | `sc.credits.registry`, `sc.retirements.completed`, `sc.ai.forecasts.price.*` | `rbac_can_access_widget()` — public widgets require no role token |
+| **buyer** | `buyer` | + `sc-marketplace`, `sc-forward-contracts` | + `sc.marketplace.*`, `sc.forwards.*` | Role token required; `gateway_authorize()` scopes topics |
+| **auditor** | `auditor` | + `sc-audit-trail`, `sc-attestation-monitor` | + `sc.audit.*`, `sc.attestations.*` | 90-day time-limited role token; access logged to `sc.audit.access_log` |
+| **owner** | `owner` | + all widgets, including cost/revenue data fields | + `sc.tenants.{tenant}.*` | Full scope; `gateway_authorize()` adds tenant namespace |
+| — | `operator` | `sc-retirement-engine`, `sc-risk-monitor`, `sc-yield-forecast`, `sc-impact-live-meter` | `sc.retirements.*`, `sc.forwards.risk.*`, `sc.ai.forecasts.*` | Spark re-auth for sensitive actions (`requiredSparkActions`) |
+| — | `governance` | `sc-governance` | `sc.governance.*` | `governance_vote` Spark action gate |
+
 ### 4.4 Double-Spend Prevention
 
 - **On-chain uniqueness:** Each `credit_id` is a unique NFT — cannot exist twice
@@ -253,12 +463,13 @@ Using the eStream `carbon-credit` visibility profile:
 
 ### 5.1 Retirement Triggers
 
-| Trigger Type | Description | Example |
-|-------------|-------------|---------|
-| **API call** | `POST /api/v1/retire` | B2B integration, e-commerce checkout |
-| **Stream event** | Lex topic predicate | `order.status == 'completed'` → retire 0.5 tCO2e |
-| **Schedule** | Cron-based | Monthly retirement of accumulated credits |
-| **Threshold** | Balance/cumulative trigger | Retire when balance > 100 tCO2e |
+| Trigger Type | Description | Example | Transport |
+|-------------|-------------|---------|-----------|
+| **Circuit invocation** | `useCircuit('sc.core.retirement_engine.v1')` | Console Kit `sc-retirement-engine` widget (Spark re-auth required) | WebTransport wire protocol |
+| **API call** | `POST /api/v1/retire` | B2B integration, e-commerce checkout | Edge proxy REST (B2B only) |
+| **Stream event** | Lex topic predicate | `order.status == 'completed'` → retire 0.5 tCO2e | SmartCircuit-internal |
+| **Schedule** | Cron-based | Monthly retirement of accumulated credits | SmartCircuit-internal |
+| **Threshold** | Balance/cumulative trigger | Retire when balance > 100 tCO2e | SmartCircuit-internal |
 
 ### 5.2 Retirement Flow
 
@@ -284,8 +495,8 @@ Execution
 Certificate Generation
     ├─ PDF certificate (branded, with QR code)
     ├─ On-chain record (immutable)
-    ├─ Webhook notification to owner
-    └─ Impact widget update (real-time)
+    ├─ Owner notification (lex topic subscription via Console Kit, or webhook for B2B)
+    └─ Impact widget update (useWidgetSubscription → real-time)
 ```
 
 ### 5.3 Certificate Format
@@ -394,7 +605,9 @@ Auditors authenticate via Spark and receive time-limited (90-day) elevated acces
 
 ## 8. B2B Integration API
 
-### 8.1 REST API
+> **Important:** The REST API below is served via the eStream **edge-proxy thin proxy** and is intended exclusively for **external B2B server-to-server integrations** (e-commerce platforms, ERP systems, registry bridges). Console Kit widgets do **not** use these endpoints — they access all data via `useWidgetSubscription()`, `useEsliteQuery()`, and `useCircuit()` over the WebTransport wire protocol (see Section 2.3).
+
+### 8.1 REST API (B2B / External Services Only)
 
 ```
 POST   /api/v1/credits/retire          # Retire credits
@@ -409,60 +622,120 @@ POST   /api/v1/marketplace/buy         # Purchase credits
 POST   /api/v1/triggers                # Create retirement trigger
 GET    /api/v1/triggers                # List active triggers
 DELETE /api/v1/triggers/{id}           # Remove trigger
-GET    /api/v1/impact/{entity_id}      # Get impact summary (for widget)
+GET    /api/v1/impact/{entity_id}      # Get impact summary (B2B embed data)
 GET    /api/v1/audit/export            # Export audit trail
 ```
 
 ### 8.2 Authentication
 
-- **Spark** — PQ-authenticated identity for all write operations
+**Console Kit (browser):** All Console Kit widgets authenticate via the **Spark wire protocol** over WebTransport datagrams (packet types 0x50–0x54). There is no HTTP fallback — the `useSpark()` hook drives the full challenge/response flow over the wire (per [estream-io#551](https://github.com/polyquantum/estream-io/issues/551)).
+
+Sensitive widget actions are gated by `requiredSparkActions` in the widget manifest. For example, the `sc-retirement-engine` widget declares `requiredSparkActions: ['retire_credits']`, which triggers a Spark re-authentication challenge before the retirement circuit can be invoked. The WASM gateway enforces this via `gateway_require_spark_action()`.
+
+**B2B REST API (server-to-server):** External integrations that do not use the Console Kit SDK authenticate via:
+
 - **API Key** — For automated B2B integrations (scoped to specific operations)
 - **OAuth2** — For third-party app integrations
-- All API calls are logged to `sc.audit.access_log`
 
-### 8.3 Webhooks
+All API calls (both Console Kit and REST) are logged to `sc.audit.access_log`.
 
-Clients can register webhooks for:
-- `credit.issued` — New credit minted
-- `credit.retired` — Credit retired (with certificate URL)
-- `trigger.fired` — Retirement trigger activated
-- `marketplace.sold` — Listed credit purchased
-- `attestation.verified` — New PoVCR attestation
+### 8.3 Webhooks (B2B Outbound Notifications)
+
+B2B clients can register webhooks for outbound event notifications. Console Kit widgets do **not** use webhooks — they subscribe directly to lex topics via `useWidgetSubscription()` over WebTransport.
+
+| Webhook Event | Lex Topic Equivalent (Console Kit) | B2B Use Case |
+|---------------|-------------------------------------|--------------|
+| `credit.issued` | `sc.credits.issued` | Notify ERP of new inventory |
+| `credit.retired` | `sc.retirements.completed` | Order confirmation, certificate delivery |
+| `trigger.fired` | `sc.retirements.triggers` | Alert operations team |
+| `marketplace.sold` | `sc.marketplace.orders` | Payment reconciliation |
+| `attestation.verified` | `sc.attestations.verified` | Audit trail sync |
 
 ---
 
-## 9. Impact Widget
+## 9. Impact Widgets
 
-Embeddable widget for enterprises to display verified carbon impact:
+Impact Widgets are Console Kit widgets that display verified carbon impact. Each variant is a registered widget with a typed manifest, RBAC roles, and declared lex stream subscriptions. They run inside the SynergyCarbon Console dashboard and are also available as standalone embeds for external websites.
 
-### 9.1 Variants
+### 9.1 Widget Variants
 
-| Variant | Display | Use Case |
-|---------|---------|----------|
-| **Counter** | Running total tCO2e retired | Corporate website |
-| **Certificate** | Visual retirement certificate | Order confirmation page |
-| **Live Meter** | Real-time generation/avoidance | Energy dashboard |
-| **Leaderboard** | Multi-entity comparison | Industry rankings |
+| Widget ID | Display | Data Source | Lex Streams | Roles | Default Size |
+|-----------|---------|-------------|-------------|-------|--------------|
+| `sc-impact-counter` | Running total tCO2e retired | subscription | `sc.retirements.completed` | (public) | 3×2 |
+| `sc-impact-certificate` | Visual retirement certificate | eslite | — (`retirements` table) | (public) | 4×3 |
+| `sc-impact-live-meter` | Real-time generation/avoidance | subscription | `sc.credits.issued`, `tz.teg.power` | `viewer` | 4×2 |
+| `sc-impact-leaderboard` | Multi-entity comparison | polling | — | (public) | 4×4 |
 
-### 9.2 Embedding
+### 9.2 Widget Implementation
 
-```html
-<!-- Simple iframe embed -->
-<iframe src="https://sc.estream.dev/widget/counter/ENTITY_ID"
-        width="300" height="150" frameborder="0"></iframe>
+Each impact variant is a Console Kit widget registered via `registerWidget()`:
 
-<!-- React component -->
-<SynergyImpactWidget entityId="ENTITY_ID" variant="counter" theme="dark" />
+```typescript
+import { lazy } from 'react';
+import { registerWidget } from '@estream/sdk-browser/widgets';
+import { CounterIcon } from './icons';
 
-<!-- Vanilla JS -->
-<div id="sc-widget"></div>
-<script src="https://sc.estream.dev/widget.js"></script>
-<script>SynergyCarbon.mount('sc-widget', { entityId: 'ENTITY_ID', variant: 'counter' })</script>
+registerWidget({
+  id: 'sc-impact-counter',
+  title: 'Impact Counter',
+  category: 'economics',
+  icon: CounterIcon,
+  component: lazy(() => import('./ImpactCounterWidget')),
+  defaultSize: { cols: 3, rows: 2 },
+  dataSource: 'subscription',
+  lexStreams: ['sc.retirements.completed'],
+  requiredRoles: [],  // Public — no role required
+  customAccent: '#00AA55',
+});
 ```
 
-### 9.3 Real-Time Updates
+**Widget component (counter example):**
 
-Widget connects via WebSocket to `sc.retirements.completed` lex topic and updates in real-time (< 1s from retirement to display).
+```typescript
+import { useWidgetSubscription } from '@estream/sdk-browser/widgets';
+import { useEStreamTheme } from '@estream/sdk-browser/theme';
+import type { RetirementEvent } from '../types';
+
+export function ImpactCounterWidget({ entityId }: { entityId: string }) {
+  const theme = useEStreamTheme();
+  const { data } = useWidgetSubscription<RetirementEvent>('sc.retirements.completed');
+  // Accumulate tCO2e for entity, render counter with theme tokens
+}
+```
+
+### 9.3 Embedding
+
+**Inside SynergyCarbon Console:** Impact widgets appear in the `WidgetGrid` alongside credit registry, marketplace, and other `sc-*` widgets. Users add them via `WidgetPicker`.
+
+**External embedding (corporate websites, order confirmation pages):** Each variant is served as a standalone route that bootstraps a minimal Console Kit shell with `EStreamThemeProvider` and the single widget.
+
+```html
+<!-- iframe embed (standalone widget route) -->
+<iframe src="https://sc.estream.dev/embed/counter/ENTITY_ID"
+        width="300" height="150" frameborder="0"></iframe>
+
+<!-- React embed (for apps already using @estream/sdk-browser) -->
+<EStreamThemeProvider mode="dark" brand={synergyCarbonBrand}>
+  <ImpactCounterWidget entityId="ENTITY_ID" />
+</EStreamThemeProvider>
+```
+
+### 9.4 Real-Time Updates
+
+Widgets subscribe to lex topics via `useWidgetSubscription()` over **WebTransport** (HTTP/3 datagrams). All subscriptions flow through the WASM data gateway (`gateway_authorize()`) which enforces that the widget only accesses its declared `lexStreams`. Updates propagate in < 1s from retirement event to display.
+
+```
+sc.retirements.completed (lex topic)
+    │ SmartCircuit emits ESF frame
+    ▼
+eStream Edge Node
+    │ WebTransport datagram
+    ▼
+WASM Data Gateway
+    │ gateway_authorize('sc-impact-counter', 'sc.retirements.completed') → allow
+    ▼
+useWidgetSubscription() → React re-render
+```
 
 ---
 
@@ -628,6 +901,11 @@ Fully automated — on each `sc.credits.issued` event, the Forward Contract Engi
 | [ESCIR_ML_EXTENSIONS.md](../../toddrooke/estream-io/specs/protocol/ESCIR_ML_EXTENSIONS.md) | estream-io | ESCIR ML extensions (tensor types, SSM primitives) |
 | [trend-detector.escir.yaml](../../toddrooke/estream-io/circuits/ops/trend-detector.escir.yaml) | estream-io | Online regression pattern (trend detection) |
 | [TZ-AI-SPEC.md](../../thermogenzero/microgrid/docs/TZ-AI-SPEC.md) | TZ microgrid | TZ AI corpus and training patterns |
-| [Console CLAUDE.md](../../toddrooke/estream-io/apps/console/CLAUDE.md) | estream-io | Widget system architecture |
+| [Console CLAUDE.md](../../toddrooke/estream-io/apps/console/CLAUDE.md) | estream-io | Console Kit widget system architecture |
+| [Console branding.yaml](../../toddrooke/estream-io/apps/console/branding.yaml) | estream-io | Console Kit brand preset pattern (includes SynergyCarbon example) |
+| [Widget types.ts](../../toddrooke/estream-io/packages/sdk-browser/src/widgets/types.ts) | estream-io | Console Kit Widget interface, categories, roles |
+| [Widget registry.ts](../../toddrooke/estream-io/packages/sdk-browser/src/widgets/registry.ts) | estream-io | Console Kit widget registration and RBAC filtering |
+| [Widget gateway.ts](../../toddrooke/estream-io/packages/sdk-browser/src/widgets/gateway.ts) | estream-io | WASM-backed data access gateway |
+| [estream-io#551](https://github.com/polyquantum/estream-io/issues/551) | estream-io | Wire Protocol SDK Reconciliation — Spark auth over wire, no HTTP fallback |
 | [TakeTitle Architecture](../../TakeTitle/taketitle-io/docs/ARCHITECTURE.md) | taketitle-io | Reference UI pattern (marketplace + portfolio) |
 | [povc-carbon-02-05-26.md](../../toddrooke/estream-io/docs/app-feedback/povc-carbon-02-05-26.md) | estream-io | Outstanding feature requests |

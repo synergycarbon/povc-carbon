@@ -1,7 +1,7 @@
 # SynergyCarbon PoVC-Carbon Platform — Top-Level Composition
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_povc_carbon_platform
 version: "1.0.0"
 license: "Proprietary"

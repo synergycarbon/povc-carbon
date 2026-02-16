@@ -1,7 +1,7 @@
 # SynergyCarbon Impact Widget — Marketplace SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_impact_widget
 version: "1.0.0"
 license: "Proprietary"
@@ -14,7 +14,7 @@ metadata:
     retirement data per entity and serves four widget variants:
     Counter (running total), Certificate (visual retirement cert),
     Live Meter (real-time generation), and Leaderboard (multi-entity
-    comparison). Updates via WebSocket with < 1s latency from
+    comparison). Updates via WebTransport with < 1s latency from
     retirement to display.
   category: cloud
 
@@ -34,7 +34,7 @@ types:
     fields:
       - name: update_debounce_ms
         type: u32
-        description: "Debounce interval for WebSocket updates"
+        description: "Debounce interval for WebTransport updates"
         default: 500
       - name: leaderboard_max_entries
         type: u16
@@ -152,7 +152,7 @@ types:
       - name: updated_at
         type: u64
 
-  WebSocketUpdate:
+  WebTransportUpdate:
     kind: struct
     description: "Real-time update pushed to connected widgets"
     fields:
@@ -208,8 +208,8 @@ outputs:
     type: LeaderboardWidget
 
   - name: ws_update
-    type: WebSocketUpdate
-    description: "Real-time WebSocket push to connected widgets"
+    type: WebTransportUpdate
+    description: "Real-time WebTransport push to connected widgets"
 
   - name: ws_update_valid
     type: bool
@@ -222,7 +222,31 @@ annotations:
   deterministic: false
   streamsight_emit: true
   real_time: true
-  websocket: true
+  webtransport: true
+  witness_tier: "presentation"
+  precision_class: D
+  alert_on_error: E7060
+  resource_metering:
+    hardware_base: 0.002
+    operations_base: 0.003
+    budget: 100000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: IMPACT_UPDATED
+    code: "0x7C"
+    payload:
+      entity_id: output.impact.entity_id
+      total_tco2e: output.impact.total_tco2e_retired
+  on_error:
+    type: IMPACT_UPDATE_FAILED
+    code: "0x7D"
+    payload:
+      error_code: output.error_code
 
 # =============================================================================
 # StreamSight Integration
@@ -281,7 +305,7 @@ compute:
       order: descending
       limit: config.leaderboard_max_entries
 
-    # WebSocket
+    # WebTransport
     - id: ws_debounce
       type: debounce
       description: "Debounce updates to prevent widget flickering"
@@ -289,7 +313,7 @@ compute:
 
     - id: ws_broadcaster
       type: broadcast
-      description: "Push updates to all connected WebSocket clients for entity"
+      description: "Push updates to all connected WebTransport clients for entity"
 
   flows:
     # Retirement → impact update
@@ -302,7 +326,7 @@ compute:
     # Live telemetry → meter
     - live_telemetry -> meter_renderer -> live_meter_data
 
-    # WebSocket real-time push
+    # WebTransport real-time push
     - entity_store.updated -> ws_debounce
     - ws_debounce -> ws_broadcaster -> ws_update
     - ws_debounce -> ws_update_valid

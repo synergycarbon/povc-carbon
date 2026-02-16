@@ -1,7 +1,7 @@
 # SynergyCarbon Forward Pricing Oracle — AI SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_forward_pricing_oracle
 version: "1.0.0"
 license: "Proprietary"
@@ -250,6 +250,30 @@ annotations:
   streamsight_emit: true
   audit_trail: true
   governance: "sc.governance"
+  witness_tier: "intelligence"
+  precision_class: D
+  alert_on_error: E7080
+  resource_metering:
+    hardware_base: 0.010
+    operations_base: 0.015
+    budget: 500000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: FORWARD_CURVE_PUBLISHED
+    code: "0x80"
+    payload:
+      tenor_count: output.curve.tenor_count
+      spot_price: output.curve.spot_price_usd
+  on_error:
+    type: FORWARD_CURVE_FAILED
+    code: "0x81"
+    payload:
+      error_code: output.error_code
 
 # =============================================================================
 # StreamSight Integration

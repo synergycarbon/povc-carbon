@@ -1,7 +1,7 @@
 # SynergyCarbon PoVCR Verifier — Core SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_povcr_verifier
 version: "1.0.0"
 license: "Proprietary"
@@ -270,6 +270,31 @@ annotations:
   audit_trail: true
   governance: "sc.governance"
   multi_tenant: true
+  precision_class: C
+  alert_on_error: E7001
+  resource_metering:
+    hardware_base: 0.008
+    operations_base: 0.012
+    budget: 500000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: ATTESTATION_VERIFIED
+    code: "0x70"
+    payload:
+      attestation_id: output.attestation.attestation_id
+      epoch: output.attestation.epoch
+      tco2e: output.attestation.tonnes_co2e
+  on_error:
+    type: ATTESTATION_REJECTED
+    code: "0x71"
+    payload:
+      error_code: output.error_code
+      epoch: input.submissions.epoch
 
 # =============================================================================
 # StreamSight Integration

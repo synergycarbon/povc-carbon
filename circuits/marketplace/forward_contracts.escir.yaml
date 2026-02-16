@@ -1,7 +1,7 @@
 # SynergyCarbon Forward Contract Engine — Marketplace SmartCircuit
 # Proprietary — SynergyCarbon
 
-escir: "0.8.0"
+escir: "0.8.1"
 name: sc_forward_contracts
 version: "1.0.0"
 license: "Proprietary"
@@ -507,6 +507,31 @@ annotations:
   streamsight_emit: true
   audit_trail: true
   governance: "sc.governance"
+  witness_tier: "execution"
+  precision_class: C
+  alert_on_error: E7050
+  resource_metering:
+    hardware_base: 0.009
+    operations_base: 0.014
+    budget: 600000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: CONTRACT_SETTLED
+    code: "0x7A"
+    payload:
+      contract_id: output.settlement.contract_id
+      tonnes_delivered: output.settlement.tonnes_delivered
+  on_error:
+    type: CONTRACT_DEFAULT
+    code: "0x7B"
+    payload:
+      contract_id: input.contract_id
+      error_code: output.error_code
 
 # =============================================================================
 # StreamSight Integration
