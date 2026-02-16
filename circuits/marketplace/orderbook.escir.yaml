@@ -139,6 +139,25 @@ types:
       - name: settled_at
         type: u64
 
+  ListingUpdate:
+    kind: struct
+    description: "Update an active listing's price, quantity, or expiry"
+    fields:
+      - name: listing_id
+        type: "bytes(32)"
+      - name: new_price_per_tonne_usd
+        type: f64
+        description: "New price (0 = no change)"
+      - name: new_min_quantity_tco2e
+        type: f32
+        description: "New minimum quantity (0 = no change)"
+      - name: new_expiry_epoch
+        type: u64
+        description: "New expiry timestamp (0 = no change)"
+      - name: seller_signature
+        type: "bytes(4627)"
+        description: "ML-DSA-87 signature from listing owner"
+
   SearchQuery:
     kind: struct
     description: "Marketplace search/filter query"
@@ -233,6 +252,11 @@ inputs:
   - name: cancel_listing_id
     type: "bytes(32)"
     description: "Cancel a listing by ID"
+
+  - name: update_listing
+    type: ListingUpdate
+    description: "Update an active listing (price, quantity, expiry)"
+    source: "lex://sc/marketplace/update"
 
   - name: search_query
     type: SearchQuery
@@ -447,6 +471,13 @@ compute:
     - escrow_release.success -> fee_accumulator.add
     - escrow_release.success -> trade_accumulator.add
     - escrow_release.success -> audit_log
+
+    # Listing update
+    - update_listing -> listing_store.lookup
+    - listing_store.found & update_listing -> listing_updater { check: "ml_dsa87_verify(seller_signature)", check: "listing.status == Active" }
+    - listing_updater.valid -> listing_store.update
+    - listing_store.updated -> listing_index.update
+    - listing_store.updated -> audit_log
 
     # Listing cancellation
     - cancel_listing_id -> listing_store.remove
