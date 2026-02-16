@@ -55,6 +55,15 @@ components:
     tier: cloud
     instances: 1
 
+  # --- Governance SmartCircuits ---
+
+  - id: governance
+    circuit: sc.governance.v1
+    source: circuits/governance/governance.escir.yaml
+    description: "Platform governance — methodology approval, verifier registration, parameters"
+    tier: cloud
+    instances: 1
+
   # --- Marketplace SmartCircuits ---
 
   - id: marketplace_orderbook
