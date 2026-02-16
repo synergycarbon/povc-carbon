@@ -896,16 +896,16 @@ Fully automated — on each `sc.credits.issued` event, the Forward Contract Engi
 | [AI_FORWARD_CONTRACTS_SPEC.md](AI_FORWARD_CONTRACTS_SPEC.md) | povc-carbon | AI forecasting and forward contracts specification |
 | [PORTFOLIO-REVIEW.md](../../../synergythermogen/ip/patents/PORTFOLIO-REVIEW.md) | synergythermogen | Patent portfolio (22 patents, 4 clusters) |
 | [ESTREAM_CONTROLS_SPEC.md](../../thermogenzero/microgrid/docs/ESTREAM_CONTROLS_SPEC.md) | TZ microgrid | TZ master controls spec (first customer) |
-| [ESTREAM_MARKETPLACE_SPEC.md](../../toddrooke/estream-io/specs/marketplace/ESTREAM_MARKETPLACE_SPEC.md) | estream-io | eStream marketplace + esf-carbon schemas |
-| [carbon-credit.yaml](../../toddrooke/estream-io/configs/visibility/profiles/carbon-credit.yaml) | estream-io | Visibility profile |
-| [ESCIR_ML_EXTENSIONS.md](../../toddrooke/estream-io/specs/protocol/ESCIR_ML_EXTENSIONS.md) | estream-io | ESCIR ML extensions (tensor types, SSM primitives) |
-| [trend-detector.escir.yaml](../../toddrooke/estream-io/circuits/ops/trend-detector.escir.yaml) | estream-io | Online regression pattern (trend detection) |
+| [ESTREAM_MARKETPLACE_SPEC.md](../../polyquantum/estream-io/specs/marketplace/ESTREAM_MARKETPLACE_SPEC.md) | estream-io | eStream marketplace + esf-carbon schemas |
+| [carbon-credit.yaml](../../polyquantum/estream-io/configs/visibility/profiles/carbon-credit.yaml) | estream-io | Visibility profile |
+| [ESCIR_ML_EXTENSIONS.md](../../polyquantum/estream-io/specs/protocol/ESCIR_ML_EXTENSIONS.md) | estream-io | ESCIR ML extensions (tensor types, SSM primitives) |
+| [trend-detector.escir.yaml](../../polyquantum/estream-io/circuits/ops/trend-detector.escir.yaml) | estream-io | Online regression pattern (trend detection) |
 | [TZ-AI-SPEC.md](../../thermogenzero/microgrid/docs/TZ-AI-SPEC.md) | TZ microgrid | TZ AI corpus and training patterns |
-| [Console CLAUDE.md](../../toddrooke/estream-io/apps/console/CLAUDE.md) | estream-io | Console Kit widget system architecture |
-| [Console branding.yaml](../../toddrooke/estream-io/apps/console/branding.yaml) | estream-io | Console Kit brand preset pattern (includes SynergyCarbon example) |
-| [Widget types.ts](../../toddrooke/estream-io/packages/sdk-browser/src/widgets/types.ts) | estream-io | Console Kit Widget interface, categories, roles |
-| [Widget registry.ts](../../toddrooke/estream-io/packages/sdk-browser/src/widgets/registry.ts) | estream-io | Console Kit widget registration and RBAC filtering |
-| [Widget gateway.ts](../../toddrooke/estream-io/packages/sdk-browser/src/widgets/gateway.ts) | estream-io | WASM-backed data access gateway |
+| [Console CLAUDE.md](../../polyquantum/estream-io/apps/console/CLAUDE.md) | estream-io | Console Kit widget system architecture |
+| [Console branding.yaml](../../polyquantum/estream-io/apps/console/branding.yaml) | estream-io | Console Kit brand preset pattern (includes SynergyCarbon example) |
+| [Widget types.ts](../../polyquantum/estream-io/packages/sdk-browser/src/widgets/types.ts) | estream-io | Console Kit Widget interface, categories, roles |
+| [Widget registry.ts](../../polyquantum/estream-io/packages/sdk-browser/src/widgets/registry.ts) | estream-io | Console Kit widget registration and RBAC filtering |
+| [Widget gateway.ts](../../polyquantum/estream-io/packages/sdk-browser/src/widgets/gateway.ts) | estream-io | WASM-backed data access gateway |
 | [estream-io#551](https://github.com/polyquantum/estream-io/issues/551) | estream-io | Wire Protocol SDK Reconciliation — Spark auth over wire, no HTTP fallback |
 | [TakeTitle Architecture](../../TakeTitle/taketitle-io/docs/ARCHITECTURE.md) | taketitle-io | Reference UI pattern (marketplace + portfolio) |
-| [povc-carbon-02-05-26.md](../../toddrooke/estream-io/docs/app-feedback/povc-carbon-02-05-26.md) | estream-io | Outstanding feature requests |
+| [povc-carbon-02-05-26.md](../../polyquantum/estream-io/docs/app-feedback/povc-carbon-02-05-26.md) | estream-io | Outstanding feature requests |

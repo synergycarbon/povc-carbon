@@ -5,8 +5,8 @@
 > **Framework:** eStream Console Kit (`@estream/sdk-browser/widgets`)  
 > **Design Reference:** [DESIGN.md](../../DESIGN.md) Sections 2.3–2.5, 9  
 > **TakeTitle Reference:** [TakeTitle Architecture](../../../../TakeTitle/taketitle-io/docs/ARCHITECTURE.md)  
-> **Console Reference:** [Console CLAUDE.md](../../../../toddrooke/estream-io/apps/console/CLAUDE.md)  
-> **Branding Reference:** [Console branding.yaml](../../../../toddrooke/estream-io/apps/console/branding.yaml)  
+> **Console Reference:** [Console CLAUDE.md](../../../../polyquantum/estream-io/apps/console/CLAUDE.md)  
+> **Branding Reference:** [Console branding.yaml](../../../../polyquantum/estream-io/apps/console/branding.yaml)  
 > **Wire Protocol:** estream-io#551 — Spark auth over WebTransport datagrams (no HTTP fallback)
 
 ---
