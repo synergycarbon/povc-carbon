@@ -113,9 +113,21 @@ types:
         type: f32
         description: "Conservative discount (e.g., 0.05 = 5%)"
         default: 0.05
+      - name: emission_factor
+        type: f32
+        description: "Grid emission factor (tCO2e/MWh) — used by GS-MICRO-SCALE and SOLAR-GRID-OFFSET"
+        default: 0.0
       - name: formula_id
         type: "string(32)"
-        description: "Calculation formula identifier"
+        description: "Calculation formula identifier (EPA-AP42-CH4-FLARE, SOLAR-GRID-OFFSET, IPCC-AR5-100Y, IPCC-AR5-20Y, VCS-AMS-III-H, GS-MICRO-SCALE, CDM-ACM0001, CUSTOM)"
+      - name: custom_formula
+        type: "string(2048)"
+        description: "Custom formula expression (only for CUSTOM methodology, validated at governance approval)"
+        default: ""
+      - name: registry_compatibility
+        type: "string(128)"
+        description: "Compatible registries: verra, gold_standard, iscc, cdm"
+        default: ""
       - name: status
         type: "string(16)"
         description: "approved | test | deprecated"
@@ -423,7 +435,40 @@ compute:
         elif methodology.formula_id == "SOLAR-GRID-OFFSET":
           # Solar displacing grid electricity
           net_tco2e = (total_energy_wh / 1000.0) * grid_emission_factor_kg_per_kwh / 1000.0
-        # ... additional formulas
+        elif methodology.formula_id == "IPCC-AR5-100Y":
+          # IPCC AR5 100-year GWP for methane avoidance
+          ch4_avoided_kg = gas_consumed_mcf * 28.3168 * 0.6567
+          gross_co2e_kg = ch4_avoided_kg * 28.0  # AR5 100-year GWP = 28
+          net_tco2e = (gross_co2e_kg / 1000.0) * (1.0 - methodology.verification_discount)
+        elif methodology.formula_id == "IPCC-AR5-20Y":
+          # IPCC AR5 20-year GWP for methane avoidance (higher weighting)
+          ch4_avoided_kg = gas_consumed_mcf * 28.3168 * 0.6567
+          gross_co2e_kg = ch4_avoided_kg * 84.0  # AR5 20-year GWP = 84
+          net_tco2e = (gross_co2e_kg / 1000.0) * (1.0 - methodology.verification_discount)
+        elif methodology.formula_id == "VCS-AMS-III-H":
+          # Verra AMS-III.H: methane recovery in wastewater treatment
+          ch4_recovered_m3 = gas_consumed_mcf * 28.3168
+          ch4_mass_kg = ch4_recovered_m3 * 0.6567
+          baseline_emissions_kg = ch4_mass_kg * methodology.gwp_factor
+          project_emissions_kg = ch4_mass_kg * 0.01 * (44.0 / 16.0)  # 1% fugitive, combustion CO2
+          net_tco2e = ((baseline_emissions_kg - project_emissions_kg) / 1000.0) * (1.0 - methodology.verification_discount)
+        elif methodology.formula_id == "GS-MICRO-SCALE":
+          # Gold Standard micro-scale methodology for renewables
+          net_kwh = total_energy_wh / 1000.0
+          grid_ef = methodology.emission_factor  # tCO2e/MWh from methodology config
+          net_tco2e = (net_kwh / 1000.0) * grid_ef * (1.0 - methodology.verification_discount)
+        elif methodology.formula_id == "CDM-ACM0001":
+          # CDM ACM0001: flaring or use of landfill gas
+          ch4_destroyed_m3 = gas_consumed_mcf * 28.3168
+          ch4_mass_kg = ch4_destroyed_m3 * 0.6567
+          destruction_efficiency = 0.99  # 99% destruction via enclosed flare
+          baseline_co2e_kg = ch4_mass_kg * methodology.gwp_factor * destruction_efficiency
+          project_co2e_kg = ch4_mass_kg * (1.0 - destruction_efficiency) * methodology.gwp_factor
+          net_tco2e = ((baseline_co2e_kg - project_co2e_kg) / 1000.0) * (1.0 - methodology.verification_discount)
+        elif methodology.formula_id == "CUSTOM":
+          # Governance-approved custom methodology
+          # Parameters loaded from methodology.custom_formula (validated at approval)
+          net_tco2e = eval_custom_formula(methodology.custom_formula, input_data) * (1.0 - methodology.verification_discount)
 
     # Step 11: Attestation builder
     - id: attestation_builder
