@@ -10,11 +10,13 @@ metadata:
   circuit_id: sc.core.retirement_engine.v1
   name: "SynergyCarbon Retirement Engine"
   description: |
-    Handles programmatic carbon credit retirement through four trigger
-    types: API call, stream event, schedule (cron), and threshold.
+    Handles programmatic carbon credit retirement through five trigger
+    types: circuit invocation (WebTransport wire protocol via Console Kit),
+    API call (edge proxy REST for B2B), stream event (lex topic condition),
+    schedule (cron), and threshold (metric-based).
     Validates retirement requests, transitions credit status via the
     Credit Registry, generates PDF certificates with QR codes, and
-    dispatches webhooks to registered clients.
+    notifies via lex topic subscription (Console Kit) or webhook (B2B).
   category: cloud
 
   implementation:
@@ -86,11 +88,13 @@ types:
 
   TriggerType:
     kind: enum
+    description: "All 5 supported retirement trigger types (DESIGN.md Section 5.1)"
     variants:
-      - ApiCall
-      - StreamEvent
-      - Schedule
-      - Threshold
+      - CircuitInvocation   # Direct invocation via WebTransport wire protocol (Console Kit)
+      - ApiCall             # Edge proxy REST (B2B server-to-server only)
+      - StreamEvent         # Lex topic condition trigger
+      - Schedule            # Time-based cron trigger
+      - Threshold           # Metric threshold trigger
 
   RetirementTrigger:
     kind: struct
