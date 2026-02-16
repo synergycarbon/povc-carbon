@@ -1,0 +1,451 @@
+# SynergyCarbon Universal Witness Node — Adapter SmartCircuit
+# Proprietary — SynergyCarbon
+
+escir: "0.8.1"
+name: sc_universal_witness_node
+version: "1.0.0"
+license: "Proprietary"
+
+metadata:
+  circuit_id: sc.adapters.universal_witness_node.v1
+  name: "SynergyCarbon Universal Witness Node"
+  description: |
+    Multi-source energy witness adapter that normalizes telemetry from
+    diverse energy sources (solar, wind, thermoelectric, biogas, CCS,
+    geothermal, hydro, nature-based) into the standard WitnessSubmission
+    format consumed by the PoVCR Verifier. Runs on edge hardware (witness
+    nodes) with source-specific methodology plugins.
+
+    Each source type has a dedicated adapter plugin that handles:
+    - Sensor protocol translation (Modbus, MQTT, OPC-UA, REST, serial)
+    - Unit conversion and normalization
+    - Local attestation signing (ML-DSA-87)
+    - VRF proof generation
+    - Merkle tree construction from raw readings
+  category: edge
+
+  implementation:
+    software:
+      runtime: estream-kernel
+      language: rust
+      estimated_memory_mb: 64
+    hardware:
+      target: arm64
+      min_flash_mb: 32
+      min_ram_mb: 128
+
+# =============================================================================
+# Type Definitions
+# =============================================================================
+
+types:
+  AdapterConfig:
+    kind: struct
+    fields:
+      - name: source_type
+        type: "string(32)"
+        description: "Energy source type (solar, wind, thermoelectric, biogas, ccs, geothermal, hydro, nature_based)"
+      - name: site_id
+        type: "bytes(32)"
+      - name: tenant_id
+        type: "string(64)"
+      - name: methodology_id
+        type: "string(64)"
+        description: "Assigned carbon calculation methodology"
+      - name: sampling_interval_s
+        type: u32
+        description: "Telemetry sampling interval"
+        default: 60
+      - name: epoch_duration_s
+        type: u32
+        description: "Epoch duration for aggregation"
+        default: 3600
+      - name: sensor_protocol
+        type: "string(32)"
+        description: "Sensor protocol (modbus, mqtt, opcua, rest, serial)"
+      - name: sensor_endpoints
+        type: "list<string(256)>"
+        description: "Sensor connection endpoints"
+
+  # --- Source-specific telemetry ---
+
+  SolarTelemetry:
+    kind: struct
+    fields:
+      - name: irradiance_w_m2
+        type: f32
+      - name: panel_temp_c
+        type: f32
+      - name: inverter_power_w
+        type: f32
+      - name: grid_export_wh
+        type: f64
+      - name: timestamp_us
+        type: u64
+
+  WindTelemetry:
+    kind: struct
+    fields:
+      - name: wind_speed_m_s
+        type: f32
+      - name: rotor_rpm
+        type: f32
+      - name: generator_power_w
+        type: f32
+      - name: grid_export_wh
+        type: f64
+      - name: nacelle_temp_c
+        type: f32
+      - name: timestamp_us
+        type: u64
+
+  ThermoelectricTelemetry:
+    kind: struct
+    fields:
+      - name: hot_side_temp_c
+        type: f32
+      - name: cold_side_temp_c
+        type: f32
+      - name: teg_power_w
+        type: f32
+      - name: gas_consumed_mcf
+        type: f32
+      - name: flare_temp_c
+        type: f32
+      - name: grid_export_wh
+        type: f64
+      - name: timestamp_us
+        type: u64
+
+  BiogasTelemetry:
+    kind: struct
+    fields:
+      - name: biogas_flow_m3_h
+        type: f32
+      - name: methane_pct
+        type: f32
+      - name: generator_power_w
+        type: f32
+      - name: gas_destroyed_m3
+        type: f64
+      - name: grid_export_wh
+        type: f64
+      - name: timestamp_us
+        type: u64
+
+  CcsTelemetry:
+    kind: struct
+    fields:
+      - name: co2_captured_kg
+        type: f64
+      - name: injection_pressure_bar
+        type: f32
+      - name: injection_rate_kg_h
+        type: f32
+      - name: storage_integrity_pct
+        type: f32
+      - name: compressor_power_wh
+        type: f64
+      - name: timestamp_us
+        type: u64
+
+  NormalizedReading:
+    kind: struct
+    description: "Source-agnostic normalized reading"
+    fields:
+      - name: source_type
+        type: "string(32)"
+      - name: energy_wh
+        type: f64
+        description: "Total energy generated/displaced (Wh)"
+      - name: gas_mcf
+        type: f32
+        description: "Gas consumed/destroyed (MCF, 0 for non-gas sources)"
+      - name: co2_captured_kg
+        type: f64
+        description: "CO2 captured (kg, CCS only, 0 for others)"
+      - name: efficiency_pct
+        type: f32
+      - name: ambient_temp_c
+        type: f32
+      - name: source_specific_json
+        type: "string(4096)"
+        description: "Source-specific additional data as JSON"
+      - name: timestamp_us
+        type: u64
+
+  EpochAggregate:
+    kind: struct
+    description: "Aggregated epoch data ready for WitnessSubmission"
+    fields:
+      - name: site_id
+        type: "bytes(32)"
+      - name: epoch_id
+        type: u32
+      - name: total_energy_wh
+        type: f64
+      - name: total_gas_mcf
+        type: f32
+      - name: total_co2_captured_kg
+        type: f64
+      - name: reading_count
+        type: u32
+      - name: min_efficiency_pct
+        type: f32
+      - name: max_efficiency_pct
+        type: f32
+      - name: merkle_root
+        type: "bytes(32)"
+      - name: vrf_proof
+        type: "bytes(64)"
+      - name: signature
+        type: "bytes(2420)"
+        description: "ML-DSA-87 signature over epoch data"
+
+# =============================================================================
+# Inputs
+# =============================================================================
+
+inputs:
+  - name: solar_reading
+    type: SolarTelemetry
+    description: "Raw solar panel telemetry"
+    source: "local://sensors/solar"
+
+  - name: wind_reading
+    type: WindTelemetry
+    description: "Raw wind turbine telemetry"
+    source: "local://sensors/wind"
+
+  - name: thermoelectric_reading
+    type: ThermoelectricTelemetry
+    description: "Raw TEG/flare telemetry"
+    source: "local://sensors/thermoelectric"
+
+  - name: biogas_reading
+    type: BiogasTelemetry
+    description: "Raw biogas generator telemetry"
+    source: "local://sensors/biogas"
+
+  - name: ccs_reading
+    type: CcsTelemetry
+    description: "Raw CCS injection telemetry"
+    source: "local://sensors/ccs"
+
+# =============================================================================
+# Outputs
+# =============================================================================
+
+outputs:
+  - name: witness_submission
+    type: EpochAggregate
+    description: "Normalized epoch aggregate submitted to PoVCR Verifier"
+    sink: "lex://sc/witnesses/submit"
+
+  - name: telemetry_log
+    type: NormalizedReading
+    description: "Local telemetry log for auditing"
+    sink: "local://telemetry/log"
+
+# =============================================================================
+# Annotations (v0.8.1)
+# =============================================================================
+
+annotations:
+  witness_tier: "edge"
+  deterministic: true
+  streamsight_emit: true
+  audit_trail: true
+  precision_class: C
+  alert_on_error: E7110
+  resource_metering:
+    hardware_base: 0.002
+    operations_base: 0.003
+    budget: 50000000
+
+# =============================================================================
+# Governance Events (v0.8.1)
+# =============================================================================
+
+governance_events:
+  on_success:
+    type: WITNESS_EPOCH_SUBMITTED
+    code: "0x86"
+    payload:
+      site_id: output.witness_submission.site_id
+      epoch_id: output.witness_submission.epoch_id
+      total_energy_wh: output.witness_submission.total_energy_wh
+      reading_count: output.witness_submission.reading_count
+  on_error:
+    type: WITNESS_EPOCH_FAILED
+    code: "0x87"
+    payload:
+      error_code: output.error_code
+      site_id: config.site_id
+
+# =============================================================================
+# StreamSight Integration
+# =============================================================================
+
+streamsight:
+  namespace: "sc.witnesses"
+
+  emit:
+    - event: "epoch_submitted"
+      topic: "lex://sc/witnesses/submitted"
+      fields: [site_id, epoch_id, total_energy_wh, reading_count, merkle_root]
+
+    - event: "sensor_error"
+      topic: "lex://sc/witnesses/errors"
+      fields: [site_id, source_type, error_code]
+      severity: warning
+
+    - event: "calibration_drift"
+      topic: "lex://sc/witnesses/calibration"
+      fields: [site_id, source_type, drift_pct]
+      severity: warning
+
+# =============================================================================
+# Compute Graph
+# =============================================================================
+
+compute:
+
+  # --- Source-specific normalization ---
+  - node: solar_normalizer
+    op: transform
+    description: "Normalize solar telemetry to NormalizedReading"
+    inputs: [solar_reading]
+    output_type: NormalizedReading
+
+  - node: wind_normalizer
+    op: transform
+    description: "Normalize wind telemetry to NormalizedReading"
+    inputs: [wind_reading]
+    output_type: NormalizedReading
+
+  - node: thermoelectric_normalizer
+    op: transform
+    description: "Normalize TEG/flare telemetry to NormalizedReading"
+    inputs: [thermoelectric_reading]
+    output_type: NormalizedReading
+
+  - node: biogas_normalizer
+    op: transform
+    description: "Normalize biogas telemetry to NormalizedReading"
+    inputs: [biogas_reading]
+    output_type: NormalizedReading
+
+  - node: ccs_normalizer
+    op: transform
+    description: "Normalize CCS telemetry to NormalizedReading"
+    inputs: [ccs_reading]
+    output_type: NormalizedReading
+
+  # --- Common pipeline ---
+  - node: reading_validator
+    op: validate
+    description: "Validate normalized readings (range checks, sanity)"
+    inputs: [solar_normalizer, wind_normalizer, thermoelectric_normalizer, biogas_normalizer, ccs_normalizer]
+    validation:
+      - field: energy_wh
+        check: "gte"
+        value: 0
+      - field: timestamp_us
+        check: "gt"
+        value: 0
+
+  - node: calibration_checker
+    op: comparator
+    description: "Detect sensor calibration drift against historical baseline"
+    inputs: [reading_validator]
+    threshold_pct: 10.0
+
+  - node: epoch_accumulator
+    op: aggregate
+    description: "Accumulate readings into epoch aggregates"
+    inputs: [reading_validator]
+    config:
+      window_s: config.epoch_duration_s
+      key: config.site_id
+
+  - node: merkle_builder
+    op: crypto_hash
+    description: "Build Merkle tree from all readings in epoch"
+    inputs: [epoch_accumulator]
+    algorithm: SHA3-256
+
+  - node: vrf_generator
+    op: crypto_vrf
+    description: "Generate VRF proof for epoch randomness"
+    inputs: [epoch_accumulator]
+
+  - node: epoch_signer
+    op: crypto_sign
+    description: "Sign epoch aggregate with witness node ML-DSA-87 key"
+    inputs: [merkle_builder, vrf_generator]
+    algorithm: ML-DSA-87
+
+  - node: submission_builder
+    op: transform
+    description: "Build final WitnessSubmission from signed epoch data"
+    inputs: [epoch_signer]
+    output: witness_submission
+
+  - node: telemetry_store
+    op: append_log
+    description: "Store raw telemetry locally for audit"
+    inputs: [reading_validator]
+    output: telemetry_log
+    retention_days: 365
+
+# =============================================================================
+# Tests
+# =============================================================================
+
+tests:
+  - name: "Solar epoch — happy path"
+    inputs:
+      solar_reading:
+        irradiance_w_m2: 850.0
+        panel_temp_c: 45.0
+        inverter_power_w: 5000.0
+        grid_export_wh: 5000.0
+    expected:
+      witness_submission:
+        total_energy_wh: 5000.0
+        reading_count: 1
+
+  - name: "Thermoelectric epoch — gas flare"
+    inputs:
+      thermoelectric_reading:
+        hot_side_temp_c: 450.0
+        cold_side_temp_c: 35.0
+        teg_power_w: 2000.0
+        gas_consumed_mcf: 0.5
+        grid_export_wh: 2000.0
+    expected:
+      witness_submission:
+        total_energy_wh: 2000.0
+        total_gas_mcf: 0.5
+
+  - name: "CCS — CO2 injection"
+    inputs:
+      ccs_reading:
+        co2_captured_kg: 1000.0
+        injection_pressure_bar: 150.0
+        injection_rate_kg_h: 500.0
+        storage_integrity_pct: 99.8
+        compressor_power_wh: 50000.0
+    expected:
+      witness_submission:
+        total_co2_captured_kg: 1000.0
+
+  - name: "Validation failure — negative energy"
+    inputs:
+      solar_reading:
+        grid_export_wh: -100.0
+    expected:
+      error:
+        code: E7110
+        reason: "energy_wh below minimum"

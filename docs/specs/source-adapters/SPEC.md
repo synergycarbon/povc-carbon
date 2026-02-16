@@ -3,7 +3,9 @@
 > **Spec Collection:** source-adapters  
 > **Implementation Phase:** Phase 9 (Weeks 53-60)  
 > **Design Reference:** [DESIGN.md](../../DESIGN.md) Section 2 (Tenant Integrations)  
-> **Patent Reference:** [PATENTS.md](PATENTS.md)
+> **Patent Reference:** [PATENTS.md](PATENTS.md)  
+> **Circuit:** `sc.adapters.universal_witness_node.v1` (`circuits/adapters/universal_witness_node.escir.yaml`)  
+> **ESCIR Version:** 0.8.1 — universal witness node with 5 source adapters (solar, wind, TEG, biogas, CCS)
 
 ---
 

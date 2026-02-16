@@ -96,6 +96,16 @@ components:
     tier: cloud
     instances: 1
 
+  # --- Adapter SmartCircuits ---
+
+  - id: universal_witness_node
+    circuit: sc.adapters.universal_witness_node.v1
+    source: circuits/adapters/universal_witness_node.escir.yaml
+    description: "Multi-source witness node adapter (solar, wind, TEG, biogas, CCS)"
+    tier: edge
+    instances: 0  # deployed per-site, not platform-level
+    external: false
+
   # --- AI SmartCircuits ---
 
   - id: yield_forecaster
