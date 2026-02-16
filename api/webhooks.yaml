@@ -1,0 +1,588 @@
+# SynergyCarbon B2B Webhook Events
+#
+# Webhook events are the B2B equivalent of lex topic subscriptions.
+# Console Kit widgets do NOT use webhooks — they subscribe directly to lex
+# topics via useWidgetSubscription() over WebTransport.
+#
+# B2B clients register webhook endpoints via the SynergyCarbon console or
+# provisioning API. Events are delivered as HTTP POST with an ML-DSA-87
+# signed payload for verification.
+#
+# Delivery guarantees:
+#   - At-least-once delivery with exponential backoff (max 5 retries)
+#   - Events include an idempotency key for deduplication
+#   - Webhook endpoint must return 2xx within 10 seconds
+#   - Failed deliveries logged to sc.audit.events
+#
+# Signature verification:
+#   Each POST includes an X-SC-Signature header containing an ML-DSA-87
+#   signature over the raw request body. Verify against the SynergyCarbon
+#   webhook public key provided during registration.
+
+version: "1.0.0"
+
+webhook_delivery:
+  content_type: "application/json"
+  signature_header: "X-SC-Signature"
+  signature_algorithm: "ML-DSA-87"
+  timestamp_header: "X-SC-Timestamp"
+  idempotency_header: "X-SC-Idempotency-Key"
+  retry_policy:
+    max_retries: 5
+    backoff: exponential
+    initial_delay_seconds: 5
+    max_delay_seconds: 3600
+  timeout_seconds: 10
+
+events:
+
+  # ── Credit Lifecycle ───────────────────────────────────────────────────
+
+  credit.issued:
+    description: |
+      Fired when a new carbon credit is minted from a verified PoVCR
+      attestation. The credit is in "issued" status and available for
+      listing, transfer, or retirement.
+    lex_topic: sc.credits.issued
+    category: credits
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - credit_id
+        - serial_number
+        - project_id
+        - vintage_year
+        - credit_type
+        - methodology
+        - tonnes_co2e
+        - attestation_id
+        - owner
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Unique event identifier
+        event_type:
+          type: string
+          const: "credit.issued"
+        timestamp:
+          type: string
+          format: date-time
+          description: Event timestamp (ISO 8601)
+        credit_id:
+          type: string
+          format: hex
+          description: Unique credit ID (bytes32 hex)
+        serial_number:
+          type: string
+          description: Registry serial number
+          example: "SC-2026-TZ-000001"
+        project_id:
+          type: string
+          description: Source project identifier
+        vintage_year:
+          type: integer
+          description: Vintage year
+        credit_type:
+          type: string
+          enum: [avoidance, removal, sequestration]
+        methodology:
+          type: string
+          description: Methodology ID
+        tonnes_co2e:
+          type: number
+          format: double
+          description: Tonnes CO2e (6 decimal precision)
+        attestation_id:
+          type: string
+          format: hex
+          description: Linked PoVCR attestation ID
+        merkle_root:
+          type: string
+          format: hex
+          description: Witness Merkle root
+        owner:
+          type: string
+          format: hex
+          description: Initial owner Spark identity
+
+  credit.retired:
+    description: |
+      Fired when a carbon credit is permanently retired (consumed). The
+      credit cannot be transferred or traded after retirement. A retirement
+      certificate is generated and available via the retirements API.
+    lex_topic: sc.retirements.completed
+    category: credits
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - credit_id
+        - serial_number
+        - retirement_id
+        - certificate_id
+        - tonnes_co2e
+        - retired_by
+        - retirement_reason
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "credit.retired"
+        timestamp:
+          type: string
+          format: date-time
+        credit_id:
+          type: string
+          format: hex
+        serial_number:
+          type: string
+        retirement_id:
+          type: string
+          description: Retirement record ID
+        certificate_id:
+          type: string
+          description: Certificate ID (e.g., SC-RET-2026-000042)
+        tonnes_co2e:
+          type: number
+          format: double
+        vintage_year:
+          type: integer
+        project_id:
+          type: string
+        methodology:
+          type: string
+        retired_by:
+          type: string
+          format: hex
+          description: Retiring entity Spark identity
+        retirement_reason:
+          type: string
+        beneficiary_name:
+          type: string
+          nullable: true
+        certificate_url:
+          type: string
+          format: uri
+          description: URL to download the retirement certificate PDF
+        verify_url:
+          type: string
+          format: uri
+          description: Public verification URL
+
+  credit.transferred:
+    description: |
+      Fired when credit ownership is transferred from one entity to another,
+      either via direct transfer or marketplace settlement. Does not fire
+      for retirements (use credit.retired instead).
+    lex_topic: sc.credits.transferred
+    category: credits
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - credit_id
+        - serial_number
+        - from_owner
+        - to_owner
+        - transfer_type
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "credit.transferred"
+        timestamp:
+          type: string
+          format: date-time
+        credit_id:
+          type: string
+          format: hex
+        serial_number:
+          type: string
+        tonnes_co2e:
+          type: number
+          format: double
+        from_owner:
+          type: string
+          format: hex
+          description: Previous owner Spark identity
+        to_owner:
+          type: string
+          format: hex
+          description: New owner Spark identity
+        transfer_type:
+          type: string
+          enum: [direct, marketplace_settlement, contract_settlement]
+          description: How the transfer was initiated
+        order_id:
+          type: string
+          nullable: true
+          description: Marketplace order ID (if marketplace_settlement)
+        contract_id:
+          type: string
+          nullable: true
+          description: Forward contract ID (if contract_settlement)
+
+  # ── Attestations ───────────────────────────────────────────────────────
+
+  attestation.verified:
+    description: |
+      Fired when a PoVCR attestation passes all verification steps —
+      signature check, VRF validation, quorum collection, Merkle root
+      consensus, energy claim validation, and carbon calculation. A credit
+      will typically be minted shortly after (see credit.issued).
+    lex_topic: sc.attestations.verified
+    category: attestations
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - attestation_id
+        - project_id
+        - epoch_id
+        - methodology
+        - total_energy_wh
+        - tonnes_co2e
+        - quorum_count
+        - quorum_required
+        - confidence
+        - merkle_root
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "attestation.verified"
+        timestamp:
+          type: string
+          format: date-time
+        attestation_id:
+          type: string
+          format: hex
+          description: Attestation ID (bytes32 hex)
+        project_id:
+          type: string
+        tenant_id:
+          type: string
+        epoch_id:
+          type: string
+          description: Verification epoch identifier
+        methodology:
+          type: string
+        total_energy_wh:
+          type: integer
+          description: Verified energy production (watt-hours)
+        tonnes_co2e:
+          type: number
+          format: double
+          description: Calculated carbon avoidance/removal
+        quorum_count:
+          type: integer
+          description: Witnesses that participated
+        quorum_required:
+          type: integer
+          description: Minimum required quorum
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: Verification confidence (0.0 to 1.0)
+        merkle_root:
+          type: string
+          format: hex
+          description: Consensus Merkle root
+
+  # ── Retirements ────────────────────────────────────────────────────────
+
+  retirement.confirmed:
+    description: |
+      Fired when a retirement is fully confirmed and the certificate has
+      been generated. This is the definitive signal that credits have been
+      permanently consumed. Includes certificate download and verification
+      URLs.
+    lex_topic: sc.retirements.certificates
+    category: retirements
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - retirement_id
+        - certificate_id
+        - credit_id
+        - serial_number
+        - tonnes_co2e
+        - retired_by
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "retirement.confirmed"
+        timestamp:
+          type: string
+          format: date-time
+        retirement_id:
+          type: string
+        certificate_id:
+          type: string
+          description: Certificate ID (e.g., SC-RET-2026-000042)
+        credit_id:
+          type: string
+          format: hex
+        serial_number:
+          type: string
+        tonnes_co2e:
+          type: number
+          format: double
+        vintage_year:
+          type: integer
+        project_id:
+          type: string
+        methodology:
+          type: string
+        retired_by:
+          type: string
+          format: hex
+        retirement_reason:
+          type: string
+        beneficiary_name:
+          type: string
+          nullable: true
+        certificate_pdf_url:
+          type: string
+          format: uri
+          description: Branded PDF certificate download
+        verify_url:
+          type: string
+          format: uri
+          description: Public verification page
+        on_chain_record:
+          type: string
+          format: hex
+          description: Immutable on-chain record hash
+
+  # ── Forward Contracts ──────────────────────────────────────────────────
+
+  contract.settled:
+    description: |
+      Fired when a forward contract settlement event occurs — credits are
+      allocated from new minting to an active forward contract. The buyer
+      receives the credits and the escrow is debited.
+    lex_topic: sc.forwards.settlement
+    category: contracts
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - contract_id
+        - settlement_id
+        - credit_id
+        - tonnes_co2e
+        - buyer
+        - seller
+        - delivery_percentage
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "contract.settled"
+        timestamp:
+          type: string
+          format: date-time
+        contract_id:
+          type: string
+        settlement_id:
+          type: string
+          description: Unique settlement event ID
+        credit_id:
+          type: string
+          format: hex
+          description: Credit allocated in this settlement
+        serial_number:
+          type: string
+        tonnes_co2e:
+          type: number
+          format: double
+          description: Quantity settled
+        price_per_tonne:
+          type: number
+          format: double
+          description: Contracted price
+        total_settled:
+          type: number
+          format: double
+          description: Cumulative tonnes settled on this contract
+        total_contracted:
+          type: number
+          format: double
+          description: Total contracted volume
+        delivery_percentage:
+          type: number
+          format: double
+          description: Overall delivery progress (0-100)
+        buyer:
+          type: string
+          format: hex
+        seller:
+          type: string
+          format: hex
+        contract_status:
+          type: string
+          enum: [active, delivering, completed]
+          description: Contract status after this settlement
+
+  contract.defaulted:
+    description: |
+      Fired when a forward contract enters default state due to persistent
+      under-delivery, escrow exhaustion, or collateral shortfall. Requires
+      manual intervention or governance action to resolve.
+    lex_topic: sc.forwards.risk.default
+    category: contracts
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - contract_id
+        - buyer
+        - seller
+        - default_reason
+        - delivery_percentage
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "contract.defaulted"
+        timestamp:
+          type: string
+          format: date-time
+        contract_id:
+          type: string
+        buyer:
+          type: string
+          format: hex
+        seller:
+          type: string
+          format: hex
+        default_reason:
+          type: string
+          enum: [under_delivery, escrow_exhausted, collateral_shortfall, seller_terminated]
+          description: Reason for default
+        delivery_percentage:
+          type: number
+          format: double
+          description: Delivery progress at time of default
+        total_contracted:
+          type: number
+          format: double
+        total_delivered:
+          type: number
+          format: double
+        escrow_remaining:
+          type: number
+          format: double
+          description: Remaining buyer escrow (USD)
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Risk score at time of default
+
+  # ── Governance ─────────────────────────────────────────────────────────
+
+  governance.methodology_approved:
+    description: |
+      Fired when a new carbon credit calculation methodology is approved
+      by governance vote (>66% approval). The methodology becomes available
+      for use in PoVCR attestations and credit minting. May include a
+      test_period before full deployment.
+    lex_topic: sc.governance.methodology.approved
+    category: governance
+    payload:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - timestamp
+        - methodology_id
+        - name
+        - status
+        - source_types
+        - approval_vote_percentage
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          const: "governance.methodology_approved"
+        timestamp:
+          type: string
+          format: date-time
+        methodology_id:
+          type: string
+          description: Unique methodology identifier
+          example: "EPA-AP42-CH4-FLARE"
+        name:
+          type: string
+          description: Human-readable name
+          example: "EPA AP-42 methane flare avoidance"
+        description:
+          type: string
+        status:
+          type: string
+          enum: [approved, test_period]
+          description: Post-approval status (may enter test_period first)
+        source_types:
+          type: array
+          items:
+            type: string
+          description: Applicable energy source types
+        carbon_calculation:
+          type: string
+          description: Calculation formula summary
+        standard_body:
+          type: string
+          description: Issuing standards body
+        gwp_factor:
+          type: number
+          format: double
+          nullable: true
+          description: GWP factor (if applicable)
+        approval_vote_percentage:
+          type: number
+          format: double
+          description: Governance vote approval percentage
+        test_period_ends:
+          type: string
+          format: date-time
+          nullable: true
+          description: End of test period (if status is test_period)
+        proposal_id:
+          type: string
+          description: Governance proposal ID that approved this methodology

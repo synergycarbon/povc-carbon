@@ -1,0 +1,1714 @@
+openapi: "3.1.0"
+
+info:
+  title: SynergyCarbon B2B Integration API
+  version: 1.0.0
+  description: |
+    **This REST API is for B2B server-to-server integrations ONLY.**
+    Console Kit widgets use the native WebTransport wire protocol — they do NOT
+    call these endpoints. See DESIGN.md Section 2.3 for the Console Kit data
+    flow and Section 8 for B2B integration context.
+
+    The API is served through the eStream **edge-proxy thin proxy** and is
+    intended for e-commerce platforms, ERP systems, registry bridges, and other
+    external services that need to interact with SynergyCarbon programmatically.
+
+    ### Authentication
+    All requests require a Bearer token — an ML-DSA-87 signed JWT issued during
+    API key provisioning or OAuth2 client-credentials flow.
+
+    ### Pagination
+    List endpoints use **cursor-based** pagination. Response envelopes include
+    `next_cursor` and `prev_cursor` fields. Pass the cursor value as the
+    `cursor` query parameter to navigate.
+
+    ### Rate Limits
+    Default: 100 req/s per API key. Elevated tiers available on request.
+  contact:
+    name: SynergyCarbon Engineering
+    url: https://sc.estream.dev
+    email: api@synergycarbon.dev
+  license:
+    name: Proprietary
+    url: https://sc.estream.dev/terms
+
+servers:
+  - url: https://edge.sc.estream.dev
+    description: Production edge proxy
+  - url: https://edge-staging.sc.estream.dev
+    description: Staging edge proxy
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Credits
+    description: Carbon credit lifecycle — query, filter, retire
+  - name: Attestations
+    description: PoVCR-verified attestation records
+  - name: Retirements
+    description: Credit retirement records and certificates
+  - name: Marketplace
+    description: Credit listings and orders
+  - name: Contracts
+    description: Forward contracts (Carbon PPAs)
+  - name: Audit
+    description: Audit trail and regulatory export (auditor role required)
+  - name: Governance
+    description: Platform governance — methodologies
+
+paths:
+  # ── Credits ──────────────────────────────────────────────────────────────
+
+  /api/v1/credits:
+    get:
+      operationId: listCredits
+      summary: List carbon credits
+      description: |
+        Returns a paginated list of carbon credits visible to the caller.
+        Results are filtered by the caller's visibility tier (public, buyer,
+        auditor, owner). Supports rich filtering by vintage, methodology,
+        status, credit type, and price range.
+      tags: [Credits]
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CreditStatus"
+          description: Filter by credit status
+        - name: vintage_year
+          in: query
+          schema:
+            type: integer
+            minimum: 2020
+            maximum: 2099
+          description: Filter by vintage year
+        - name: vintage_year_min
+          in: query
+          schema:
+            type: integer
+          description: Minimum vintage year (inclusive)
+        - name: vintage_year_max
+          in: query
+          schema:
+            type: integer
+          description: Maximum vintage year (inclusive)
+        - name: credit_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/CreditType"
+          description: Filter by credit type
+        - name: methodology
+          in: query
+          schema:
+            type: string
+            example: "EPA-AP42-CH4-FLARE"
+          description: Filter by methodology ID
+        - name: project_id
+          in: query
+          schema:
+            type: string
+            example: "tz-wellpad-alpha-01"
+          description: Filter by source project
+        - name: owner
+          in: query
+          schema:
+            type: string
+            format: hex
+          description: Filter by current owner (hex-encoded Spark identity)
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [issued_at, vintage_year, tonnes_co2e]
+            default: issued_at
+          description: Sort field
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order
+      responses:
+        "200":
+          description: Paginated list of credits
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CarbonCredit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/v1/credits/{credit_id}:
+    get:
+      operationId: getCredit
+      summary: Get credit details
+      description: |
+        Returns full details for a single carbon credit. Fields returned
+        depend on the caller's visibility tier.
+      tags: [Credits]
+      parameters:
+        - $ref: "#/components/parameters/CreditIdPath"
+      responses:
+        "200":
+          description: Credit details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/credits/{credit_id}/retire:
+    post:
+      operationId: retireCredit
+      summary: Retire a carbon credit
+      description: |
+        Retire a carbon credit, consuming it permanently. The caller must be
+        the credit owner or an authorized delegate. Retirement is irreversible.
+        A retirement certificate is generated and returned in the response.
+
+        **Idempotency:** Supply an `Idempotency-Key` header to safely retry.
+      tags: [Credits]
+      parameters:
+        - $ref: "#/components/parameters/CreditIdPath"
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Client-generated idempotency key for safe retries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetireCreditRequest"
+      responses:
+        "200":
+          description: Credit retired successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetirementResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Credit already retired or in non-retirable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ── Attestations ─────────────────────────────────────────────────────────
+
+  /api/v1/attestations:
+    get:
+      operationId: listAttestations
+      summary: List verified attestations
+      description: |
+        Returns a paginated list of PoVCR-verified attestation records.
+        Each attestation represents a verified energy production claim backed
+        by hardware witness quorum and Merkle root consensus.
+      tags: [Attestations]
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: project_id
+          in: query
+          schema:
+            type: string
+          description: Filter by source project
+        - name: tenant_id
+          in: query
+          schema:
+            type: string
+          description: Filter by tenant
+        - name: methodology
+          in: query
+          schema:
+            type: string
+          description: Filter by methodology ID
+        - name: verified_after
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only attestations verified after this timestamp
+        - name: verified_before
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only attestations verified before this timestamp
+      responses:
+        "200":
+          description: Paginated list of attestations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Attestation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/v1/attestations/{attestation_id}:
+    get:
+      operationId: getAttestation
+      summary: Get attestation details
+      description: |
+        Returns full details for a single PoVCR attestation, including
+        witness quorum data, Merkle root, and energy claim breakdown.
+        Auditor-tier fields require `auditor` role.
+      tags: [Attestations]
+      parameters:
+        - name: attestation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: hex
+            minLength: 64
+            maxLength: 64
+          description: Attestation ID (bytes32 hex)
+      responses:
+        "200":
+          description: Attestation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttestationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Retirements ──────────────────────────────────────────────────────────
+
+  /api/v1/retirements:
+    get:
+      operationId: listRetirements
+      summary: List retirements
+      description: |
+        Returns a paginated list of credit retirement records. Each
+        retirement includes the certificate ID, quantity, and verification
+        metadata.
+      tags: [Retirements]
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: retired_by
+          in: query
+          schema:
+            type: string
+            format: hex
+          description: Filter by retiring entity
+        - name: project_id
+          in: query
+          schema:
+            type: string
+          description: Filter by source project
+        - name: retired_after
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only retirements after this timestamp
+        - name: retired_before
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only retirements before this timestamp
+      responses:
+        "200":
+          description: Paginated list of retirements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Retirement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/v1/retirements/{retirement_id}:
+    get:
+      operationId: getRetirement
+      summary: Get retirement details
+      description: |
+        Returns full details for a single retirement record, including the
+        generated certificate and verification metadata.
+      tags: [Retirements]
+      parameters:
+        - name: retirement_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Retirement ID (e.g., SC-RET-2026-000042)
+      responses:
+        "200":
+          description: Retirement details with certificate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetirementDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Marketplace ──────────────────────────────────────────────────────────
+
+  /api/v1/marketplace/listings:
+    get:
+      operationId: listMarketplaceListings
+      summary: List active marketplace listings
+      description: |
+        Returns a paginated list of active credit listings on the
+        SynergyCarbon marketplace. Supports filtering by vintage, methodology,
+        credit type, price range, and source type.
+      tags: [Marketplace]
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: vintage_year
+          in: query
+          schema:
+            type: integer
+          description: Filter by vintage year
+        - name: credit_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/CreditType"
+          description: Filter by credit type
+        - name: methodology
+          in: query
+          schema:
+            type: string
+          description: Filter by methodology
+        - name: source_type
+          in: query
+          schema:
+            type: string
+            enum: [TEG, solar, wind, CCS, biogas, nature_based]
+          description: Filter by energy source type
+        - name: price_min
+          in: query
+          schema:
+            type: number
+            format: double
+          description: Minimum price per tonne (USD)
+        - name: price_max
+          in: query
+          schema:
+            type: number
+            format: double
+          description: Maximum price per tonne (USD)
+        - name: min_quantity
+          in: query
+          schema:
+            type: number
+            format: double
+          description: Minimum total tonnes available
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [price_per_tonne, total_tonnes, created_at, vintage_year]
+            default: created_at
+          description: Sort field
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order
+      responses:
+        "200":
+          description: Paginated list of marketplace listings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MarketplaceListing"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/v1/marketplace/orders:
+    post:
+      operationId: placeOrder
+      summary: Place a marketplace order
+      description: |
+        Purchase credits from an active marketplace listing. Funds are held
+        in eStream L2 escrow during settlement. The credit is transferred to
+        the buyer and funds released to the seller upon completion.
+
+        **Idempotency:** Supply an `Idempotency-Key` header to safely retry.
+      tags: [Marketplace]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Client-generated idempotency key for safe retries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceOrderRequest"
+      responses:
+        "201":
+          description: Order placed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Listing not found or no longer active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Listing no longer available (sold or expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ── Forward Contracts ────────────────────────────────────────────────────
+
+  /api/v1/contracts:
+    get:
+      operationId: listContracts
+      summary: List forward contracts
+      description: |
+        Returns a paginated list of forward contracts (Carbon PPAs) visible
+        to the caller. Includes contract terms, delivery progress, and
+        current status.
+      tags: [Contracts]
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ContractStatus"
+          description: Filter by contract status
+        - name: contract_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/ContractType"
+          description: Filter by contract type
+        - name: project_id
+          in: query
+          schema:
+            type: string
+          description: Filter by source project
+      responses:
+        "200":
+          description: Paginated list of forward contracts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ForwardContract"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/v1/contracts/{contract_id}:
+    get:
+      operationId: getContract
+      summary: Get forward contract details
+      description: |
+        Returns full details for a single forward contract, including
+        delivery schedule, settlement history, risk score, and escrow status.
+      tags: [Contracts]
+      parameters:
+        - name: contract_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Forward contract ID
+      responses:
+        "200":
+          description: Contract details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Audit ────────────────────────────────────────────────────────────────
+
+  /api/v1/audit/events:
+    get:
+      operationId: listAuditEvents
+      summary: List audit events
+      description: |
+        Returns a paginated list of immutable audit trail events. Each event
+        is ML-DSA-87 signed and includes actor, action, subject, and
+        before/after state.
+
+        **Requires `auditor` role.**
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [issue, transfer, retire, list, cancel, verify, settle, propose, vote]
+          description: Filter by action type
+        - name: actor
+          in: query
+          schema:
+            type: string
+            format: hex
+          description: Filter by actor identity (hex)
+        - name: subject
+          in: query
+          schema:
+            type: string
+          description: Filter by subject (credit_id or attestation_id)
+        - name: after
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Events after this timestamp
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Events before this timestamp
+      responses:
+        "200":
+          description: Paginated list of audit events
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AuditEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/v1/audit/export:
+    get:
+      operationId: exportAuditData
+      summary: Export audit data in regulatory format
+      description: |
+        Export audit trail data in a specified regulatory format. Supported
+        formats include GHG Protocol (CSV/XLSX), Verra VCS, Gold Standard,
+        ISCC (JSON), and SOC2 structured log.
+
+        **Requires `auditor` role.**
+
+        Large exports are processed asynchronously — the response includes a
+        `download_url` that becomes available once the export job completes.
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ghg_protocol_csv, ghg_protocol_xlsx, verra_vcs, gold_standard, iscc_json, soc2]
+          description: Regulatory export format
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Export start date (inclusive)
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Export end date (inclusive)
+        - name: project_id
+          in: query
+          schema:
+            type: string
+          description: Scope export to a specific project
+      responses:
+        "200":
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExportResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ── Governance ───────────────────────────────────────────────────────────
+
+  /api/v1/governance/methodologies:
+    get:
+      operationId: listMethodologies
+      summary: List approved methodologies
+      description: |
+        Returns a list of all approved carbon credit calculation
+        methodologies on the platform. Includes methodology parameters,
+        applicable source types, and approval status.
+      tags: [Governance]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [approved, test_period, proposed, deprecated]
+          description: Filter by methodology status
+        - name: source_type
+          in: query
+          schema:
+            type: string
+          description: Filter by applicable source type
+      responses:
+        "200":
+          description: List of methodologies
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Methodology"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# ════════════════════════════════════════════════════════════════════════════
+# Components
+# ════════════════════════════════════════════════════════════════════════════
+
+components:
+
+  # ── Security ─────────────────────────────────────────────────────────────
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        ML-DSA-87 signed JWT. Issued via API key provisioning or OAuth2
+        client-credentials flow. The JWT `sub` claim maps to a Spark
+        identity and determines the caller's visibility tier.
+
+  # ── Parameters ───────────────────────────────────────────────────────────
+
+  parameters:
+    CursorParam:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Opaque cursor for pagination. Obtained from `next_cursor` or `prev_cursor` in a previous response.
+
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      description: Maximum number of items to return per page.
+
+    CreditIdPath:
+      name: credit_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: hex
+        minLength: 64
+        maxLength: 64
+      description: Credit ID (bytes32 hex, e.g., hash of attestation + serial)
+
+  # ── Responses ────────────────────────────────────────────────────────────
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Forbidden:
+      description: Insufficient permissions for this operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    UnprocessableEntity:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until the rate limit resets
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Requests allowed per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Requests remaining in current window
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Schemas ──────────────────────────────────────────────────────────────
+
+  schemas:
+
+    # ─ Enums ─────────────────────────────────────────────────────────────
+
+    CreditStatus:
+      type: string
+      enum: [issued, listed, sold, retired, cancelled]
+      description: Credit lifecycle status
+
+    CreditType:
+      type: string
+      enum: [avoidance, removal, sequestration]
+      description: Type of carbon credit
+
+    ContractStatus:
+      type: string
+      enum: [proposed, negotiation, active, delivering, completed, suspended, defaulted, terminated]
+      description: Forward contract lifecycle status
+
+    ContractType:
+      type: string
+      enum: [fixed_term, project_lifetime, volume_committed, callable]
+      description: Forward contract type
+
+    # ─ Pagination ────────────────────────────────────────────────────────
+
+    PaginatedEnvelope:
+      type: object
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items: {}
+        pagination:
+          type: object
+          required: [has_more]
+          properties:
+            next_cursor:
+              type: string
+              nullable: true
+              description: Cursor for the next page (null if no more results)
+            prev_cursor:
+              type: string
+              nullable: true
+              description: Cursor for the previous page (null if on first page)
+            has_more:
+              type: boolean
+              description: Whether more results exist beyond this page
+            total_count:
+              type: integer
+              description: Total number of matching records (omitted for large datasets)
+
+    # ─ Error schemas ─────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              example: "credit_not_found"
+            message:
+              type: string
+              description: Human-readable error description
+              example: "Credit with the specified ID does not exist"
+            details:
+              type: object
+              additionalProperties: true
+              description: Additional error context
+            request_id:
+              type: string
+              format: uuid
+              description: Unique request identifier for support
+
+    ValidationErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, validation_errors]
+          properties:
+            code:
+              type: string
+              example: "validation_failed"
+            message:
+              type: string
+              example: "Request body failed validation"
+            validation_errors:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field:
+                    type: string
+                    description: JSON path to the invalid field
+                    example: "retirement_reason"
+                  message:
+                    type: string
+                    description: Why the field is invalid
+                    example: "Field is required"
+                  code:
+                    type: string
+                    description: Machine-readable validation code
+                    example: "required"
+            request_id:
+              type: string
+              format: uuid
+
+    # ─ Carbon Credit ─────────────────────────────────────────────────────
+
+    CarbonCredit:
+      type: object
+      required:
+        - credit_id
+        - serial_number
+        - project_id
+        - vintage_year
+        - credit_type
+        - methodology
+        - tonnes_co2e
+        - status
+        - issued_at
+      properties:
+        credit_id:
+          type: string
+          format: hex
+          minLength: 64
+          maxLength: 64
+          description: Unique credit ID (bytes32 hex)
+        serial_number:
+          type: string
+          description: Registry serial number (e.g., SC-2026-TZ-000001)
+          example: "SC-2026-TZ-000001"
+        project_id:
+          type: string
+          description: Source project identifier
+          example: "tz-wellpad-alpha-01"
+        vintage_year:
+          type: integer
+          description: Year of emission reduction
+          example: 2026
+        credit_type:
+          $ref: "#/components/schemas/CreditType"
+        methodology:
+          type: string
+          description: Methodology ID used for carbon calculation
+          example: "EPA-AP42-CH4-FLARE"
+        tonnes_co2e:
+          type: number
+          format: double
+          description: Tonnes of CO2 equivalent (6 decimal precision)
+          example: 1.500000
+        status:
+          $ref: "#/components/schemas/CreditStatus"
+        issued_at:
+          type: string
+          format: date-time
+          description: Issuance timestamp
+        attestation_id:
+          type: string
+          format: hex
+          description: Link to the PoVCR attestation (bytes32 hex)
+        merkle_root:
+          type: string
+          format: hex
+          description: Witness Merkle root (bytes32 hex)
+        owner:
+          type: string
+          format: hex
+          description: Current owner Spark identity (hex). Visible to buyer+ tiers.
+        retired_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Retirement timestamp (null if not retired)
+        retired_by:
+          type: string
+          format: hex
+          nullable: true
+          description: Retiring entity Spark identity (null if not retired)
+        retirement_reason:
+          type: string
+          nullable: true
+          description: Reason provided at retirement
+          example: "Offset for Q1 2026 operations"
+
+    CreditResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/CarbonCredit"
+
+    # ─ Attestation ───────────────────────────────────────────────────────
+
+    Attestation:
+      type: object
+      required:
+        - attestation_id
+        - project_id
+        - epoch_id
+        - methodology
+        - total_energy_wh
+        - tonnes_co2e
+        - quorum_count
+        - quorum_required
+        - confidence
+        - verified_at
+      properties:
+        attestation_id:
+          type: string
+          format: hex
+          description: Attestation ID (bytes32 hex)
+        project_id:
+          type: string
+          description: Source project identifier
+        tenant_id:
+          type: string
+          description: Tenant identifier (auditor+ tier)
+        epoch_id:
+          type: string
+          description: Verification epoch ID
+        methodology:
+          type: string
+          description: Methodology ID
+        total_energy_wh:
+          type: integer
+          description: Total verified energy in watt-hours
+        tonnes_co2e:
+          type: number
+          format: double
+          description: Calculated CO2e tonnes
+        quorum_count:
+          type: integer
+          description: Number of witnesses that participated
+        quorum_required:
+          type: integer
+          description: Minimum quorum required
+        merkle_root:
+          type: string
+          format: hex
+          description: Consensus Merkle root (bytes32 hex)
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: Verification confidence score (0.0 to 1.0)
+        verified_at:
+          type: string
+          format: date-time
+          description: Timestamp of verification
+        credit_id:
+          type: string
+          format: hex
+          nullable: true
+          description: Linked credit ID (if a credit has been minted)
+
+    AttestationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Attestation"
+
+    # ─ Retirement ────────────────────────────────────────────────────────
+
+    RetireCreditRequest:
+      type: object
+      required: [retirement_reason]
+      properties:
+        retirement_reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Reason for retirement
+          example: "Offset for Q1 2026 operations"
+        beneficiary_name:
+          type: string
+          maxLength: 200
+          description: Entity name for the retirement certificate
+          example: "Acme Corp"
+        beneficiary_id:
+          type: string
+          description: External identifier of the beneficiary
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary metadata to include on the certificate
+
+    Retirement:
+      type: object
+      required:
+        - retirement_id
+        - credit_id
+        - serial_number
+        - tonnes_co2e
+        - retired_by
+        - retired_at
+        - retirement_reason
+        - certificate_id
+      properties:
+        retirement_id:
+          type: string
+          description: Unique retirement record ID
+        credit_id:
+          type: string
+          format: hex
+          description: Retired credit ID (bytes32 hex)
+        serial_number:
+          type: string
+          description: Credit serial number
+        tonnes_co2e:
+          type: number
+          format: double
+          description: Quantity retired (tCO2e)
+        vintage_year:
+          type: integer
+          description: Credit vintage year
+        project_id:
+          type: string
+          description: Source project
+        methodology:
+          type: string
+          description: Methodology ID
+        retired_by:
+          type: string
+          format: hex
+          description: Retiring entity Spark identity
+        retired_at:
+          type: string
+          format: date-time
+          description: Retirement timestamp
+        retirement_reason:
+          type: string
+          description: Reason provided
+        beneficiary_name:
+          type: string
+          nullable: true
+          description: Beneficiary entity name
+        certificate_id:
+          type: string
+          description: Certificate ID (e.g., SC-RET-2026-000042)
+
+    RetirementResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Retirement"
+
+    RetirementDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: "#/components/schemas/Retirement"
+            - type: object
+              properties:
+                certificate:
+                  $ref: "#/components/schemas/RetirementCertificate"
+                attestation:
+                  $ref: "#/components/schemas/Attestation"
+
+    RetirementCertificate:
+      type: object
+      required:
+        - certificate_id
+        - pdf_url
+        - verify_url
+        - on_chain_record
+      properties:
+        certificate_id:
+          type: string
+          description: Certificate ID
+          example: "SC-RET-2026-000042"
+        pdf_url:
+          type: string
+          format: uri
+          description: URL to download the branded PDF certificate
+        verify_url:
+          type: string
+          format: uri
+          description: Public verification URL with QR code
+          example: "https://sc.estream.dev/verify/42"
+        on_chain_record:
+          type: string
+          format: hex
+          description: On-chain record hash (immutable)
+        qr_code_url:
+          type: string
+          format: uri
+          description: URL to the QR code image
+
+    # ─ Marketplace ───────────────────────────────────────────────────────
+
+    MarketplaceListing:
+      type: object
+      required:
+        - listing_id
+        - credit_ids
+        - total_tonnes
+        - price_per_tonne
+        - vintage_year
+        - methodology
+        - project_name
+        - status
+        - created_at
+        - expires_at
+      properties:
+        listing_id:
+          type: string
+          description: Unique listing identifier
+        credit_ids:
+          type: array
+          items:
+            type: string
+            format: hex
+          description: Credits included (1 or batch)
+        total_tonnes:
+          type: number
+          format: double
+          description: Total tCO2e offered
+        price_per_tonne:
+          type: number
+          format: double
+          description: Ask price per tonne (USD)
+        currency:
+          type: string
+          enum: [USD, ES]
+          default: USD
+          description: Price currency
+        min_purchase:
+          type: number
+          format: double
+          description: Minimum purchase quantity (tCO2e)
+        vintage_year:
+          type: integer
+          description: Credit vintage year
+        credit_type:
+          $ref: "#/components/schemas/CreditType"
+        methodology:
+          type: string
+          description: Verification methodology
+        source_type:
+          type: string
+          description: Energy source type (TEG, solar, wind, etc.)
+        project_name:
+          type: string
+          description: Source project name
+        seller:
+          type: string
+          format: hex
+          description: Seller Spark identity (hex)
+        status:
+          type: string
+          enum: [active, sold, expired, cancelled]
+          description: Listing status
+        created_at:
+          type: string
+          format: date-time
+          description: Listing creation timestamp
+        expires_at:
+          type: string
+          format: date-time
+          description: Listing expiration timestamp
+
+    PlaceOrderRequest:
+      type: object
+      required: [listing_id, quantity_tonnes]
+      properties:
+        listing_id:
+          type: string
+          description: ID of the listing to purchase from
+        quantity_tonnes:
+          type: number
+          format: double
+          minimum: 0.001
+          description: Quantity to purchase (tCO2e, must meet listing min_purchase)
+        max_price_per_tonne:
+          type: number
+          format: double
+          description: Maximum acceptable price per tonne (order rejected if listing price exceeds this)
+        auto_retire:
+          type: boolean
+          default: false
+          description: Automatically retire purchased credits on settlement
+        retirement_reason:
+          type: string
+          description: Required if auto_retire is true
+        beneficiary_name:
+          type: string
+          description: Beneficiary name for auto-retirement certificate
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary metadata for the order
+
+    OrderResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required:
+            - order_id
+            - listing_id
+            - quantity_tonnes
+            - price_per_tonne
+            - total_price
+            - status
+            - created_at
+          properties:
+            order_id:
+              type: string
+              description: Unique order identifier
+            listing_id:
+              type: string
+              description: Source listing ID
+            quantity_tonnes:
+              type: number
+              format: double
+              description: Quantity purchased (tCO2e)
+            price_per_tonne:
+              type: number
+              format: double
+              description: Price per tonne at fill
+            total_price:
+              type: number
+              format: double
+              description: Total order cost (USD)
+            currency:
+              type: string
+              enum: [USD, ES]
+            status:
+              type: string
+              enum: [pending, escrowed, settled, failed, cancelled]
+              description: Order status
+            credit_ids:
+              type: array
+              items:
+                type: string
+                format: hex
+              description: Credit IDs transferred (populated on settlement)
+            auto_retire:
+              type: boolean
+              description: Whether credits will be auto-retired
+            retirement_id:
+              type: string
+              nullable: true
+              description: Retirement ID if auto_retire was true and settlement completed
+            created_at:
+              type: string
+              format: date-time
+            settled_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    # ─ Forward Contracts ─────────────────────────────────────────────────
+
+    ForwardContract:
+      type: object
+      required:
+        - contract_id
+        - contract_type
+        - status
+        - buyer
+        - seller
+        - project_id
+        - methodology
+        - price_per_tonne
+        - total_tonnes
+        - delivered_tonnes
+        - start_date
+      properties:
+        contract_id:
+          type: string
+          description: Unique contract identifier
+        contract_type:
+          $ref: "#/components/schemas/ContractType"
+        status:
+          $ref: "#/components/schemas/ContractStatus"
+        buyer:
+          type: string
+          format: hex
+          description: Buyer Spark identity
+        seller:
+          type: string
+          format: hex
+          description: Seller Spark identity
+        project_id:
+          type: string
+          description: Source project
+        methodology:
+          type: string
+          description: Methodology ID
+        price_per_tonne:
+          type: number
+          format: double
+          description: Contracted price per tonne (USD)
+        total_tonnes:
+          type: number
+          format: double
+          description: Total contracted volume (tCO2e)
+        delivered_tonnes:
+          type: number
+          format: double
+          description: Volume delivered to date
+        delivery_percentage:
+          type: number
+          format: double
+          description: Delivery progress (0-100)
+        start_date:
+          type: string
+          format: date
+          description: Contract start date
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Contract end date (null for project-lifetime)
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Delivery risk score (0 = low, 100 = high)
+        escrow_balance:
+          type: number
+          format: double
+          description: Current buyer escrow balance (USD)
+        created_at:
+          type: string
+          format: date-time
+
+    ContractDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: "#/components/schemas/ForwardContract"
+            - type: object
+              properties:
+                settlement_history:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      settlement_id:
+                        type: string
+                      credit_id:
+                        type: string
+                        format: hex
+                      tonnes_co2e:
+                        type: number
+                        format: double
+                      settled_at:
+                        type: string
+                        format: date-time
+                  description: List of past settlement events
+
+    # ─ Audit ─────────────────────────────────────────────────────────────
+
+    AuditEvent:
+      type: object
+      required:
+        - event_id
+        - timestamp
+        - actor
+        - action
+        - subject
+        - signature
+      properties:
+        event_id:
+          type: string
+          description: Unique event identifier
+        timestamp:
+          type: string
+          format: date-time
+          description: Event timestamp (microsecond precision)
+        actor:
+          type: string
+          format: hex
+          description: Spark-authenticated actor identity (hex)
+        action:
+          type: string
+          enum: [issue, transfer, retire, list, cancel, verify, settle, propose, vote]
+          description: Action performed
+        subject:
+          type: string
+          description: Subject identifier (credit_id, attestation_id, contract_id)
+        subject_type:
+          type: string
+          enum: [credit, attestation, retirement, listing, contract, methodology]
+          description: Type of subject
+        details:
+          type: object
+          properties:
+            before:
+              type: object
+              additionalProperties: true
+              description: State before the action
+            after:
+              type: object
+              additionalProperties: true
+              description: State after the action
+          description: Before/after state snapshot
+        signature:
+          type: string
+          format: hex
+          description: ML-DSA-87 signature over the event
+        prev_event_hash:
+          type: string
+          format: hex
+          description: Hash of the previous audit event (chain integrity)
+
+    AuditExportResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required:
+            - export_id
+            - format
+            - status
+            - start_date
+            - end_date
+            - created_at
+          properties:
+            export_id:
+              type: string
+              description: Unique export job identifier
+            format:
+              type: string
+              description: Requested export format
+            status:
+              type: string
+              enum: [processing, completed, failed]
+              description: Export job status
+            start_date:
+              type: string
+              format: date
+            end_date:
+              type: string
+              format: date
+            project_id:
+              type: string
+              nullable: true
+            record_count:
+              type: integer
+              description: Number of records included (populated on completion)
+            download_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Signed download URL (available when status is completed)
+            expires_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: Download URL expiration
+            created_at:
+              type: string
+              format: date-time
+
+    # ─ Governance ────────────────────────────────────────────────────────
+
+    Methodology:
+      type: object
+      required:
+        - methodology_id
+        - name
+        - status
+        - source_types
+        - carbon_calculation
+      properties:
+        methodology_id:
+          type: string
+          description: Unique methodology identifier
+          example: "EPA-AP42-CH4-FLARE"
+        name:
+          type: string
+          description: Human-readable methodology name
+          example: "EPA AP-42 methane flare avoidance"
+        description:
+          type: string
+          description: Detailed description of the methodology
+        status:
+          type: string
+          enum: [approved, test_period, proposed, deprecated]
+          description: Approval status
+        source_types:
+          type: array
+          items:
+            type: string
+          description: Applicable energy source types
+          example: ["TEG", "gas-to-power"]
+        carbon_calculation:
+          type: string
+          description: Carbon calculation formula summary
+          example: "CH4 mass x GWP factor"
+        standard_body:
+          type: string
+          description: Issuing standards body (EPA, IPCC, Verra, Gold Standard, CDM)
+        gwp_factor:
+          type: number
+          format: double
+          description: Global Warming Potential factor used
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Approval timestamp
+        test_period_ends:
+          type: string
+          format: date-time
+          nullable: true
+          description: Test period end date (if in test_period status)

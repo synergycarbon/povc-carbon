@@ -32,7 +32,7 @@ The master design narrative lives in [DESIGN.md](../DESIGN.md) and [AI_FORWARD_C
 | [marketplace-ui/](marketplace-ui/) | Console Kit deployment, widget catalog, branding | — | Phase 8 (Wk 45-52) | Spec Ready |
 | [governance/](governance/) | Platform governance, methodology approval, verifier registration | — | Phase 6 (cross-cutting) | Planned |
 | [rbac/](rbac/) | RBAC & Data Gateway, visibility tier mapping, Spark action gates | — | Phase 8 (cross-cutting) | Planned |
-| [b2b-api/](b2b-api/) | B2B REST API (edge proxy), webhooks, OpenAPI spec | — | Phase 3 (Wk 13-18) | Planned |
+| [b2b-api/](b2b-api/) | B2B REST API (edge proxy), webhooks, OpenAPI spec | — | Phase 3 (Wk 13-18) | Spec Ready |
 
 ---
 
