@@ -4,7 +4,8 @@
 > **Implementation Phase:** Phase 7 (Weeks 37-44)  
 > **SmartCircuits:** `sc.ai.yield_forecaster.v1`, `sc.ai.forward_pricing_oracle.v1`  
 > **Design Reference:** [AI_FORWARD_CONTRACTS_SPEC.md](../../AI_FORWARD_CONTRACTS_SPEC.md) Sections 3-4  
-> **Patent Reference:** [PATENTS.md](PATENTS.md)
+> **Patent Reference:** [PATENTS.md](PATENTS.md)  
+> **ESCIR Version:** 0.8.1 — both circuits verified complete (16 + 11 compute nodes)
 
 ---
 

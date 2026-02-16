@@ -4,7 +4,8 @@
 > **Implementation Phase:** Phase 7 (Weeks 37-44)  
 > **SmartCircuits:** `sc.marketplace.forward_contracts.v1`  
 > **Design Reference:** [AI_FORWARD_CONTRACTS_SPEC.md](../../AI_FORWARD_CONTRACTS_SPEC.md) Sections 5-6  
-> **Patent Reference:** [PATENTS.md](PATENTS.md)
+> **Patent Reference:** [PATENTS.md](PATENTS.md)  
+> **ESCIR Version:** 0.8.1 — circuit verified complete (29 compute nodes, full lifecycle)
 
 ---
 
