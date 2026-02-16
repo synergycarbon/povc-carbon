@@ -1,0 +1,56 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Proof-of-Verified-Carbon — transparent, verifiable carbon credit platform built on eStream' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/brand/synergy-carbon-icon.svg" />
+    <title>{title} | SynergyCarbon</title>
+    <style is:global>
+      :root {
+        --sc-primary: #16a34a;
+        --sc-primary-light: #22c55e;
+        --sc-primary-dark: #15803d;
+        --sc-secondary: #0f766e;
+        --sc-accent: #eab308;
+        --sc-surface: #f0fdf4;
+        --sc-text: #1a2e1a;
+        --sc-text-muted: #6b7b6b;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        color: var(--sc-text);
+        background: white;
+        line-height: 1.6;
+      }
+
+      a {
+        color: var(--sc-primary);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

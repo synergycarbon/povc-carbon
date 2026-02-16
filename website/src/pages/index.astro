@@ -1,0 +1,91 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Home">
+  <header style="background: linear-gradient(135deg, #0a1f12 0%, #15803d 100%); color: white; padding: 4rem 2rem; text-align: center;">
+    <img src="/brand/synergy-carbon-logo.svg" alt="SynergyCarbon" style="height: 48px; margin-bottom: 1.5rem; filter: brightness(10);" />
+    <h1 style="font-size: 3rem; font-weight: 800; margin-bottom: 1rem;">
+      Proof-of-Verified-Carbon
+    </h1>
+    <p style="font-size: 1.25rem; opacity: 0.9; max-width: 640px; margin: 0 auto 2rem;">
+      Transparent, verifiable carbon credits built on the eStream network.
+      Every tonne CO2e is witnessed, verified, and traceable — from source to retirement.
+    </p>
+    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+      <a href="#how-it-works" style="background: #22c55e; color: white; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; text-decoration: none;">
+        How It Works
+      </a>
+      <a href="https://console.synergycarbon.io" style="background: transparent; color: white; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; border: 2px solid rgba(255,255,255,0.3); text-decoration: none;">
+        Open Console
+      </a>
+    </div>
+  </header>
+
+  <section id="how-it-works" style="padding: 4rem 2rem; max-width: 960px; margin: 0 auto;">
+    <h2 style="font-size: 2rem; text-align: center; margin-bottom: 3rem; color: #15803d;">
+      How PoVC Works
+    </h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem;">
+      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
+        <h3 style="color: #15803d; margin-bottom: 0.5rem;">1. Witness</h3>
+        <p style="color: #6b7b6b;">
+          Edge hardware nodes sample energy generation from solar, wind, thermoelectric, biogas, and CCS sources with cryptographic attestation.
+        </p>
+      </div>
+      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
+        <h3 style="color: #15803d; margin-bottom: 0.5rem;">2. Verify</h3>
+        <p style="color: #6b7b6b;">
+          The PoVCR Verifier checks ML-DSA-87 signatures, validates quorum consensus, and calculates carbon yield using approved methodologies.
+        </p>
+      </div>
+      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
+        <h3 style="color: #15803d; margin-bottom: 0.5rem;">3. Mint</h3>
+        <p style="color: #6b7b6b;">
+          Verified attestations are minted as ECC-1 carbon credit NFTs with full provenance chain, serial numbers, and visibility-tiered metadata.
+        </p>
+      </div>
+      <div style="padding: 1.5rem; border-radius: 12px; background: #f0fdf4;">
+        <h3 style="color: #15803d; margin-bottom: 0.5rem;">4. Trade & Retire</h3>
+        <p style="color: #6b7b6b;">
+          Credits trade on the marketplace or via forward contracts. Retirement is permanent, with verifiable certificates and cross-registry sync.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding: 4rem 2rem; background: #f0fdf4;">
+    <div style="max-width: 960px; margin: 0 auto; text-align: center;">
+      <h2 style="font-size: 2rem; margin-bottom: 1rem; color: #15803d;">Built on eStream</h2>
+      <p style="color: #6b7b6b; max-width: 640px; margin: 0 auto 2rem;">
+        SynergyCarbon runs on the eStream network — post-quantum secure, real-time data via WebTransport, and WASM-backed RBAC. No HTTP fallbacks. No intermediaries.
+      </p>
+      <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
+        <div>
+          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">14</div>
+          <div style="color: #6b7b6b; font-size: 0.875rem;">Console Widgets</div>
+        </div>
+        <div>
+          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">12</div>
+          <div style="color: #6b7b6b; font-size: 0.875rem;">SmartCircuits</div>
+        </div>
+        <div>
+          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">7</div>
+          <div style="color: #6b7b6b; font-size: 0.875rem;">Methodologies</div>
+        </div>
+        <div>
+          <div style="font-size: 2rem; font-weight: 800; color: #16a34a;">4</div>
+          <div style="color: #6b7b6b; font-size: 0.875rem;">Registry Bridges</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="padding: 2rem; text-align: center; color: #6b7b6b; font-size: 0.875rem;">
+    <p>&copy; 2026 SynergyCarbon Inc. All rights reserved.</p>
+    <p style="margin-top: 0.5rem;">
+      <a href="https://console.synergycarbon.io">Console</a> &middot;
+      <a href="https://github.com/synergycarbon">GitHub</a>
+    </p>
+  </footer>
+</Base>
