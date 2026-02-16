@@ -1,8 +1,8 @@
 # SynergyCarbon Spec Collections
 
-> **Version:** 1.0.0
-> **Date:** 2026-02-11
-> **Platform:** eStream v0.8.1
+> **Version:** 1.1.0
+> **Date:** 2026-02-15
+> **Platform:** eStream v0.8.1 + Console Kit (`@estream/sdk-browser/widgets`)
 > **Patent Portfolio:** [PORTFOLIO-REVIEW.md](../../../../synergythermogen/ip/patents/PORTFOLIO-REVIEW.md) (22 patents across 4 clusters)
 
 ---
@@ -29,7 +29,10 @@ The master design narrative lives in [DESIGN.md](../DESIGN.md) and [AI_FORWARD_C
 | [forward-contracts/](forward-contracts/) | Forward contract engine, settlement, escrow | forward-carbon-credit-contracts, streaming-carbon-settlement | Phase 7 (Wk 37-44) | Spec Ready |
 | [compliance/](compliance/) | Registry bridge, audit trail, regulatory export | registry-bridge-system, povc-verified-recs | Phase 1-6 (cross-cutting) | Spec Ready |
 | [source-adapters/](source-adapters/) | Universal witness node, per-source methodology plugins | universal-carbon-witness-node, biogas, CCS, grid-displacement, nature-based | Phase 9 (Wk 53-60) | Spec Ready |
-| [marketplace-ui/](marketplace-ui/) | Widget-based marketplace + portfolio UI | — | Phase 8 (Wk 45-52) | Spec Ready |
+| [marketplace-ui/](marketplace-ui/) | Console Kit deployment, widget catalog, branding | — | Phase 8 (Wk 45-52) | Spec Ready |
+| [governance/](governance/) | Platform governance, methodology approval, verifier registration | — | Phase 6 (cross-cutting) | Planned |
+| [rbac/](rbac/) | RBAC & Data Gateway, visibility tier mapping, Spark action gates | — | Phase 8 (cross-cutting) | Planned |
+| [b2b-api/](b2b-api/) | B2B REST API (edge proxy), webhooks, OpenAPI spec | — | Phase 3 (Wk 13-18) | Planned |
 
 ---
 

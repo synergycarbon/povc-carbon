@@ -2,16 +2,20 @@
 
 > **Spec Collection:** marketplace-ui  
 > **Implementation Phase:** Phase 8 (Weeks 45-52)  
-> **Framework:** eStream Console Widget System (`@estream/sdk-browser`)  
-> **Design Reference:** [DESIGN.md](../../DESIGN.md) Section 9 (Impact Widget)  
+> **Framework:** eStream Console Kit (`@estream/sdk-browser/widgets`)  
+> **Design Reference:** [DESIGN.md](../../DESIGN.md) Sections 2.3–2.5, 9  
 > **TakeTitle Reference:** [TakeTitle Architecture](../../../../TakeTitle/taketitle-io/docs/ARCHITECTURE.md)  
-> **Console Reference:** [Console CLAUDE.md](../../../../toddrooke/estream-io/apps/console/CLAUDE.md)
+> **Console Reference:** [Console CLAUDE.md](../../../../toddrooke/estream-io/apps/console/CLAUDE.md)  
+> **Branding Reference:** [Console branding.yaml](../../../../toddrooke/estream-io/apps/console/branding.yaml)  
+> **Wire Protocol:** estream-io#551 — Spark auth over WebTransport datagrams (no HTTP fallback)
 
 ---
 
 ## 1. Overview
 
-The SynergyCarbon marketplace UI is a consumer-facing web application built on the eStream console widget framework (`@estream/sdk-browser`). It follows the same architectural pattern as TakeTitle: a standalone web app that registers product-specific widgets into the shared widget system, using Spark authentication, the WidgetDataGateway for secure lex topic access, and `--es-*` design tokens.
+The SynergyCarbon marketplace UI is a **Console Kit deployment** (`@estream/sdk-browser/widgets`). It follows the same architectural pattern as TakeTitle: a standalone web app that registers product-specific widgets into the Console Kit widget system, using Spark wire protocol authentication (per estream-io#551), the WASM-backed WidgetDataGateway for secure lex topic access, and `--es-*` design tokens resolved from `branding.yaml`.
+
+**Key Console Kit APIs:** `registerWidget()`, `useWidgetSubscription()`, `useWidgetData()`, `useEsliteQuery()`, `useTransportState()`, `useEStreamTheme()`, `useBranding()`, `WidgetFrame`, `WidgetGrid`, `WidgetPicker`.
 
 ### 1.1 The Shared Pattern
 
