@@ -64,6 +64,15 @@ components:
     tier: cloud
     instances: 1
 
+  # --- Bridge SmartCircuits ---
+
+  - id: verra_registry_bridge
+    circuit: sc.bridge.verra_registry.v1
+    source: circuits/bridge/verra_registry_bridge.escir.yaml
+    description: "Cross-registry bridge for Verra VCS, Gold Standard, ISCC"
+    tier: cloud
+    instances: 1
+
   # --- Marketplace SmartCircuits ---
 
   - id: marketplace_orderbook
