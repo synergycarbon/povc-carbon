@@ -5,7 +5,8 @@
 > **Design Reference:** [DESIGN.md](../../DESIGN.md) Section 2 (Tenant Integrations)  
 > **Patent Reference:** [PATENTS.md](PATENTS.md)  
 > **Circuit:** `sc.adapters.universal_witness_node.v1` (`circuits/adapters/universal_witness_node.escir.yaml`)  
-> **ESCIR Version:** 0.8.1 — universal witness node with 5 source adapters (solar, wind, TEG, biogas, CCS)
+> **ESCIR Version:** 0.8.1 — universal witness node with 5 source adapters (solar, wind, TEG, biogas, CCS)  
+> **Hardware Spec:** [WITNESS_NODE_SPEC.md](../../../hardware/WITNESS_NODE_SPEC.md)
 
 ---
 
