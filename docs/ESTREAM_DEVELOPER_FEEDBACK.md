@@ -170,5 +170,5 @@ The additional work on the marketing website, ESZ demo fixtures, and console dem
 
 The upstream proposals from this document have been accepted and tracked in the eStream repository:
 
-- **[#555 — EPIC: Developer Experience](https://github.com/polyquantum/estream-io/issues/555)** — ESCIR Migration CLI, TypeScript Codegen from Circuit Types, JSON Schema for IDE Validation, ESLite Schema Migration, Widget Scaffold CLI, Carbon ESF Schema Pack (`esf-carbon`), Console Kit Developer Guide, ESCIR Test Runner, Widget Event Bus, Multi-Tenant Data Gateway
+- **[#555 — EPIC: Developer Experience](https://github.com/polyquantum/estream-io/issues/555)** — ESCIR Migration CLI, TypeScript Codegen from Circuit Types, JSON Schema for IDE Validation, ESLite Schema Migration, Widget Scaffold CLI, Carbon ESF Schema Pack (`esf-carbon`), Console Kit Developer Guide, ESCIR Test Runner, Widget Event Bus, Multi-Tenant Data Gateway, Widget Embed SDK (`@estream/widget-embed`), ESZ Demo Fixture Standard, Console Kit Demo Mode Toggle, Astro Static Site Integration Pattern
 - **[#556 — EPIC: eStream Website + Platform Impact Case Study](https://github.com/polyquantum/estream-io/issues/556)** — Public estream.io website with testimonials section, platform impact white paper based on SynergyCarbon build metrics
