@@ -1,0 +1,197 @@
+// Carbon Governance Graph
+// Methodology lifecycle, verifier registration, and committee voting
+// Replaces: governance ESCIR
+
+type Methodology = struct {
+    methodology_id: bytes(16),
+    name: string,
+    category: u8,
+    version: u32,
+    author: bytes(32),
+    doc_hash: bytes(32),
+    created_at: u64,
+    updated_at: u64,
+}
+
+type Verifier = struct {
+    verifier_id: bytes(32),
+    org_name: string,
+    iso_14065_cert_hash: bytes(32),
+    ml_dsa_87_pubkey: bytes(2592),
+    accredited_at: u64,
+    expires_at: u64,
+    jurisdiction: string,
+}
+
+type ApprovalVote = struct {
+    vote_id: bytes(16),
+    voter: bytes(32),
+    methodology_id: bytes(16),
+    approve: bool,
+    rationale_hash: bytes(32),
+    voted_at: u64,
+}
+
+type MethodologyVersion = struct {
+    version_id: bytes(16),
+    methodology_id: bytes(16),
+    version: u32,
+    doc_hash_sha3_256: bytes(32),
+    changelog_hash: bytes(32),
+    published_at: u64,
+}
+
+type CommitteeMember = struct {
+    member_id: bytes(32),
+    ml_dsa_87_pubkey: bytes(2592),
+    appointed_at: u64,
+    term_expires_at: u64,
+}
+
+type PublicComment = struct {
+    comment_id: bytes(16),
+    methodology_id: bytes(16),
+    author: bytes(32),
+    body_hash: bytes(32),
+    submitted_at: u64,
+}
+
+// category constants: 0=EPA_AP_42, 1=solar_grid_offset, 2=methane_destruction, 3=ccs, 4=biogas
+
+state_machine methodology_lifecycle {
+    initial PROPOSED
+    persistence wal
+    terminal [SUPERSEDED, RETIRED]
+    li_anomaly_detection true
+
+    PROPOSED -> UNDER_REVIEW when committee_assigned guard has_committee_quorum
+    UNDER_REVIEW -> PUBLIC_COMMENT when review_complete guard min_2_reviewers
+    PUBLIC_COMMENT -> APPROVED when comment_period_closed guard min_30d_open
+    APPROVED -> ACTIVE when activation_vote guard approval_3_of_5
+    ACTIVE -> SUPERSEDED when new_version_active
+    ACTIVE -> RETIRED when retirement_vote guard approval_3_of_5
+    PROPOSED -> RETIRED when rejection_vote guard approval_3_of_5
+}
+
+graph governance_graph {
+    node Methodology
+    node Verifier
+    node ApprovalVote
+    node MethodologyVersion
+    node CommitteeMember
+    node PublicComment
+    edge proposes: CommitteeMember -> Methodology { guard has_committee_role }
+    edge reviews: Verifier -> Methodology { guard iso_14065_valid }
+    edge votes_on: CommitteeMember -> ApprovalVote { guard term_not_expired }
+    edge approves: ApprovalVote -> Methodology { guard approval_3_of_5 }
+    edge supersedes: MethodologyVersion -> MethodologyVersion { guard higher_version }
+    edge comments_on: PublicComment -> Methodology { guard comment_period_open }
+    overlay approval_status: u8 curate delta_curate
+    overlay vote_count: u32 bitmask delta_curate
+    overlay public_comment_count: u32 bitmask delta_curate
+    overlay verifier_accreditation: u8 curate delta_curate
+    overlay methodology_category: u8 curate
+    overlay version_chain: bytes(32) curate delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed governance_anomaly
+    ai_feed methodology_quality
+    observe governance_graph: [approval_status, vote_count, verifier_accreditation] threshold: {
+        anomaly_score 0.90
+        baseline_window 240
+    }
+}
+
+series governance_decisions: governance_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Register a new verifier (ISO 14065 accreditation + ML-DSA-87 key ceremony)
+circuit register_verifier(graph_id: bytes(32), verifier: Verifier, ceremony_sig: bytes(4627)) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/governance/verifier/register
+    precision C
+    povc true
+    observe metrics: [verifier_id, org_name, jurisdiction, accredited_at]
+{
+    verifier.verifier_id
+}
+
+// Propose a new methodology
+circuit propose_methodology(graph_id: bytes(32), methodology: Methodology, doc_hash: bytes(32)) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/propose
+    precision C
+    povc true
+    observe metrics: [methodology_id, name, category, author]
+{
+    methodology.methodology_id
+}
+
+// Cast a committee approval vote (3-of-5 threshold)
+circuit cast_vote(graph_id: bytes(32), vote: ApprovalVote, sig: bytes(4627)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/governance/vote/cast
+    precision D
+    povc true
+    observe metrics: [vote_id, voter, methodology_id, approve]
+{
+    true
+}
+
+// Check if methodology has reached 3-of-5 approval
+circuit check_approval(graph_id: bytes(32), methodology_id: bytes(16)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/governance/vote/check
+    precision D
+    observe metrics: [methodology_id, approve_count, reject_count, threshold_met]
+{
+    false
+}
+
+// Publish a new methodology version (SHA3-256 doc hash)
+circuit publish_version(graph_id: bytes(32), version: MethodologyVersion) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/version
+    precision C
+    povc true
+    observe metrics: [methodology_id, version, doc_hash_sha3_256]
+{
+    version.version_id
+}
+
+// Submit a public comment during comment period
+circuit submit_comment(graph_id: bytes(32), comment: PublicComment) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/governance/comment/submit
+    precision C
+    observe metrics: [comment_id, methodology_id, author]
+{
+    comment.comment_id
+}
+
+// Activate a methodology after approval (transitions APPROVED -> ACTIVE)
+circuit activate_methodology(graph_id: bytes(32), methodology_id: bytes(16)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/activate
+    precision D
+    povc true
+    observe metrics: [methodology_id, approval_status]
+{
+    true
+}
+
+// Supersede an active methodology with a new version
+circuit supersede_methodology(graph_id: bytes(32), old_id: bytes(16), new_version_id: bytes(16)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/supersede
+    precision D
+    povc true
+    observe metrics: [old_id, new_version_id]
+{
+    true
+}
+
+stream governance_events: event<ApprovalVote>
+    retention 10y
+    consumers [compliance, audit, streamsight, registry]
+
+stream methodology_changes: event<Methodology>
+    retention 10y
+    consumers [registry, marketplace, compliance, streamsight]

@@ -1,0 +1,223 @@
+// SynergyCarbon: Verification Pipeline DAG
+// PoVCR protocol: hardware-attested → Merkle commitment → multi-witness (3-of-5) → credit eligibility
+//
+// Lex: esn/sustainability/carbon/org/synergycarbon
+//   └── sub_lex project fan_in → verification/
+//       Only VERIFIED_DATA, COMPLIANCE flow up; RAW_SENSOR stays local
+
+type MeasurementId = bytes(32)
+type AttestationId = bytes(32)
+type AccountId = bytes(32)
+
+type Measurement = struct {
+    measurement_id: MeasurementId,
+    sensor_id: bytes(32),
+    value: u64,
+    unit: u8,
+    timestamp: u64,
+    location_hash: bytes(32),
+    hardware_attestation: bytes(64),
+    methodology_id: bytes(16),
+}
+
+type Attestation = struct {
+    attestation_id: AttestationId,
+    measurement_id: MeasurementId,
+    attester_id: bytes(32),
+    signature: bytes(4627),
+    committed_at: u64,
+    merkle_root: bytes(32),
+}
+
+type VerificationResult = struct {
+    verification_id: bytes(32),
+    measurement_id: MeasurementId,
+    reduction_tonnes: u64,
+    methodology_hash: bytes(32),
+    compliance_flags: u32,
+    witness_count: u8,
+    eligible: bool,
+    verified_at: u64,
+}
+
+type AuditEvent = struct {
+    audit_id: bytes(32),
+    verification_id: bytes(32),
+    auditor_id: bytes(32),
+    action: u8,
+    finding: u8,
+    audited_at: u64,
+}
+
+type VerificationEdge = struct {
+    edge_id: bytes(16),
+    edge_type: u8,          // 0=attests, 1=verifies, 2=audits
+    source_id: bytes(32),
+    target_id: bytes(32),
+    created_at: u64,
+}
+
+state_machine verification_lifecycle {
+    initial PENDING
+    persistence wal
+    terminal [ELIGIBLE, REJECTED, REVOKED]
+    li_anomaly_detection true
+
+    PENDING -> ATTESTED when hardware_attestation_received
+    ATTESTED -> COMMITTED when merkle_commitment_created
+    COMMITTED -> WITNESSED when witness_threshold_met guard witness_count >= 3
+    WITNESSED -> ELIGIBLE when compliance_passed guard compliance_flags == 0x0F
+    WITNESSED -> REJECTED when compliance_failed
+    ELIGIBLE -> REVOKED when audit_revocation
+}
+
+dag verification_pipeline {
+    node Measurement
+    node Attestation
+    node VerificationResult
+    node AuditEvent
+    edge VerificationEdge
+    overlay verification_status: u8 curate delta_curate
+    overlay anomaly_score: u64 bitmask delta_curate
+    overlay methodology_match: u64 bitmask delta_curate
+    overlay witness_progress: u8 curate delta_curate
+    overlay compliance_bitmap: u32 bitmask delta_curate
+    overlay hardware_trust_level: u8 curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed anomaly_detection
+    ai_feed methodology_validation
+    observe verification_pipeline: [verification_status, anomaly_score, witness_progress, compliance_bitmap] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series verification_chain: verification_pipeline
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+circuit submit_measurement(dag_id: bytes(32), measurement: Measurement, pk: bytes(1568)) -> MeasurementId
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification {
+        governance hierarchical
+        approval_required true
+        audit_trail true
+        sovereignty us
+        compliance [epa_ghg, iso_14064, verra_vcs]
+    }
+    precision A
+    witness threshold(3, 5)
+    rbac [sensor_operator, verifier, registry_admin]
+    observe metrics: [measurement_id, sensor_id, value, unit]
+    invariant "value_positive" { measurement.value > 0 }
+    invariant "hardware_attested" { measurement.hardware_attestation != 0x00 }
+    monitor "anomaly_rate" { anomaly_rate < 0.10 }
+    fuzz_target
+{
+    let reading_hash = sha3_256(measurement.sensor_id ++ measurement.value ++ measurement.timestamp)
+    let hw_valid = mldsa_verify(reading_hash, measurement.hardware_attestation, measurement.sensor_id)
+    let kem = mlkem_encaps(pk)
+    let anomaly = streamsight_anomaly(reading_hash)
+    store("measurements", measurement.measurement_id, measurement)
+    measurement.measurement_id
+}
+
+circuit create_commitment(dag_id: bytes(32), measurement_id: MeasurementId, pk: bytes(1568)) -> AttestationId
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification
+    precision A
+    constant_time true
+    witness threshold(2, 3)
+    observe metrics: [measurement_id, merkle_root]
+    invariant "commitment_deterministic" { sha3_256(measurement_id) == expected }
+    critical_path
+    fuzz_target
+{
+    let measurement = context_lookup("measurements", measurement_id)
+    let data_hash = sha3_256(measurement_id ++ measurement.value)
+    let merkle_root = sha3_256(data_hash)
+    let sig = mldsa_sign(merkle_root, measurement.sensor_id)
+    let kem = mlkem_encaps(pk)
+    let expected = sha3_256(measurement_id)
+    let attestation_id = sha3_256(merkle_root ++ sig)
+    store("attestations", attestation_id, merkle_root)
+    attestation_id
+}
+
+circuit witness_verify(dag_id: bytes(32), attestation_id: AttestationId, witness_pk: bytes(1952), witness_sig: bytes(4627)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification
+    precision A
+    constant_time true
+    witness threshold(3, 5)
+    rbac [verifier, registry_admin]
+    observe metrics: [attestation_id, witness_count, threshold_met]
+    invariant "signature_valid" { verified == true }
+    fuzz_target
+{
+    let attestation = context_lookup("attestations", attestation_id)
+    let verified = mldsa_verify(attestation, witness_sig, witness_pk)
+    let count = context_lookup("witness_count", attestation_id) + 1
+    store("witness_count", attestation_id, count)
+    verified
+}
+
+circuit check_compliance(dag_id: bytes(32), verification_id: bytes(32), methodology: bytes(256), pk: bytes(1568)) -> VerificationResult
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification/compliance
+    precision A
+    witness threshold(3, 5)
+    rbac [compliance_officer, verifier, registry_admin]
+    streamsight true
+    observe metrics: [verification_id, compliance_flags, reduction_tonnes, eligible]
+    invariant "reduction_positive" { reduction_tonnes > 0 }
+    monitor "verification_rate" { verified_pct > 0.95 }
+    fuzz_target
+    esz_emit "verify/synergycarbon_verification.esz"
+    li_feed full_escir true, optimized_ir true
+{
+    let method_hash = blake3(methodology)
+    let kem = mlkem_encaps(pk)
+    let classification = li_classify(methodology, verification_id)
+    let anomaly = streamsight_anomaly(method_hash)
+    let baseline = streamsight_baseline("verification_rate")
+    let measurement = context_lookup("measurement_for_verification", verification_id)
+    VerificationResult {
+        verification_id: verification_id,
+        measurement_id: measurement.measurement_id,
+        reduction_tonnes: measurement.value,
+        methodology_hash: method_hash,
+        compliance_flags: 0x0F,
+        witness_count: 3,
+        eligible: anomaly < 85,
+        verified_at: now(),
+    }
+}
+
+circuit record_audit(dag_id: bytes(32), verification_id: bytes(32), auditor_id: bytes(32), action: u8, finding: u8) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification
+    precision A
+    povc true
+    rbac [auditor, compliance_officer, registry_admin]
+    observe metrics: [audit_id, verification_id, auditor_id, action, finding]
+{
+    let audit_id = sha3_256(verification_id ++ auditor_id ++ action)
+    store("audits", audit_id, audit_id)
+    audit_id
+}
+
+stream verification_events: event<VerificationResult>
+    retention 99y
+    consumers [registry, epa_reporting, audit, compliance, streamsight]
+    classify reduction_tonnes: VERIFIED_DATA, methodology_hash: METADATA, compliance_flags: COMPLIANCE
+
+stream attestation_events: event<Attestation>
+    retention 99y
+    consumers [registry, audit, streamsight]
+    classify merkle_root: VERIFIED_DATA, attester_id: METADATA
+
+stream audit_trail: event<AuditEvent>
+    retention 99y
+    consumers [compliance, epa_reporting, governance, streamsight]
+    classify auditor_id: METADATA, finding: COMPLIANCE, action: METADATA

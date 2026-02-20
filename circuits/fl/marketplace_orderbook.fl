@@ -1,0 +1,228 @@
+// SynergyCarbon: Marketplace Order Book Graph
+// Spot orderbook, forward contracts (9-state FSM), impact visualization
+// Pricing: 0.5% per trade (50 bps), $0.10 per retirement certificate
+
+type OrderId = bytes(32)
+type AccountId = bytes(32)
+type CreditId = bytes(32)
+
+type Order = struct {
+    order_id: OrderId,
+    trader_id: AccountId,
+    credit_vintage: u64,
+    side: u8,               // 0=Buy, 1=Sell
+    order_type: u8,         // 0=Limit, 1=Market
+    price_cents: u64,
+    quantity_tonnes: u64,
+    remaining_tonnes: u64,
+    status: u8,             // 0=Open, 1=PartialFill, 2=Filled, 3=Cancelled
+}
+
+type Trade = struct {
+    trade_id: bytes(32),
+    ask_id: OrderId,
+    bid_id: OrderId,
+    seller_id: AccountId,
+    buyer_id: AccountId,
+    quantity_tonnes: u64,
+    price_cents: u64,
+    total_cents: u64,
+    platform_fee_cents: u64,
+    witness_hash: bytes(32),
+}
+
+type ForwardContract = struct {
+    contract_id: bytes(32),
+    seller_id: AccountId,
+    buyer_id: AccountId,
+    vintage_year: u64,
+    quantity_tonnes: u64,
+    price_cents: u64,
+    delivery_date: u64,
+    status: u8,
+}
+
+type ImpactMetric = struct {
+    metric_id: bytes(32),
+    total_tonnes_traded: u64,
+    total_tonnes_retired: u64,
+    total_trades: u64,
+    avg_price_cents: u64,
+}
+
+type MarketEdge = struct {
+    edge_id: bytes(16),
+    edge_type: u8,          // 0=places, 1=matches, 2=settles, 3=visualizes
+    source_id: bytes(32),
+    target_id: bytes(32),
+}
+
+state_machine forward_lifecycle {
+    initial DRAFT
+    persistence wal
+    terminal [SETTLED, EXPIRED]
+    li_anomaly_detection true
+
+    DRAFT -> NEGOTIATING when terms_proposed
+    NEGOTIATING -> AGREED when both_parties_signed guard signatures_valid
+    NEGOTIATING -> EXPIRED when negotiation_timeout
+    AGREED -> ACTIVE when deposit_locked guard escrow_funded
+    ACTIVE -> DELIVERING when delivery_initiated guard delivery_date_reached
+    DELIVERING -> DELIVERED when credits_transferred guard transfer_verified
+    DELIVERED -> SETTLING when settlement_initiated
+    SETTLING -> SETTLED when payment_confirmed guard funds_released
+    ACTIVE -> EXPIRED when contract_expired guard past_delivery_date
+}
+
+graph marketplace_orderbook {
+    node Order
+    node Trade
+    node ForwardContract
+    node ImpactMetric
+    edge MarketEdge
+    overlay depth: u64 bitmask delta_curate
+    overlay volume: u64 bitmask delta_curate
+    overlay price_trend: u64 bitmask delta_curate
+    overlay forward_curve: u64 bitmask delta_curate
+    overlay spread: u64 bitmask delta_curate
+    overlay impact_counter: u64 bitmask delta_curate
+    storage csr { hot @bram, warm @ddr, cold @nvme }
+    ai_feed price_prediction
+    ai_feed volume_forecast
+    observe marketplace_orderbook: [depth, volume, price_trend, spread] threshold: { anomaly_score 0.85, baseline_window 60 }
+}
+
+series trade_history: marketplace_orderbook
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+circuit place_order(graph_id: bytes(32), order: Order, pk: bytes(1568)) -> OrderId
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/order/place {
+        governance hierarchical
+        audit_trail true
+        compliance [epa_ghg, verra_vcs]
+    }
+    precision A
+    constant_time true
+    rbac [trader, marketplace_admin]
+    observe metrics: [order_id, trader_id, side, order_type, price_cents, quantity_tonnes]
+    invariant "quantity_positive" { order.quantity_tonnes > 0 }
+    invariant "price_valid" { order.order_type == 1 || order.price_cents > 0 }
+{
+    let kem = mlkem_encaps(pk)
+    store("orders", order.order_id, order)
+    order.order_id
+}
+
+circuit cancel_order(graph_id: bytes(32), order_id: OrderId, trader_id: AccountId) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/order/cancel
+    precision C
+    povc true
+    observe metrics: [order_id, trader_id]
+{
+    let status = context_lookup("order_status", order_id)
+    store("order_status", order_id, 3)
+    status == 0 || status == 1
+}
+
+circuit match_orders(graph_id: bytes(32), vintage_year: u64, pk: bytes(1568)) -> list<bytes(32)>
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/match {
+        governance hierarchical
+        audit_trail true
+        compliance [epa_ghg, verra_vcs]
+    }
+    precision A
+    constant_time true
+    witness threshold(2, 3)
+    rbac [matching_engine, marketplace_admin]
+    observe metrics: [vintage_year, trades_matched, volume_matched, fees_collected]
+    invariant "no_self_trade" { buyer_id != seller_id }
+    invariant "fee_correct" { platform_fee_cents == computed_fee }
+    property safety "price_time_priority" { fill_sequence_valid == true }
+    fuzz_target
+    esz_emit "verify/synergycarbon_orderbook.esz"
+    li_feed full_escir true, optimized_ir true
+{
+    let kem = mlkem_encaps(pk)
+    let bids = context_lookup("open_bids_by_price_time", vintage_year)
+    let asks = context_lookup("open_asks_by_price_time", vintage_year)
+    let trade_ids = []
+    for bid in bids {
+        for ask in asks {
+            if bid.price_cents >= ask.price_cents && bid.trader_id != ask.trader_id {
+                let qty = min(bid.remaining_tonnes, ask.remaining_tonnes)
+                let total = qty * ask.price_cents
+                let computed_fee = (total * 50) / 10000
+                let td = sha3_256(bid.order_id ++ ask.order_id ++ qty)
+                let wh = sha3_256(mldsa_sign(td, graph_id))
+                let trade = Trade {
+                    trade_id: sha3_256(td), ask_id: ask.order_id, bid_id: bid.order_id,
+                    seller_id: ask.trader_id, buyer_id: bid.trader_id,
+                    quantity_tonnes: qty, price_cents: ask.price_cents,
+                    total_cents: total, platform_fee_cents: computed_fee, witness_hash: wh,
+                }
+                store("trades", trade.trade_id, trade)
+                trade_ids = trade_ids ++ [trade.trade_id]
+            }
+        }
+    }
+    trade_ids
+}
+
+circuit create_forward(graph_id: bytes(32), seller_id: AccountId, buyer_id: AccountId, vintage: u64, tonnes: u64, price_cents: u64, delivery_date: u64, pk: bytes(1568)) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/forward/create {
+        governance hierarchical
+        audit_trail true
+    }
+    precision A
+    witness threshold(2, 3)
+    rbac [trader, marketplace_admin]
+    observe metrics: [contract_id, seller_id, buyer_id, tonnes, price_cents]
+    invariant "tonnes_positive" { tonnes > 0 }
+    invariant "delivery_future" { delivery_date > now() }
+{
+    let kem = mlkem_encaps(pk)
+    let cid = sha3_256(seller_id ++ buyer_id ++ vintage ++ tonnes ++ delivery_date)
+    store("forwards", cid, cid)
+    cid
+}
+
+transaction settle_forward(contract_id: bytes(32), seller_id: AccountId, buyer_id: AccountId, tonnes: u64, price_cents: u64)
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/forward/settle
+    invariant "funds_conserved" { total_debited == total_credited }
+    timeout 60s
+    reserve forward_escrow[contract_id] hold price_cents ttl 60s
+    debit  forward_escrow[contract_id] price_cents
+    credit seller_balances[seller_id] price_cents
+    emit   forward_events SettlementEvent { contract_id, seller_id, buyer_id, tonnes, price_cents }
+
+circuit update_impact(graph_id: bytes(32), trade_tonnes: u64, retired_tonnes: u64) -> ImpactMetric
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace
+    precision B
+    observe metrics: [total_tonnes_traded, total_tonnes_retired, total_trades]
+{
+    let c = context_lookup("impact_metrics", graph_id)
+    ImpactMetric {
+        metric_id: sha3_256(graph_id),
+        total_tonnes_traded: c.total_tonnes_traded + trade_tonnes,
+        total_tonnes_retired: c.total_tonnes_retired + retired_tonnes,
+        total_trades: c.total_trades + 1,
+        avg_price_cents: c.avg_price_cents,
+    }
+}
+
+stream trade_events: event<Trade>
+    retention 99y
+    consumers [registry, analytics, compliance, streamsight]
+    classify quantity_tonnes: VERIFIED_DATA, price_cents: ANALYTICS, trader_id: METADATA
+
+stream forward_events: event<ForwardContract>
+    retention 99y
+    consumers [registry, analytics, compliance, governance]
+    classify quantity_tonnes: VERIFIED_DATA, price_cents: ANALYTICS, delivery_date: METADATA
+
+stream impact_events: event<ImpactMetric>
+    retention 99y
+    consumers [analytics, dashboard, streamsight]
+    classify total_tonnes_traded: ANALYTICS, total_tonnes_retired: ANALYTICS

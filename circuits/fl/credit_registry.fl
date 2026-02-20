@@ -1,0 +1,223 @@
+// SynergyCarbon: Credit Registry Graph
+// Lifecycle: PENDING → ISSUED → ACTIVE → TRANSFERRED → RETIRED
+// Atomic transfer with reserve/debit/credit; permanent retirement with certificate
+//
+// Lex: esn/sustainability/carbon/org/synergycarbon
+//   └── sub_lex project fan_in → credits/
+//       Only VERIFIED_DATA, CREDIT_TOTAL, COMPLIANCE flow up
+
+type CreditId = bytes(32)
+type AccountId = bytes(32)
+
+type Credit = struct {
+    credit_id: CreditId,
+    project_id: AccountId,
+    vintage_year: u64,
+    tonnes: u64,
+    methodology_hash: bytes(32),
+    verification_id: bytes(32),
+    status: u8,
+    issued_at: u64,
+}
+
+type Account = struct {
+    account_id: AccountId,
+    name_hash: bytes(32),
+    account_type: u8,
+    created_at: u64,
+}
+
+type RetirementEvent = struct {
+    retirement_id: bytes(32),
+    credit_id: CreditId,
+    owner_id: AccountId,
+    tonnes: u64,
+    certificate_hash: bytes(32),
+    reason: u8,
+    retired_at: u64,
+    permanent: bool,
+}
+
+type VintageYear = struct {
+    year: u64,
+    total_issued: u64,
+    total_retired: u64,
+    total_active: u64,
+    compliance_hash: bytes(32),
+}
+
+type CreditEdge = struct {
+    edge_id: bytes(16),
+    edge_type: u8,          // 0=issued_by, 1=held_by, 2=transferred_to, 3=retired_by
+    source_id: bytes(32),
+    target_id: bytes(32),
+    tonnes: u64,
+    created_at: u64,
+}
+
+state_machine credit_lifecycle {
+    initial PENDING
+    persistence wal
+    terminal [RETIRED]
+    li_anomaly_detection true
+
+    PENDING -> ISSUED when verification_complete guard eligible
+    ISSUED -> ACTIVE when credit_activated
+    ACTIVE -> TRANSFERRED when transfer_executed
+    TRANSFERRED -> ACTIVE when transfer_settled
+    ACTIVE -> RETIRED when retirement_executed guard owner_authorized
+}
+
+graph credit_registry {
+    node Credit
+    node Account
+    node RetirementEvent
+    node VintageYear
+    edge CreditEdge
+    overlay total_tonnes_verified: u64 bitmask delta_curate
+    overlay credits_active: u64 bitmask delta_curate
+    overlay retirement_rate: u64 bitmask delta_curate
+    overlay balance: u64 bitmask delta_curate
+    overlay compliance_status: u8 curate delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed retirement_forecasting
+    ai_feed compliance_monitoring
+    observe credit_registry: [total_tonnes_verified, credits_active, retirement_rate, compliance_status] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series credit_provenance: credit_registry
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+circuit issue_credit(graph_id: bytes(32), project_id: AccountId, tonnes: u64, vintage: u64, verification_id: bytes(32), pk: bytes(1568)) -> Credit
+    lex esn/sustainability/carbon/org/synergycarbon/project/credits {
+        governance hierarchical
+        approval_required true
+        audit_trail true
+        sovereignty us
+        compliance [epa_ghg, iso_14064, verra_vcs]
+    }
+    precision A
+    witness threshold(3, 5)
+    rbac [registry_admin, verifier, issuer]
+    observe metrics: [credit_id, project_id, tonnes, vintage, verification_id]
+    invariant "tonnes_positive" { tonnes > 0 }
+    invariant "vintage_valid" { vintage >= 2020 && vintage <= 2100 }
+    invariant "verification_linked" { verification_id != 0x00 }
+    fuzz_target
+    kat_vector
+{
+    let credit_id = sha3_256(project_id ++ verification_id ++ vintage)
+    let sig = mldsa_sign(credit_id, project_id)
+    let verified = mldsa_verify(credit_id, sig, project_id)
+    let kem = mlkem_encaps(pk)
+    Credit {
+        credit_id: credit_id,
+        project_id: project_id,
+        vintage_year: vintage,
+        tonnes: tonnes,
+        methodology_hash: sha3_256(verification_id),
+        verification_id: verification_id,
+        status: 1,
+        issued_at: now(),
+    }
+}
+
+transaction transfer_credit(seller: AccountId, buyer: AccountId, credit_id: CreditId, tonnes: u64)
+    lex esn/sustainability/carbon/org/synergycarbon/project/credits
+    invariant "funds_conserved" { total_debited == total_credited }
+    invariant "no_self_transfer" { seller != buyer }
+    timeout 30s
+    reserve credit_balances[credit_id] hold tonnes ttl 30s
+    debit  credit_balances[seller] tonnes
+    credit credit_balances[buyer] tonnes
+    emit   credit_events TransferEvent { seller, buyer, credit_id, tonnes }
+
+circuit retire_credit(graph_id: bytes(32), owner_id: AccountId, credit_id: CreditId, tonnes: u64, reason: u8, pk: bytes(1568)) -> RetirementEvent
+    lex esn/sustainability/carbon/org/synergycarbon/project/credits
+    precision A
+    witness threshold(2, 3)
+    rbac [owner, registry_admin]
+    constant_time true
+    observe metrics: [retirement_id, credit_id, owner_id, tonnes, reason]
+    invariant "tonnes_positive" { tonnes > 0 }
+    invariant "owner_authorized" { owner_verified == true }
+    fuzz_target
+{
+    let sig = mldsa_sign(credit_id, owner_id)
+    let owner_verified = mldsa_verify(credit_id, sig, owner_id)
+    let kem = mlkem_encaps(pk)
+    let certificate_hash = sha3_256(credit_id ++ owner_id ++ tonnes ++ reason)
+    let retirement_id = sha3_256(certificate_hash)
+    RetirementEvent {
+        retirement_id: retirement_id,
+        credit_id: credit_id,
+        owner_id: owner_id,
+        tonnes: tonnes,
+        certificate_hash: certificate_hash,
+        reason: reason,
+        retired_at: now(),
+        permanent: true,
+    }
+}
+
+circuit query_vintage(graph_id: bytes(32), year: u64) -> VintageYear
+    lex esn/sustainability/carbon/org/synergycarbon/project/credits
+    precision B
+    observe metrics: [year, total_issued, total_retired]
+{
+    let issued = context_lookup("vintage_issued", year)
+    let retired = context_lookup("vintage_retired", year)
+    VintageYear {
+        year: year, total_issued: issued, total_retired: retired,
+        total_active: issued - retired, compliance_hash: sha3_256(year ++ issued),
+    }
+}
+
+circuit registry_analytics(graph_id: bytes(32), lookup: bytes(256), pk: bytes(1568)) -> VintageYear
+    lex esn/sustainability/carbon/org/synergycarbon {
+        governance hierarchical
+        audit_trail true
+        sovereignty us
+        compliance [epa_ghg, iso_14064, verra_vcs]
+        sub_lex project fan_in
+    }
+    precision B
+    streamsight true
+    observe metrics: [registry_queries, total_tonnes_verified, projects_active]
+    invariant "credit_count_consistent" { total_credits == issued - retired }
+    monitor "verification_rate" { verified_pct > 0.95 }
+    esz_emit "verify/synergycarbon_registry.esz"
+    li_feed full_escir true, optimized_ir true
+{
+    let kem = mlkem_encaps(pk)
+    let compliance = li_classify(lookup, sha3_256(lookup))
+    let anomaly = streamsight_anomaly(compliance)
+    VintageYear {
+        year: 0, total_issued: 0, total_retired: 0,
+        total_active: 0, compliance_hash: compliance,
+    }
+}
+
+stream credit_events: event<Credit>
+    retention 99y
+    consumers [registry, epa_reporting, audit, compliance, streamsight]
+    classify tonnes: VERIFIED_DATA, vintage_year: METADATA, credit_id: METADATA
+
+stream retirement_events: event<RetirementEvent>
+    retention 99y
+    consumers [registry, epa_reporting, audit, compliance, governance]
+    classify tonnes: VERIFIED_DATA, certificate_hash: COMPLIANCE, owner_id: METADATA
+
+stream registry_state: event<VintageYear>
+    retention 99y
+    consumers [analytics, compliance, epa_reporting, streamsight]
+    classify total_issued: ANALYTICS, total_retired: ANALYTICS, compliance_hash: COMPLIANCE

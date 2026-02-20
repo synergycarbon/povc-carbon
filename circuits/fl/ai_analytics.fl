@@ -1,0 +1,201 @@
+// Carbon AI Analytics Graph
+// Yield forecasting, forward pricing oracle, and risk monitoring
+// Replaces: yield_forecaster, forward_pricing_oracle
+
+type ForecastModel = struct {
+    model_id: bytes(16),
+    model_type: u8,
+    architecture: u8,
+    horizon: u8,
+    source_type: u8,
+    last_trained_at: u64,
+    parameters_hash: bytes(32),
+    mse: u64,
+    mae: u64,
+}
+
+type PricePoint = struct {
+    price_id: bytes(16),
+    credit_type: u8,
+    registry: u8,
+    price_usd_cents: u64,
+    timestamp: u64,
+    volume_tonnes: u64,
+    curve_position: u8,
+}
+
+type RiskMetric = struct {
+    risk_id: bytes(16),
+    risk_type: u8,
+    source_id: bytes(16),
+    score: u64,
+    severity: u8,
+    assessed_at: u64,
+    mitigation_hash: bytes(32),
+}
+
+type YieldCurve = struct {
+    curve_id: bytes(16),
+    source_id: bytes(16),
+    horizon: u8,
+    predicted_kwh: u64,
+    confidence_lower: u64,
+    confidence_upper: u64,
+    generated_at: u64,
+    model_id: bytes(16),
+}
+
+type ForwardContract = struct {
+    contract_id: bytes(16),
+    credit_type: u8,
+    registry: u8,
+    delivery_date: u64,
+    strike_price_usd_cents: u64,
+    volume_tonnes: u64,
+    counterparty_hash: bytes(32),
+}
+
+type ESLMUpdate = struct {
+    update_id: bytes(16),
+    model_id: bytes(16),
+    delta_hash: bytes(32),
+    samples_ingested: u64,
+    updated_at: u64,
+    improvement_bps: i32,
+}
+
+// model_type: 0=yield_forecaster, 1=forward_pricer, 2=risk_assessor
+// architecture: 0=mamba_s4_ssm, 1=transformer, 2=ensemble
+// horizon: 0=24h, 1=7d, 2=30d, 3=90d, 4=1y
+// risk_type: 0=counterparty, 1=delivery, 2=market, 3=methodology
+// curve_position: 0=spot, 1=1m, 2=3m, 3=6m, 4=1y, 5=2y
+
+graph ai_analytics_graph {
+    node ForecastModel
+    node PricePoint
+    node RiskMetric
+    node YieldCurve
+    node ForwardContract
+    edge predicts: ForecastModel -> YieldCurve { guard model_trained }
+    edge prices: ForecastModel -> PricePoint { guard market_data_fresh }
+    edge assesses: ForecastModel -> RiskMetric { guard risk_model_valid }
+    edge updates: ESLMUpdate -> ForecastModel { guard improvement_positive }
+    edge contracts: PricePoint -> ForwardContract { guard price_within_band }
+    overlay prediction_confidence: u64 bitmask delta_curate
+    overlay price_trend: i64 bitmask delta_curate
+    overlay risk_score: u64 bitmask delta_curate
+    overlay model_accuracy: u64 bitmask delta_curate
+    overlay data_freshness: u64 bitmask delta_curate
+    overlay volatility: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed yield_prediction
+    ai_feed forward_curve
+    ai_feed risk_assessment
+    observe ai_analytics_graph: [prediction_confidence, price_trend, risk_score, model_accuracy] threshold: {
+        anomaly_score 0.80
+        baseline_window 60
+    }
+}
+
+series prediction_history: ai_analytics_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Deploy a new forecast model (Mamba/S4 SSM architecture)
+circuit deploy_model(graph_id: bytes(32), model: ForecastModel) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/model/deploy
+    precision C
+    povc true
+    observe metrics: [model_id, model_type, architecture, horizon]
+{
+    model.model_id
+}
+
+// Generate yield forecast for a source at a given horizon (24h, 7d, 30d, 90d, 1y)
+circuit forecast_yield(graph_id: bytes(32), model_id: bytes(16), source_id: bytes(16), horizon: u8) -> YieldCurve
+    lex esn/sustainability/carbon/org/synergycarbon/project/credits/forecast
+    precision D
+    observe metrics: [model_id, source_id, horizon, predicted_kwh, confidence_lower, confidence_upper]
+{
+    YieldCurve {
+        curve_id: model_id,
+        source_id: source_id,
+        horizon: horizon,
+        predicted_kwh: 0,
+        confidence_lower: 0,
+        confidence_upper: 0,
+        generated_at: 0,
+        model_id: model_id,
+    }
+}
+
+// Compute forward price curve for a credit type and registry
+circuit price_forward(graph_id: bytes(32), credit_type: u8, registry: u8) -> list<PricePoint>
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/forward
+    precision D
+    observe metrics: [credit_type, registry, curve_points, spot_price]
+{
+    []
+}
+
+// Assess risk for a specific source or contract
+circuit assess_risk(graph_id: bytes(32), risk_type: u8, target_id: bytes(16)) -> RiskMetric
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/assess
+    precision D
+    observe metrics: [risk_type, target_id, score, severity]
+{
+    RiskMetric {
+        risk_id: target_id,
+        risk_type: risk_type,
+        source_id: target_id,
+        score: 0,
+        severity: 0,
+        assessed_at: 0,
+        mitigation_hash: target_id,
+    }
+}
+
+// Ingest ESLM continuous learning update
+circuit eslm_update(graph_id: bytes(32), update: ESLMUpdate) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/eslm/update
+    precision C
+    povc true
+    observe metrics: [update_id, model_id, samples_ingested, improvement_bps]
+{
+    true
+}
+
+// Evaluate model accuracy against actuals
+circuit evaluate_accuracy(graph_id: bytes(32), model_id: bytes(16), actual_kwh: u64, horizon: u8) -> u64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/model/evaluate
+    precision C
+    observe metrics: [model_id, horizon, predicted_kwh, actual_kwh, error_pct]
+{
+    0
+}
+
+// Aggregate risk scores across a portfolio of sources
+circuit portfolio_risk(graph_id: bytes(32), source_ids: list<bytes(16)>) -> u64
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
+    precision C
+    observe metrics: [source_count, avg_risk, max_risk, weighted_risk]
+{
+    0
+}
+
+stream yield_predictions: event<YieldCurve>
+    retention 5y
+    consumers [marketplace, compliance, streamsight, portfolio]
+
+stream price_updates: event<PricePoint>
+    retention 5y
+    consumers [marketplace, trading, streamsight, alerting]
+
+stream risk_alerts: event<RiskMetric>
+    retention 5y
+    consumers [compliance, ops, streamsight, alerting]

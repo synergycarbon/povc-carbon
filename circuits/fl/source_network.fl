@@ -1,0 +1,197 @@
+// Carbon Source Network Graph
+// Universal witness nodes, multi-source adapters, and registry bridges
+// Replaces: universal_witness_node, verra_registry_bridge
+
+type WitnessNode = struct {
+    node_id: bytes(32),
+    hw_platform: u8,
+    se050_cert_hash: bytes(32),
+    ml_dsa_87_pubkey: bytes(2592),
+    firmware_version: u32,
+    region: string,
+    deployed_at: u64,
+    last_heartbeat: u64,
+}
+
+type EnergySource = struct {
+    source_id: bytes(16),
+    source_type: u8,
+    capacity_kw: u64,
+    location_lat: i64,
+    location_lon: i64,
+    commissioned_at: u64,
+    methodology_id: bytes(16),
+    owner: bytes(32),
+}
+
+type RegistryBridge = struct {
+    bridge_id: bytes(16),
+    registry_type: u8,
+    api_endpoint_hash: bytes(32),
+    credential_vault_ref: bytes(32),
+    last_sync_at: u64,
+    sync_interval_s: u32,
+}
+
+type AdapterConfig = struct {
+    adapter_id: bytes(16),
+    source_type: u8,
+    protocol: u8,
+    sample_rate_hz: u32,
+    calibration_hash: bytes(32),
+    last_calibrated_at: u64,
+}
+
+type Attestation = struct {
+    attestation_id: bytes(16),
+    source_id: bytes(16),
+    node_id: bytes(32),
+    measurement_kwh: u64,
+    timestamp: u64,
+    se050_signature: bytes(64),
+    attestation_hash: bytes(32),
+}
+
+type BridgeSubmission = struct {
+    submission_id: bytes(16),
+    bridge_id: bytes(16),
+    attestation_hash: bytes(32),
+    credit_metadata_hash: bytes(32),
+    registry_format: u8,
+    submitted_at: u64,
+    registry_ack_hash: bytes(32),
+}
+
+// source_type: 0=solar, 1=wind, 2=biogas, 3=teg, 4=ccs
+// registry_type: 0=verra_vcs, 1=gold_standard, 2=cdm
+// hw_platform: 0=arm64_soc_se050
+
+graph source_network_graph {
+    node WitnessNode
+    node EnergySource
+    node RegistryBridge
+    node AdapterConfig
+    edge monitors: WitnessNode -> EnergySource { guard node_assigned }
+    edge adapts: AdapterConfig -> EnergySource { guard source_type_match }
+    edge bridges_to: EnergySource -> RegistryBridge { guard methodology_accepted }
+    edge configures: AdapterConfig -> WitnessNode { guard firmware_compatible }
+    overlay source_health: u64 bitmask delta_curate
+    overlay adapter_status: u8 curate delta_curate
+    overlay bridge_sync_status: u8 curate delta_curate
+    overlay node_uptime: u64 bitmask delta_curate
+    overlay measurement_rate: u64 bitmask delta_curate
+    overlay calibration_drift: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed source_anomaly
+    ai_feed calibration_drift
+    ai_feed bridge_health
+    observe source_network_graph: [source_health, adapter_status, bridge_sync_status, node_uptime] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series source_attestations: source_network_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Register a universal witness node (ARM64 SoC + SE050 secure element)
+circuit register_witness(graph_id: bytes(32), node: WitnessNode, se050_attestation: bytes(64)) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/ops/witness/register
+    precision C
+    povc true
+    observe metrics: [node_id, hw_platform, region, firmware_version]
+{
+    node.node_id
+}
+
+// Register an energy source with its monitoring node
+circuit register_source(graph_id: bytes(32), source: EnergySource, node_id: bytes(32)) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/project/source/register
+    precision C
+    povc true
+    observe metrics: [source_id, source_type, capacity_kw, node_id]
+{
+    source.source_id
+}
+
+// Configure a multi-source adapter (solar, wind, biogas, teg, ccs)
+circuit configure_adapter(graph_id: bytes(32), config: AdapterConfig, node_id: bytes(32)) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/ops/adapter/configure
+    precision C
+    povc true
+    observe metrics: [adapter_id, source_type, protocol, sample_rate_hz]
+{
+    config.adapter_id
+}
+
+// Submit a measurement attestation from a witness node
+circuit submit_attestation(graph_id: bytes(32), attestation: Attestation) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification/attest
+    precision D
+    povc true
+    observe metrics: [attestation_id, source_id, node_id, measurement_kwh]
+{
+    attestation.attestation_id
+}
+
+// Register a registry bridge (Verra VCS, Gold Standard, CDM)
+circuit register_bridge(graph_id: bytes(32), bridge: RegistryBridge) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridge/register
+    precision C
+    povc true
+    observe metrics: [bridge_id, registry_type, sync_interval_s]
+{
+    bridge.bridge_id
+}
+
+// Submit attested credits to a registry bridge (attestation_hash + credit_metadata -> registry format)
+circuit bridge_submit(graph_id: bytes(32), submission: BridgeSubmission) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridge/submit
+    precision D
+    povc true
+    observe metrics: [submission_id, bridge_id, attestation_hash, registry_format]
+{
+    submission.submission_id
+}
+
+// Sync bridge status with external registry
+circuit sync_bridge(graph_id: bytes(32), bridge_id: bytes(16)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridge/sync
+    precision C
+    observe metrics: [bridge_id, last_sync_at, pending_count, ack_count]
+{
+    true
+}
+
+// Update witness node heartbeat and health
+circuit heartbeat(graph_id: bytes(32), node_id: bytes(32), timestamp: u64) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/ops/witness/heartbeat
+    precision A
+    observe metrics: [node_id, timestamp, uptime_s]
+{
+    true
+}
+
+// Recalibrate an adapter (updates calibration_hash and drift overlay)
+circuit recalibrate_adapter(graph_id: bytes(32), adapter_id: bytes(16), new_calibration: bytes(32)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/ops/adapter/recalibrate
+    precision C
+    povc true
+    observe metrics: [adapter_id, calibration_drift, new_calibration]
+{
+    true
+}
+
+stream source_attestation_events: event<Attestation>
+    retention 10y
+    consumers [verification, registry, compliance, streamsight]
+
+stream bridge_events: event<BridgeSubmission>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
