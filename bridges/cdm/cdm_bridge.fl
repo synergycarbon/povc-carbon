@@ -81,7 +81,58 @@ type CdmSyncResult = struct {
     last_sync_at: u64,
 }
 
+// CDM-specific validation types
+
+type CdmHostPartyLoa = struct {
+    country_code: string,
+    loa_hash: bytes(32),
+    dna_authority: string,
+    issued_at: u64,
+    expires_at: u64,
+    valid: bool,
+}
+
+type CdmMonitoringPeriod = struct {
+    credit_id: bytes(32),
+    period_start: u64,
+    period_end: u64,
+    crediting_start: u64,
+    crediting_end: u64,
+    report_ref: string,
+}
+
+type CdmAdditionalityResult = struct {
+    credit_id: bytes(32),
+    methodology_ref: string,
+    barrier_score: f64,
+    investment_score: f64,
+    common_practice_score: f64,
+    composite_score: f64,
+    passes: bool,
+}
+
+type CdmValidationResult = struct {
+    credit_id: bytes(32),
+    serial_valid: bool,
+    loa_valid: bool,
+    monitoring_valid: bool,
+    additionality_valid: bool,
+    quantity_tonnes: f64,
+    all_passed: bool,
+}
+
+type CdmSyncConflict = struct {
+    credit_id: bytes(32),
+    local_state: u8,
+    remote_state: u8,
+    local_serial: string,
+    remote_serial: string,
+    conflict_type: u8,
+    detected_at: u64,
+}
+
 // state: 0=pending, 1=submitted, 2=registered, 3=retired, 4=rejected
+// conflict_type: 0=state_divergence, 1=serial_mismatch, 2=stale_local
 
 graph cdm_bridge_graph {
     node CdmBridgeConfig
@@ -121,7 +172,64 @@ circuit cdm_batch_import(graph_id: bytes(32), batch: CdmBatchImport) -> bytes(16
     povc true
     publish sc.bridges.cdm.status
     observe metrics: [batch_id, batch_size, source_registry, imported_at]
+    invariant "batch_not_empty" { batch.batch_size > 0 }
 {
+    let vrf_seed = sha3_256(batch.batch_id ++ batch.source_registry ++ batch.imported_at)
+    let vrf_tx_id = vrf_prove(vrf_seed, graph_id)
+
+    let imported = 0
+    let skipped = 0
+
+    for credit in batch.credits {
+        let existing = eslite_query("cdm_mappings_by_serial", credit.cdm_serial)
+
+        if existing != null {
+            skipped = skipped + 1
+            continue
+        }
+
+        let serial_hash = sha3_256(credit.cdm_serial)
+        let serial_len = len(credit.cdm_serial)
+        let serial_format_ok = serial_len >= 16 && serial_len <= 32
+
+        let tonnes_f64 = to_f64(credit.tonnes_co2e)
+        let quantity_valid = tonnes_f64 > 0.0
+
+        if serial_format_ok == false || quantity_valid == false {
+            continue
+        }
+
+        let sc_credit_id = sha3_256(credit.cdm_serial ++ credit.cdm_project_ref ++ credit.vintage_year)
+        let sc_serial = sha3_256(credit.cdm_serial ++ credit.vintage_year)
+        let attest_hash = sha3_256(credit.cdm_serial ++ credit.cdm_project_ref ++ credit.attestation_hash)
+
+        let record = CdmCreditRecord {
+            credit_id: sc_credit_id,
+            sc_serial: credit.sc_serial,
+            cdm_serial: credit.cdm_serial,
+            cdm_project_ref: credit.cdm_project_ref,
+            cpa_id: credit.cpa_id,
+            state: 2,
+            submitted_at: batch.imported_at,
+            registered_at: batch.imported_at,
+            retired_at: 0,
+            attestation_hash: attest_hash,
+            methodology_ref: credit.methodology_ref,
+            vintage_year: credit.vintage_year,
+            tonnes_co2e: credit.tonnes_co2e,
+        }
+
+        eslite_insert("cdm_mappings", sc_credit_id, record)
+        eslite_insert("cdm_mappings_by_serial", credit.cdm_serial, record)
+        eslite_insert("cdm_bridge_locks", sc_credit_id, true)
+
+        imported = imported + 1
+    }
+
+    let anomaly = stream_sight_anomaly(sha3_256(batch.batch_id ++ imported))
+    let validation_hash = sha3_256(vrf_tx_id ++ imported ++ skipped)
+    eslite_insert("cdm_batch_history", batch.batch_id, validation_hash)
+
     batch.batch_id
 }
 
@@ -133,7 +241,84 @@ circuit cdm_batch_export(graph_id: bytes(32), batch: CdmBatchExport) -> bytes(16
     subscribe sc.credits.issued
     publish sc.bridges.cdm.status
     observe metrics: [batch_id, batch_size, exported_at]
+    invariant "batch_not_empty" { batch.batch_size > 0 }
 {
+    let vrf_seed = sha3_256(batch.batch_id ++ batch.exported_at)
+    let vrf_tx_id = vrf_prove(vrf_seed, graph_id)
+
+    let accepted = 0
+    let rejected = 0
+    let skipped_locked = 0
+
+    for request in batch.credits {
+        let global_lock = eslite_query("bridge_global_locks", request.credit_id)
+        if global_lock != null {
+            let lock_bridge = eslite_query("bridge_global_lock_owner", request.credit_id)
+            if lock_bridge != 2 {
+                skipped_locked = skipped_locked + 1
+                continue
+            }
+        }
+
+        let existing = eslite_query("cdm_mappings", request.credit_id)
+        if existing != null {
+            let current_state = existing.state
+            if current_state != 0 {
+                skipped_locked = skipped_locked + 1
+                continue
+            }
+        }
+
+        let retry_count = eslite_query("cdm_retry_count", request.credit_id)
+        if retry_count == null { retry_count = 0 }
+        if retry_count >= 3 {
+            continue
+        }
+
+        let validation = cdm_validate_credit(graph_id, request)
+        if validation.all_passed == false {
+            rejected = rejected + 1
+            eslite_insert("cdm_retry_count", request.credit_id, retry_count + 1)
+            continue
+        }
+
+        let prev_state = 0
+        let new_state = 1
+        let transition_ok = fsm_transition("cdm_credit_lifecycle", request.credit_id, prev_state, new_state)
+        if transition_ok == false {
+            rejected = rejected + 1
+            continue
+        }
+
+        let submit_record = CdmCreditRecord {
+            credit_id: request.credit_id,
+            sc_serial: request.sc_serial,
+            cdm_serial: "",
+            cdm_project_ref: "",
+            cpa_id: request.cpa_id,
+            state: 1,
+            submitted_at: batch.exported_at,
+            registered_at: 0,
+            retired_at: 0,
+            attestation_hash: request.attestation_hash,
+            methodology_ref: request.methodology_ref,
+            vintage_year: request.vintage_year,
+            tonnes_co2e: request.tonnes_co2e,
+        }
+
+        eslite_insert("cdm_mappings", request.credit_id, submit_record)
+        eslite_insert("cdm_bridge_locks", request.credit_id, true)
+        eslite_insert("bridge_global_locks", request.credit_id, true)
+        eslite_insert("bridge_global_lock_owner", request.credit_id, 2)
+
+        accepted = accepted + 1
+    }
+
+    let ack_hash = sha3_256(vrf_tx_id ++ accepted ++ rejected ++ skipped_locked)
+    eslite_insert("cdm_export_history", batch.batch_id, ack_hash)
+
+    let anomaly = stream_sight_anomaly(sha3_256(batch.batch_id ++ accepted))
+
     batch.batch_id
 }
 
@@ -145,11 +330,122 @@ circuit cdm_submit_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> byt
     subscribe sc.credits.issued
     publish sc.bridges.cdm.status
     observe metrics: [credit_id, sc_serial, methodology_ref, vintage_year, tonnes_co2e]
+    invariant "tonnes_positive" { request.tonnes_co2e > 0 }
+    invariant "vintage_valid" { request.vintage_year >= 2000 && request.vintage_year <= 2100 }
 {
+    let global_lock = eslite_query("bridge_global_locks", request.credit_id)
+    if global_lock != null {
+        let lock_owner = eslite_query("bridge_global_lock_owner", request.credit_id)
+        if lock_owner != null && lock_owner != 2 {
+            fail("BRIDGE_LOCKED by another bridge — cannot submit to CDM")
+        }
+    }
+
+    let existing = eslite_query("cdm_mappings", request.credit_id)
+    if existing != null {
+        if existing.state == 1 || existing.state == 2 {
+            fail("Credit already SUBMITTED or REGISTERED on CDM")
+        }
+    }
+
+    let validation = cdm_validate_credit(graph_id, request)
+    if validation.all_passed == false {
+        fail("CDM validation failed")
+    }
+
+    let prev_state = 0
+    if existing != null && existing.state == 4 {
+        prev_state = 4
+        let reset_ok = fsm_transition("cdm_credit_lifecycle", request.credit_id, 4, 0)
+    }
+    let transition_ok = fsm_transition("cdm_credit_lifecycle", request.credit_id, 0, 1)
+
+    let vrf_seed = sha3_256(request.credit_id ++ request.sc_serial ++ now())
+    let vrf_tx_id = vrf_prove(vrf_seed, graph_id)
+
+    let tonnes_f64 = to_f64(request.tonnes_co2e)
+
+    let record = CdmCreditRecord {
+        credit_id: request.credit_id,
+        sc_serial: request.sc_serial,
+        cdm_serial: "",
+        cdm_project_ref: "",
+        cpa_id: request.cpa_id,
+        state: 1,
+        submitted_at: now(),
+        registered_at: 0,
+        retired_at: 0,
+        attestation_hash: request.attestation_hash,
+        methodology_ref: request.methodology_ref,
+        vintage_year: request.vintage_year,
+        tonnes_co2e: request.tonnes_co2e,
+    }
+
+    eslite_insert("cdm_mappings", request.credit_id, record)
+    eslite_insert("cdm_bridge_locks", request.credit_id, true)
+    eslite_insert("bridge_global_locks", request.credit_id, true)
+    eslite_insert("bridge_global_lock_owner", request.credit_id, 2)
+
+    let anomaly = stream_sight_anomaly(sha3_256(request.credit_id ++ request.tonnes_co2e))
+
     request.credit_id
 }
 
+// CDM-specific validation: CER serial format, Host Party LOA, monitoring period, additionality
+circuit cdm_validate_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> CdmValidationResult
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/validate
+    precision C
+    observe metrics: [credit_id, serial_valid, loa_valid, monitoring_valid, additionality_valid]
+{
+    // CER serial format: length and hash-based structural check
+    let serial_len = len(request.sc_serial)
+    let serial_valid = serial_len >= 12 && serial_len <= 64
+
+    // Host Party LOA: query for valid Letter of Approval from Designated National Authority
+    let loa_record = eslite_query("cdm_host_party_loa", request.host_country)
+    let loa_valid = false
+    if loa_record != null {
+        let loa_expired = loa_record.expires_at < now()
+        loa_valid = loa_record.valid == true && loa_expired == false
+    }
+
+    // Monitoring period: crediting period must bracket the vintage year
+    let monitoring = eslite_query("cdm_monitoring_periods", request.credit_id)
+    let monitoring_valid = false
+    if monitoring != null {
+        let period_duration = monitoring.period_end - monitoring.period_start
+        let period_positive = monitoring.period_end > monitoring.period_start
+        let within_crediting = monitoring.period_start >= monitoring.crediting_start && monitoring.period_end <= monitoring.crediting_end
+        let max_period_s = 315360000
+        let duration_ok = period_duration <= max_period_s
+        monitoring_valid = period_positive && within_crediting && duration_ok
+    }
+
+    // Additionality: AI-based assessment using methodology and project data
+    let method_hash = sha3_256(request.methodology_ref ++ request.host_country)
+    let project_features = sha3_256(request.project_name ++ request.project_location ++ request.vintage_year)
+    let additionality_score = ai_classify("cdm_additionality_model", method_hash ++ project_features)
+    let additionality_threshold = 0.65
+    let additionality_valid = additionality_score >= additionality_threshold
+
+    let tonnes_f64 = to_f64(request.tonnes_co2e)
+    let quantity_valid = tonnes_f64 > 0.0 && tonnes_f64 <= 1000000.0
+
+    let all_passed = serial_valid && loa_valid && monitoring_valid && additionality_valid && quantity_valid
+
+    CdmValidationResult {
+        credit_id: request.credit_id,
+        serial_valid: serial_valid,
+        loa_valid: loa_valid,
+        monitoring_valid: monitoring_valid,
+        additionality_valid: additionality_valid,
+        quantity_tonnes: tonnes_f64,
+        all_passed: all_passed,
+    }
+}
+
 // Handle CDM status update (polled from SOAP API)
+// Maps CDM status to bridge state and executes FSM transition
 circuit cdm_status_update(graph_id: bytes(32), update: CdmStatusUpdate) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/status
     precision C
@@ -157,23 +453,185 @@ circuit cdm_status_update(graph_id: bytes(32), update: CdmStatusUpdate) -> bool
     publish sc.bridges.cdm.status
     observe metrics: [credit_id, cdm_serial, previous_state, new_state, event_type]
 {
+    let record = eslite_query("cdm_mappings", update.credit_id)
+    if record == null {
+        fail("No CDM mapping for credit")
+    }
+
+    let current_state = record.state
+    if current_state == update.previous_state {
+        // no-op: already at expected previous state, no conflict
+    } else {
+        let conflict = CdmSyncConflict {
+            credit_id: update.credit_id,
+            local_state: current_state,
+            remote_state: update.previous_state,
+            local_serial: record.cdm_serial,
+            remote_serial: update.cdm_serial,
+            conflict_type: 0,
+            detected_at: update.timestamp,
+        }
+        eslite_insert("cdm_sync_conflicts", sha3_256(update.credit_id ++ update.timestamp), conflict)
+    }
+
+    let transition_ok = fsm_transition("cdm_credit_lifecycle", update.credit_id, current_state, update.new_state)
+    if transition_ok == false {
+        fail("Invalid CDM state transition")
+    }
+
+    // BRIDGE_LOCKED: states 1 (submitted) and 2 (registered) hold the lock
+    let bridge_locked = update.new_state == 1 || update.new_state == 2
+
+    let updated_record = CdmCreditRecord {
+        credit_id: update.credit_id,
+        sc_serial: record.sc_serial,
+        cdm_serial: update.cdm_serial,
+        cdm_project_ref: record.cdm_project_ref,
+        cpa_id: record.cpa_id,
+        state: update.new_state,
+        submitted_at: record.submitted_at,
+        registered_at: record.registered_at,
+        retired_at: record.retired_at,
+        attestation_hash: record.attestation_hash,
+        methodology_ref: record.methodology_ref,
+        vintage_year: record.vintage_year,
+        tonnes_co2e: record.tonnes_co2e,
+    }
+
+    if update.new_state == 2 {
+        updated_record.registered_at = update.timestamp
+        updated_record.cdm_serial = update.cdm_serial
+    }
+    if update.new_state == 3 {
+        updated_record.retired_at = update.timestamp
+    }
+    if update.new_state == 4 {
+        eslite_insert("cdm_rejection_reasons", update.credit_id, update.event_type)
+    }
+
+    eslite_insert("cdm_mappings", update.credit_id, updated_record)
+    if update.cdm_serial != "" {
+        eslite_insert("cdm_mappings_by_serial", update.cdm_serial, updated_record)
+    }
+
+    if bridge_locked {
+        eslite_insert("cdm_bridge_locks", update.credit_id, true)
+        eslite_insert("bridge_global_locks", update.credit_id, true)
+    } else {
+        eslite_insert("cdm_bridge_locks", update.credit_id, false)
+        eslite_insert("bridge_global_locks", update.credit_id, false)
+        eslite_insert("bridge_global_lock_owner", update.credit_id, null)
+    }
+
+    let anomaly = stream_sight_anomaly(sha3_256(update.credit_id ++ update.new_state ++ update.timestamp))
+
     true
 }
 
 // Periodic sync: poll CDM SOAP API for status of all SUBMITTED credits
+// Detects state divergence between local FSM and CDM registry
 circuit cdm_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> CdmSyncResult
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/sync
     precision C
     observe metrics: [bridge_id, credits_synced, credits_pending, credits_registered]
 {
+    let submitted_credits = eslite_query("cdm_mappings_by_state", 1)
+    let registered_credits = eslite_query("cdm_mappings_by_state", 2)
+
+    let synced = 0
+    let pending = 0
+    let registered = 0
+    let retired = 0
+    let rejected = 0
+
+    for credit in submitted_credits {
+        let remote_state = eslite_query("cdm_remote_status_cache", credit.credit_id)
+
+        if remote_state == null {
+            pending = pending + 1
+            continue
+        }
+
+        // CDM status mapping: pending_review=1, registered/active=2, retired=3, cancelled/suspended/rejected=4
+        if remote_state == 2 {
+            let transition_ok = fsm_transition("cdm_credit_lifecycle", credit.credit_id, 1, 2)
+            if transition_ok {
+                let updated = credit
+                updated.state = 2
+                updated.registered_at = now()
+                eslite_insert("cdm_mappings", credit.credit_id, updated)
+                eslite_insert("cdm_bridge_locks", credit.credit_id, true)
+                registered = registered + 1
+            }
+        } else if remote_state == 4 {
+            let transition_ok = fsm_transition("cdm_credit_lifecycle", credit.credit_id, 1, 4)
+            if transition_ok {
+                let updated = credit
+                updated.state = 4
+                eslite_insert("cdm_mappings", credit.credit_id, updated)
+                eslite_insert("cdm_bridge_locks", credit.credit_id, false)
+                eslite_insert("bridge_global_locks", credit.credit_id, false)
+                eslite_insert("bridge_global_lock_owner", credit.credit_id, null)
+                rejected = rejected + 1
+            }
+        } else {
+            pending = pending + 1
+        }
+
+        synced = synced + 1
+    }
+
+    for credit in registered_credits {
+        let remote_state = eslite_query("cdm_remote_status_cache", credit.credit_id)
+
+        if remote_state == null {
+            registered = registered + 1
+            continue
+        }
+
+        if remote_state == 3 {
+            let transition_ok = fsm_transition("cdm_credit_lifecycle", credit.credit_id, 2, 3)
+            if transition_ok {
+                let updated = credit
+                updated.state = 3
+                updated.retired_at = now()
+                eslite_insert("cdm_mappings", credit.credit_id, updated)
+                eslite_insert("cdm_bridge_locks", credit.credit_id, false)
+                eslite_insert("bridge_global_locks", credit.credit_id, false)
+                eslite_insert("bridge_global_lock_owner", credit.credit_id, null)
+                retired = retired + 1
+            }
+        } else if remote_state == 4 {
+            // CDM suspended or cancelled — treat as rejection
+            let transition_ok = fsm_transition("cdm_credit_lifecycle", credit.credit_id, 2, 4)
+            if transition_ok {
+                let updated = credit
+                updated.state = 4
+                eslite_insert("cdm_mappings", credit.credit_id, updated)
+                eslite_insert("cdm_bridge_locks", credit.credit_id, false)
+                eslite_insert("bridge_global_locks", credit.credit_id, false)
+                rejected = rejected + 1
+            }
+        } else {
+            registered = registered + 1
+        }
+
+        synced = synced + 1
+    }
+
+    let sync_anomaly = stream_sight_anomaly(sha3_256(bridge_id ++ synced ++ rejected))
+
+    let last_sync = now()
+    eslite_insert("cdm_last_sync", bridge_id, last_sync)
+
     CdmSyncResult {
         bridge_id: bridge_id,
-        credits_synced: 0,
-        credits_pending: 0,
-        credits_registered: 0,
-        credits_retired: 0,
-        credits_rejected: 0,
-        last_sync_at: 0,
+        credits_synced: synced,
+        credits_pending: pending,
+        credits_registered: registered,
+        credits_retired: retired,
+        credits_rejected: rejected,
+        last_sync_at: last_sync,
     }
 }
 
@@ -185,6 +643,33 @@ circuit cdm_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
     publish sc.bridges.cdm.status
     observe metrics: [credit_id]
 {
+    let global_lock = eslite_query("bridge_global_locks", credit_id)
+    if global_lock != null && global_lock == true {
+        let lock_owner = eslite_query("bridge_global_lock_owner", credit_id)
+        if lock_owner != null && lock_owner != 2 {
+            fail("Credit already BRIDGE_LOCKED by another bridge")
+        }
+        if lock_owner == 2 {
+            true
+        }
+    }
+
+    let record = eslite_query("cdm_mappings", credit_id)
+    if record != null {
+        let state = record.state
+        if state == 1 || state == 2 {
+            true
+        }
+    }
+
+    eslite_insert("cdm_bridge_locks", credit_id, true)
+    eslite_insert("bridge_global_locks", credit_id, true)
+    eslite_insert("bridge_global_lock_owner", credit_id, 2)
+
+    let vrf_seed = sha3_256(credit_id ++ now())
+    let lock_proof = vrf_prove(vrf_seed, graph_id)
+    eslite_insert("cdm_lock_proofs", credit_id, lock_proof)
+
     true
 }
 
@@ -196,10 +681,32 @@ circuit cdm_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
     publish sc.bridges.cdm.status
     observe metrics: [credit_id]
 {
+    let record = eslite_query("cdm_mappings", credit_id)
+    if record == null {
+        fail("No CDM mapping for credit")
+    }
+
+    let state = record.state
+    if state == 1 || state == 2 {
+        fail("Cannot unlock credit in SUBMITTED or REGISTERED state — must be REJECTED first")
+    }
+
+    if state == 4 {
+        let transition_ok = fsm_transition("cdm_credit_lifecycle", credit_id, 4, 0)
+        let updated = record
+        updated.state = 0
+        eslite_insert("cdm_mappings", credit_id, updated)
+    }
+
+    eslite_insert("cdm_bridge_locks", credit_id, false)
+    eslite_insert("bridge_global_locks", credit_id, false)
+    eslite_insert("bridge_global_lock_owner", credit_id, null)
+
     true
 }
 
 // Propagate retirement from CDM to SynergyCarbon
+// Triggers SC-side retirement when CDM reports credit as retired
 circuit cdm_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), cdm_serial: string) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/retire
     precision C
@@ -208,6 +715,165 @@ circuit cdm_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), cdm_seri
     publish sc.credits.retired
     observe metrics: [credit_id, cdm_serial]
 {
+    let record = eslite_query("cdm_mappings", credit_id)
+    if record == null {
+        let record_by_serial = eslite_query("cdm_mappings_by_serial", cdm_serial)
+        if record_by_serial == null {
+            fail("No CDM mapping found for credit or serial")
+        }
+        record = record_by_serial
+    }
+
+    if record.state != 2 {
+        fail("Credit must be in REGISTERED state to propagate retirement")
+    }
+
+    if record.cdm_serial != cdm_serial && record.cdm_serial != "" {
+        let conflict = CdmSyncConflict {
+            credit_id: credit_id,
+            local_state: record.state,
+            remote_state: 3,
+            local_serial: record.cdm_serial,
+            remote_serial: cdm_serial,
+            conflict_type: 1,
+            detected_at: now(),
+        }
+        eslite_insert("cdm_sync_conflicts", sha3_256(credit_id ++ now()), conflict)
+        fail("CDM serial mismatch during retirement propagation")
+    }
+
+    let transition_ok = fsm_transition("cdm_credit_lifecycle", credit_id, 2, 3)
+    if transition_ok == false {
+        fail("FSM transition REGISTERED→RETIRED failed")
+    }
+
+    let vrf_seed = sha3_256(credit_id ++ cdm_serial ++ now())
+    let retirement_proof = vrf_prove(vrf_seed, graph_id)
+
+    let tonnes_f64 = to_f64(record.tonnes_co2e)
+
+    let updated = CdmCreditRecord {
+        credit_id: credit_id,
+        sc_serial: record.sc_serial,
+        cdm_serial: cdm_serial,
+        cdm_project_ref: record.cdm_project_ref,
+        cpa_id: record.cpa_id,
+        state: 3,
+        submitted_at: record.submitted_at,
+        registered_at: record.registered_at,
+        retired_at: now(),
+        attestation_hash: record.attestation_hash,
+        methodology_ref: record.methodology_ref,
+        vintage_year: record.vintage_year,
+        tonnes_co2e: record.tonnes_co2e,
+    }
+
+    eslite_insert("cdm_mappings", credit_id, updated)
+    eslite_insert("cdm_mappings_by_serial", cdm_serial, updated)
+
+    eslite_insert("cdm_bridge_locks", credit_id, false)
+    eslite_insert("bridge_global_locks", credit_id, false)
+    eslite_insert("bridge_global_lock_owner", credit_id, null)
+
+    eslite_insert("cdm_retirement_proofs", credit_id, retirement_proof)
+
+    let anomaly = stream_sight_anomaly(sha3_256(credit_id ++ cdm_serial ++ tonnes_f64))
+
+    true
+}
+
+// Additionality assessment using AI classification
+// Evaluates barrier analysis, investment analysis, and common practice analysis
+circuit cdm_assess_additionality(graph_id: bytes(32), credit_id: bytes(32), methodology_ref: string, project_data: bytes(256)) -> CdmAdditionalityResult
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/additionality
+    precision C
+    observe metrics: [credit_id, methodology_ref, composite_score, passes]
+{
+    let method_hash = sha3_256(methodology_ref)
+    let project_hash = sha3_256(project_data)
+
+    let barrier_features = method_hash ++ project_hash ++ sha3_256("barrier")
+    let barrier_score = ai_classify("cdm_barrier_analysis", barrier_features)
+
+    let investment_features = method_hash ++ project_hash ++ sha3_256("investment")
+    let investment_score = ai_classify("cdm_investment_analysis", investment_features)
+
+    let common_practice_features = method_hash ++ project_hash ++ sha3_256("common_practice")
+    let common_practice_score = ai_classify("cdm_common_practice", common_practice_features)
+
+    let w_barrier = 0.40
+    let w_investment = 0.35
+    let w_common = 0.25
+    let composite = barrier_score * w_barrier + investment_score * w_investment + common_practice_score * w_common
+
+    let threshold = 0.65
+    let passes = composite >= threshold
+
+    eslite_insert("cdm_additionality_results", credit_id, composite)
+
+    CdmAdditionalityResult {
+        credit_id: credit_id,
+        methodology_ref: methodology_ref,
+        barrier_score: barrier_score,
+        investment_score: investment_score,
+        common_practice_score: common_practice_score,
+        composite_score: composite,
+        passes: passes,
+    }
+}
+
+// Register a Host Party LOA (Letter of Approval) from a Designated National Authority
+circuit cdm_register_loa(graph_id: bytes(32), loa: CdmHostPartyLoa) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/loa
+    precision C
+    povc true
+    observe metrics: [country_code, dna_authority, valid]
+    invariant "loa_not_expired" { loa.expires_at > loa.issued_at }
+{
+    let existing = eslite_query("cdm_host_party_loa", loa.country_code)
+
+    if existing != null {
+        if existing.expires_at > now() && existing.valid == true {
+            let loa_hash_check = sha3_256(existing.loa_hash ++ existing.dna_authority)
+            let new_hash_check = sha3_256(loa.loa_hash ++ loa.dna_authority)
+            if loa_hash_check == new_hash_check {
+                true
+            }
+        }
+    }
+
+    let vrf_seed = sha3_256(loa.country_code ++ loa.loa_hash ++ loa.issued_at)
+    let loa_proof = vrf_prove(vrf_seed, graph_id)
+
+    eslite_insert("cdm_host_party_loa", loa.country_code, loa)
+    eslite_insert("cdm_loa_proofs", loa.country_code, loa_proof)
+
+    true
+}
+
+// Record a monitoring period for a credit (required for CDM validation)
+circuit cdm_record_monitoring_period(graph_id: bytes(32), period: CdmMonitoringPeriod) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/monitoring
+    precision C
+    povc true
+    observe metrics: [credit_id, period_start, period_end]
+    invariant "period_valid" { period.period_end > period.period_start }
+    invariant "within_crediting" { period.period_start >= period.crediting_start && period.period_end <= period.crediting_end }
+{
+    let duration_s = period.period_end - period.period_start
+    let max_duration_s = 315360000
+    if duration_s > max_duration_s {
+        fail("Monitoring period exceeds 10-year maximum")
+    }
+
+    let crediting_duration = period.crediting_end - period.crediting_start
+    let max_crediting_s = 630720000
+    if crediting_duration > max_crediting_s {
+        fail("Crediting period exceeds 20-year maximum")
+    }
+
+    eslite_insert("cdm_monitoring_periods", period.credit_id, period)
+
     true
 }
 
@@ -220,5 +886,13 @@ stream cdm_export_events: event<CdmBatchExport>
     consumers [registry, compliance, audit, streamsight]
 
 stream cdm_status_events: event<CdmStatusUpdate>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+stream cdm_validation_events: event<CdmValidationResult>
+    retention 10y
+    consumers [registry, compliance, audit]
+
+stream cdm_conflict_events: event<CdmSyncConflict>
     retention 10y
     consumers [registry, compliance, audit, streamsight]

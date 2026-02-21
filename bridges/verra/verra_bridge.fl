@@ -3,6 +3,21 @@
 // Handles: credit registration, status sync, retirement propagation, dedup
 // Subscribes: sc.credits.issued
 // Publishes:  sc.bridges.verra.status
+//
+// Bridge State Machine (u8):
+//   0=PENDING → 1=SUBMITTED → 2=LISTED → 3=RETIRED
+//                    ↓
+//                 4=REJECTED ──→ 0=PENDING (re-submit path)
+//
+// BRIDGE_LOCKED: state ∈ {1=SUBMITTED, 2=LISTED}
+// A locked credit cannot be transferred or retired on SynergyCarbon
+// until the lock is released via rejection or retirement propagation.
+//
+// Webhook event_type encoding (u8):
+//   0=review_complete  1=registered  2=retired  3=cancelled  4=status_changed
+//
+// review_result encoding (u8):
+//   0=approved  1=rejected
 
 type VerraBridgeConfig = struct {
     bridge_id: bytes(16),
@@ -23,10 +38,14 @@ type BridgeMapping = struct {
     submitted_at: u64,
     listed_at: u64,
     retired_at: u64,
+    rejected_at: u64,
     attestation_hash: bytes(32),
     methodology_id: bytes(16),
     vintage_year: u16,
-    tonnes_co2e: u64,
+    tonnes_co2e: f64,
+    bridge_locked: bool,
+    rejection_reason_hash: bytes(32),
+    last_sync_at: u64,
 }
 
 type BridgeSubmitRequest = struct {
@@ -35,9 +54,10 @@ type BridgeSubmitRequest = struct {
     attestation_hash: bytes(32),
     methodology_id: bytes(16),
     vintage_year: u16,
-    tonnes_co2e: u64,
+    tonnes_co2e: f64,
     project_name: string,
     project_location: string,
+    monitoring_report_hash: bytes(32),
 }
 
 type BridgeStatusUpdate = struct {
@@ -45,8 +65,10 @@ type BridgeStatusUpdate = struct {
     verra_serial: string,
     previous_state: u8,
     new_state: u8,
-    event_type: string,
+    event_type: u8,
     timestamp: u64,
+    review_result: u8,
+    rejection_reason_hash: bytes(32),
 }
 
 type BridgeSyncResult = struct {
@@ -59,13 +81,25 @@ type BridgeSyncResult = struct {
     last_sync_at: u64,
 }
 
-// state: 0=pending, 1=submitted, 2=listed, 3=retired, 4=rejected
+type BridgeValidation = struct {
+    is_valid: bool,
+    error_code: u8,
+    vintage_ok: bool,
+    quantity_ok: bool,
+    serial_ok: bool,
+    methodology_ok: bool,
+    not_duplicate: bool,
+}
+
+// error_code: 0=ok 1=vintage 2=quantity 3=serial 4=methodology 5=duplicate
+//             6=already_mapped 7=not_found 8=bad_transition 9=bridge_locked
 
 graph verra_bridge_graph {
     node BridgeMapping
     edge maps: BridgeMapping -> BridgeMapping { guard state_valid }
     overlay bridge_state: u8 curate delta_curate
     overlay sync_lag: u64 bitmask delta_curate
+    overlay bridge_lock: bool curate delta_curate
     storage csr {
         hot @bram,
         warm @ddr,
@@ -73,7 +107,8 @@ graph verra_bridge_graph {
     }
     ai_feed bridge_anomaly
     ai_feed sync_health
-    observe verra_bridge_graph: [bridge_state, sync_lag] threshold: {
+    ai_feed methodology_classifier
+    observe verra_bridge_graph: [bridge_state, sync_lag, bridge_lock] threshold: {
         anomaly_score 0.85
         baseline_window 60
     }
@@ -83,7 +118,79 @@ stream verra_bridge_events: event<BridgeStatusUpdate>
     retention 10y
     consumers [registry, compliance, audit, streamsight]
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Validate a credit submission request
+// Checks vintage year range, quantity bounds, serial format, methodology,
+// and cross-registry deduplication before allowing bridge submission.
+// ═══════════════════════════════════════════════════════════════════════════
+
+circuit verra_validate_request(graph_id: bytes(32), request: BridgeSubmitRequest) -> BridgeValidation
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/validate
+    precision C
+    observe metrics: [credit_id, sc_serial, methodology_id, vintage_year, tonnes_co2e]
+{
+    let current_year: f64 = 2026.0
+    let min_vintage: f64 = 2000.0
+    let max_vintage: f64 = current_year + 1.0
+    let min_tonnes: f64 = 0.001
+    let max_tonnes: f64 = 50000000.0
+
+    let vy: f64 = request.vintage_year as f64
+    let vintage_ok: bool = vy >= min_vintage && vy <= max_vintage
+
+    let qty: f64 = request.tonnes_co2e
+    let quantity_ok: bool = qty >= min_tonnes && qty <= max_tonnes
+
+    let serial_len: f64 = strlen(request.sc_serial) as f64
+    let serial_ok: bool = serial_len >= 8.0 && serial_len <= 64.0
+
+    let meth_score: f64 = ai_classify("verra_methodology", request.methodology_id)
+    let methodology_ok: bool = meth_score > 0.7
+
+    let existing = eslite_query("bridge_mappings", request.credit_id)
+    let not_already_mapped: bool = existing == null
+
+    let dedup_key = vrf_prove(request.methodology_id ++ request.vintage_year ++ request.tonnes_co2e)
+    let cross_dup = eslite_query("bridge_dedup_index", dedup_key)
+    let not_duplicate: bool = not_already_mapped && cross_dup == null
+
+    let is_valid: bool = vintage_ok && quantity_ok && serial_ok && methodology_ok && not_duplicate
+
+    let error_code: u8 = 0
+    if !vintage_ok     { error_code = 1 }
+    if !quantity_ok    { error_code = 2 }
+    if !serial_ok      { error_code = 3 }
+    if !methodology_ok { error_code = 4 }
+    if !not_duplicate  { error_code = 5 }
+    if !not_already_mapped { error_code = 6 }
+
+    BridgeValidation {
+        is_valid: is_valid,
+        error_code: error_code,
+        vintage_ok: vintage_ok,
+        quantity_ok: quantity_ok,
+        serial_ok: serial_ok,
+        methodology_ok: methodology_ok,
+        not_duplicate: not_duplicate,
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Submit a credit for cross-listing on Verra VCS
+//
+// Migrated from: mapping.ts create() + transition(SUBMITTED)
+//                client.ts  register_credit() + check_duplicate()
+//
+// 1. Validate all fields (vintage, qty, serial, methodology, dedup)
+// 2. Generate deterministic bridge tx ID via VRF
+// 3. Create mapping record in PENDING state
+// 4. FSM transition PENDING(0) → SUBMITTED(1)
+// 5. Set BRIDGE_LOCKED — SC-side transfer/retirement blocked
+// 6. Index dedup key for cross-registry duplicate prevention
+// ═══════════════════════════════════════════════════════════════════════════
+
 circuit verra_submit_credit(graph_id: bytes(32), request: BridgeSubmitRequest) -> bytes(32)
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/submit
     precision C
@@ -92,10 +199,86 @@ circuit verra_submit_credit(graph_id: bytes(32), request: BridgeSubmitRequest) -
     publish sc.bridges.verra.status
     observe metrics: [credit_id, sc_serial, methodology_id, vintage_year, tonnes_co2e]
 {
-    request.credit_id
+    let validation = verra_validate_request(graph_id, request)
+    if !validation.is_valid {
+        return 0x0
+    }
+
+    let existing = eslite_query("bridge_mappings", request.credit_id)
+    if existing != null {
+        return 0x0
+    }
+
+    let tx_seed = request.credit_id ++ request.sc_serial ++ request.attestation_hash ++ now()
+    let bridge_tx_id: bytes(32) = vrf_prove(tx_seed)
+
+    let mapping = BridgeMapping {
+        credit_id: request.credit_id,
+        sc_serial: request.sc_serial,
+        verra_serial: "",
+        verra_project_id: "",
+        state: 0,
+        submitted_at: 0,
+        listed_at: 0,
+        retired_at: 0,
+        rejected_at: 0,
+        attestation_hash: request.attestation_hash,
+        methodology_id: request.methodology_id,
+        vintage_year: request.vintage_year,
+        tonnes_co2e: request.tonnes_co2e,
+        bridge_locked: false,
+        rejection_reason_hash: 0x0,
+        last_sync_at: now(),
+    }
+
+    eslite_insert("bridge_mappings", request.credit_id, mapping)
+
+    let dedup_key = vrf_prove(request.methodology_id ++ request.vintage_year ++ request.tonnes_co2e)
+    eslite_insert("bridge_dedup_index", dedup_key, request.credit_id)
+    eslite_insert("bridge_serial_by_sc", request.sc_serial, request.credit_id)
+
+    let new_state: u8 = fsm_transition("verra_bridge_fsm", 0, 1)
+
+    mapping.state = new_state
+    mapping.submitted_at = now()
+    mapping.bridge_locked = true
+    mapping.last_sync_at = now()
+    eslite_insert("bridge_mappings", request.credit_id, mapping)
+    eslite_insert("bridge_locks", request.credit_id, true)
+
+    emit BridgeStatusUpdate {
+        credit_id: request.credit_id,
+        verra_serial: "",
+        previous_state: 0,
+        new_state: 1,
+        event_type: 1,
+        timestamp: now(),
+        review_result: 0,
+        rejection_reason_hash: 0x0,
+    }
+
+    let anomaly: f64 = stream_sight_anomaly("bridge_submit_rate", request.tonnes_co2e)
+
+    bridge_tx_id
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Handle Verra webhook status update (inbound from Verra)
+//
+// Migrated from: webhook.ts handle_event()
+//                mapping.ts transition()
+//
+// Event dispatch:
+//   event_type 0 (review_complete):
+//     review_result 0 (approved) → SUBMITTED(1) → LISTED(2)
+//     review_result 1 (rejected) → SUBMITTED(1) → REJECTED(4), unlock
+//   event_type 1 (registered)    → SUBMITTED(1) → LISTED(2)
+//   event_type 2 (retired)       → LISTED(2)    → RETIRED(3), unlock
+//   event_type 3 (cancelled)     → any locked   → REJECTED(4), unlock
+//   event_type 4 (status_changed)→ map Verra status to bridge state
+// ═══════════════════════════════════════════════════════════════════════════
+
 circuit verra_webhook_update(graph_id: bytes(32), update: BridgeStatusUpdate) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/webhook
     precision C
@@ -103,27 +286,299 @@ circuit verra_webhook_update(graph_id: bytes(32), update: BridgeStatusUpdate) ->
     publish sc.bridges.verra.status
     observe metrics: [credit_id, verra_serial, previous_state, new_state, event_type]
 {
+    let mapping = eslite_query("bridge_mappings", update.credit_id)
+    if mapping == null {
+        mapping = eslite_query("bridge_serial_index", update.verra_serial)
+        if mapping == null {
+            return false
+        }
+    }
+
+    let current_state: u8 = mapping.state
+    let target_state: u8 = current_state
+    let transitioned: bool = false
+
+    // ── event_type 0: review_complete ────────────────────────────────────
+    if update.event_type == 0 {
+        if update.review_result == 0 {
+            target_state = fsm_transition("verra_bridge_fsm", current_state, 2)
+            if target_state == 2 {
+                mapping.state = 2
+                mapping.listed_at = now()
+                mapping.verra_serial = update.verra_serial
+                mapping.last_sync_at = now()
+                eslite_insert("bridge_serial_index", update.verra_serial, mapping)
+                transitioned = true
+            }
+        }
+        if update.review_result == 1 {
+            target_state = fsm_transition("verra_bridge_fsm", current_state, 4)
+            if target_state == 4 {
+                mapping.state = 4
+                mapping.rejected_at = now()
+                mapping.rejection_reason_hash = update.rejection_reason_hash
+                mapping.bridge_locked = false
+                mapping.last_sync_at = now()
+                eslite_insert("bridge_locks", mapping.credit_id, false)
+                transitioned = true
+            }
+        }
+    }
+
+    // ── event_type 1: registered ─────────────────────────────────────────
+    if update.event_type == 1 {
+        target_state = fsm_transition("verra_bridge_fsm", current_state, 2)
+        if target_state == 2 {
+            mapping.state = 2
+            mapping.listed_at = now()
+            mapping.verra_serial = update.verra_serial
+            mapping.last_sync_at = now()
+            eslite_insert("bridge_serial_index", update.verra_serial, mapping)
+            transitioned = true
+        }
+    }
+
+    // ── event_type 2: retired ────────────────────────────────────────────
+    if update.event_type == 2 {
+        target_state = fsm_transition("verra_bridge_fsm", current_state, 3)
+        if target_state == 3 {
+            mapping.state = 3
+            mapping.retired_at = now()
+            mapping.bridge_locked = false
+            mapping.last_sync_at = now()
+            eslite_insert("bridge_locks", mapping.credit_id, false)
+            transitioned = true
+        }
+    }
+
+    // ── event_type 3: cancelled ──────────────────────────────────────────
+    if update.event_type == 3 {
+        target_state = fsm_transition("verra_bridge_fsm", current_state, 4)
+        if target_state == 4 {
+            mapping.state = 4
+            mapping.rejected_at = now()
+            mapping.rejection_reason_hash = update.rejection_reason_hash
+            mapping.bridge_locked = false
+            mapping.last_sync_at = now()
+            eslite_insert("bridge_locks", mapping.credit_id, false)
+            transitioned = true
+        }
+    }
+
+    // ── event_type 4: status_changed (generic Verra status mapping) ─────
+    if update.event_type == 4 {
+        // Verra status → bridge state: registered/active → 2, retired → 3, cancelled/rejected → 4
+        if update.new_state == 2 && current_state < 2 {
+            target_state = fsm_transition("verra_bridge_fsm", current_state, 2)
+            if target_state == 2 {
+                mapping.state = 2
+                mapping.listed_at = now()
+                mapping.verra_serial = update.verra_serial
+                mapping.last_sync_at = now()
+                eslite_insert("bridge_serial_index", update.verra_serial, mapping)
+                transitioned = true
+            }
+        }
+        if update.new_state == 3 && current_state == 2 {
+            target_state = fsm_transition("verra_bridge_fsm", current_state, 3)
+            if target_state == 3 {
+                mapping.state = 3
+                mapping.retired_at = now()
+                mapping.bridge_locked = false
+                mapping.last_sync_at = now()
+                eslite_insert("bridge_locks", mapping.credit_id, false)
+                transitioned = true
+            }
+        }
+        if update.new_state == 4 {
+            target_state = fsm_transition("verra_bridge_fsm", current_state, 4)
+            if target_state == 4 {
+                mapping.state = 4
+                mapping.rejected_at = now()
+                mapping.bridge_locked = false
+                mapping.last_sync_at = now()
+                eslite_insert("bridge_locks", mapping.credit_id, false)
+                transitioned = true
+            }
+        }
+    }
+
+    if !transitioned {
+        return false
+    }
+
+    eslite_insert("bridge_mappings", mapping.credit_id, mapping)
+
+    emit BridgeStatusUpdate {
+        credit_id: mapping.credit_id,
+        verra_serial: mapping.verra_serial,
+        previous_state: current_state,
+        new_state: target_state,
+        event_type: update.event_type,
+        timestamp: now(),
+        review_result: update.review_result,
+        rejection_reason_hash: update.rejection_reason_hash,
+    }
+
+    let anomaly: f64 = stream_sight_anomaly("bridge_transition_rate", target_state as f64)
+
     true
 }
 
-// Periodic sync: query Verra API for status of all SUBMITTED credits
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Periodic sync: poll Verra for status of all SUBMITTED credits
+//
+// Migrated from: client.ts query_by_sc_credit() + get_status()
+//                mapping.ts get_all_by_state(), transition()
+//
+// For each SUBMITTED credit, queries the Verra status cache (populated by
+// the external API poller) and reconciles state drift. Detects stale
+// submissions (>30 days with no Verra response) and reports anomalies.
+// ═══════════════════════════════════════════════════════════════════════════
+
 circuit verra_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> BridgeSyncResult
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/sync
     precision C
     observe metrics: [bridge_id, credits_synced, credits_pending, credits_listed]
 {
+    let submitted = eslite_query("bridge_mappings_by_state", 1)
+    let pending_count: u32 = 0
+    let listed_count: u32 = 0
+    let retired_count: u32 = 0
+    let rejected_count: u32 = 0
+    let synced_count: u32 = 0
+
+    for mapping in submitted {
+        synced_count = synced_count + 1
+
+        let verra_status = eslite_query("verra_status_cache", mapping.credit_id)
+
+        if verra_status != null {
+            let verra_state: u8 = verra_status.state
+
+            // Verra says LISTED but we still say SUBMITTED
+            if verra_state == 2 && mapping.state == 1 {
+                let ns: u8 = fsm_transition("verra_bridge_fsm", mapping.state, 2)
+                if ns == 2 {
+                    mapping.state = 2
+                    mapping.listed_at = now()
+                    mapping.verra_serial = verra_status.vcu_serial
+                    mapping.verra_project_id = verra_status.project_id
+                    mapping.last_sync_at = now()
+                    eslite_insert("bridge_mappings", mapping.credit_id, mapping)
+                    eslite_insert("bridge_serial_index", verra_status.vcu_serial, mapping)
+                    listed_count = listed_count + 1
+
+                    emit BridgeStatusUpdate {
+                        credit_id: mapping.credit_id,
+                        verra_serial: verra_status.vcu_serial,
+                        previous_state: 1,
+                        new_state: 2,
+                        event_type: 4,
+                        timestamp: now(),
+                        review_result: 0,
+                        rejection_reason_hash: 0x0,
+                    }
+                }
+            }
+
+            // Verra says RETIRED
+            if verra_state == 3 && mapping.state != 3 {
+                let ns: u8 = fsm_transition("verra_bridge_fsm", mapping.state, 3)
+                if ns == 3 {
+                    mapping.state = 3
+                    mapping.retired_at = now()
+                    mapping.bridge_locked = false
+                    mapping.last_sync_at = now()
+                    eslite_insert("bridge_mappings", mapping.credit_id, mapping)
+                    eslite_insert("bridge_locks", mapping.credit_id, false)
+                    retired_count = retired_count + 1
+
+                    emit BridgeStatusUpdate {
+                        credit_id: mapping.credit_id,
+                        verra_serial: mapping.verra_serial,
+                        previous_state: 1,
+                        new_state: 3,
+                        event_type: 2,
+                        timestamp: now(),
+                        review_result: 0,
+                        rejection_reason_hash: 0x0,
+                    }
+                }
+            }
+
+            // Verra says REJECTED/CANCELLED
+            if verra_state == 4 && mapping.state != 4 {
+                let ns: u8 = fsm_transition("verra_bridge_fsm", mapping.state, 4)
+                if ns == 4 {
+                    mapping.state = 4
+                    mapping.rejected_at = now()
+                    mapping.bridge_locked = false
+                    mapping.last_sync_at = now()
+                    eslite_insert("bridge_mappings", mapping.credit_id, mapping)
+                    eslite_insert("bridge_locks", mapping.credit_id, false)
+                    rejected_count = rejected_count + 1
+
+                    emit BridgeStatusUpdate {
+                        credit_id: mapping.credit_id,
+                        verra_serial: mapping.verra_serial,
+                        previous_state: 1,
+                        new_state: 4,
+                        event_type: 3,
+                        timestamp: now(),
+                        review_result: 0,
+                        rejection_reason_hash: 0x0,
+                    }
+                }
+            }
+
+            // State still divergent after attempting transitions → sync conflict
+            if mapping.state != verra_state {
+                let anomaly: f64 = stream_sight_anomaly("bridge_sync_conflict", synced_count as f64)
+            }
+        }
+
+        if verra_status == null {
+            pending_count = pending_count + 1
+
+            // Flag stale submissions (>30 days without Verra response)
+            let age_s: f64 = (now() - mapping.submitted_at) as f64
+            let thirty_days_s: f64 = 2592000.0
+            if age_s > thirty_days_s {
+                let stale: f64 = stream_sight_anomaly("bridge_stale_submission", age_s)
+            }
+        }
+    }
+
+    // Count all LISTED credits for the aggregate total
+    let listed_all = eslite_query("bridge_mappings_by_state", 2)
+    let total_listed: u32 = 0
+    for m in listed_all {
+        total_listed = total_listed + 1
+    }
+
     BridgeSyncResult {
         bridge_id: bridge_id,
-        credits_synced: 0,
-        credits_pending: 0,
-        credits_listed: 0,
-        credits_retired: 0,
-        credits_rejected: 0,
-        last_sync_at: 0,
+        credits_synced: synced_count,
+        credits_pending: pending_count,
+        credits_listed: total_listed + listed_count,
+        credits_retired: retired_count,
+        credits_rejected: rejected_count,
+        last_sync_at: now(),
     }
 }
 
-// Lock a credit for bridge submission (prevents SC-side transfer/retirement)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lock a credit for bridge submission
+//
+// Migrated from: mapping.ts is_bridge_locked()
+//
+// Sets BRIDGE_LOCKED on the SC side, preventing transfer/retirement while
+// the credit is being cross-listed on Verra. Only allowed from PENDING(0).
+// ═══════════════════════════════════════════════════════════════════════════
+
 circuit verra_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/lock
     precision C
@@ -131,10 +586,51 @@ circuit verra_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
     publish sc.bridges.verra.status
     observe metrics: [credit_id]
 {
+    let mapping = eslite_query("bridge_mappings", credit_id)
+    if mapping == null {
+        return false
+    }
+
+    // Only lock from PENDING(0) — about to submit
+    if mapping.state != 0 {
+        return false
+    }
+
+    let already_locked = eslite_query("bridge_locks", credit_id)
+    if already_locked == true {
+        return false
+    }
+
+    mapping.bridge_locked = true
+    mapping.last_sync_at = now()
+    eslite_insert("bridge_mappings", credit_id, mapping)
+    eslite_insert("bridge_locks", credit_id, true)
+
+    emit BridgeStatusUpdate {
+        credit_id: credit_id,
+        verra_serial: mapping.verra_serial,
+        previous_state: mapping.state,
+        new_state: mapping.state,
+        event_type: 4,
+        timestamp: now(),
+        review_result: 0,
+        rejection_reason_hash: 0x0,
+    }
+
     true
 }
 
-// Unlock a credit after bridge rejection (allows SC-side operations again)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Unlock a credit after bridge rejection
+//
+// Migrated from: mapping.ts transition(REJECTED → PENDING)
+//
+// Releases BRIDGE_LOCKED and resets state to PENDING(0) so the credit can
+// be transferred/retired on SC or re-submitted to Verra. Only allowed
+// from REJECTED(4).
+// ═══════════════════════════════════════════════════════════════════════════
+
 circuit verra_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/unlock
     precision C
@@ -142,10 +638,60 @@ circuit verra_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
     publish sc.bridges.verra.status
     observe metrics: [credit_id]
 {
+    let mapping = eslite_query("bridge_mappings", credit_id)
+    if mapping == null {
+        return false
+    }
+
+    if mapping.state != 4 {
+        return false
+    }
+
+    let new_state: u8 = fsm_transition("verra_bridge_fsm", 4, 0)
+    if new_state != 0 {
+        return false
+    }
+
+    let previous_state: u8 = mapping.state
+
+    mapping.state = 0
+    mapping.bridge_locked = false
+    mapping.rejected_at = 0
+    mapping.rejection_reason_hash = 0x0
+    mapping.last_sync_at = now()
+    eslite_insert("bridge_mappings", credit_id, mapping)
+    eslite_insert("bridge_locks", credit_id, false)
+
+    // Clear dedup index so credit can be re-submitted
+    let dedup_key = vrf_prove(mapping.methodology_id ++ mapping.vintage_year ++ mapping.tonnes_co2e)
+    eslite_insert("bridge_dedup_index", dedup_key, null)
+
+    emit BridgeStatusUpdate {
+        credit_id: credit_id,
+        verra_serial: mapping.verra_serial,
+        previous_state: previous_state,
+        new_state: 0,
+        event_type: 4,
+        timestamp: now(),
+        review_result: 0,
+        rejection_reason_hash: 0x0,
+    }
+
     true
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Propagate retirement from Verra to SynergyCarbon
+//
+// Migrated from: webhook.ts handle_event() (credit.retired case)
+//                mapping.ts transition(RETIRED)
+//
+// When Verra retires a cross-listed credit, this circuit transitions the
+// SC-side mapping to RETIRED(3) and publishes sc.credits.retired. Requires
+// the credit to be BRIDGE_LOCKED in LISTED(2) state.
+// ═══════════════════════════════════════════════════════════════════════════
+
 circuit verra_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), verra_serial: string) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/retire
     precision C
@@ -154,14 +700,157 @@ circuit verra_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), verra_
     publish sc.credits.retired
     observe metrics: [credit_id, verra_serial]
 {
+    let mapping = eslite_query("bridge_mappings", credit_id)
+    if mapping == null {
+        mapping = eslite_query("bridge_serial_index", verra_serial)
+        if mapping == null {
+            return false
+        }
+    }
+
+    // Must be LISTED(2) and BRIDGE_LOCKED
+    if mapping.state != 2 {
+        return false
+    }
+    if !mapping.bridge_locked {
+        return false
+    }
+
+    let new_state: u8 = fsm_transition("verra_bridge_fsm", 2, 3)
+    if new_state != 3 {
+        return false
+    }
+
+    let previous_state: u8 = mapping.state
+
+    mapping.state = 3
+    mapping.retired_at = now()
+    mapping.bridge_locked = false
+    mapping.last_sync_at = now()
+    eslite_insert("bridge_mappings", mapping.credit_id, mapping)
+    eslite_insert("bridge_locks", mapping.credit_id, false)
+
+    emit BridgeStatusUpdate {
+        credit_id: mapping.credit_id,
+        verra_serial: verra_serial,
+        previous_state: previous_state,
+        new_state: 3,
+        event_type: 2,
+        timestamp: now(),
+        review_result: 0,
+        rejection_reason_hash: 0x0,
+    }
+
+    // Anomaly detection on retirement propagation latency
+    let propagation_lag: f64 = 0.0
+    if mapping.listed_at > 0 {
+        propagation_lag = (now() - mapping.listed_at) as f64
+    }
+    let anomaly: f64 = stream_sight_anomaly("bridge_retire_lag", propagation_lag)
+
     true
 }
 
-// Check for duplicate serial numbers across registries before submission
-circuit verra_dedup_check(graph_id: bytes(32), sc_serial: string, methodology_id: bytes(16), vintage_year: u16, tonnes_co2e: u64) -> bool
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cross-registry duplicate check
+//
+// Migrated from: client.ts check_duplicate()
+//
+// Three-layer dedup:
+//   1. SC serial already bridged → reject
+//   2. Exact methodology+vintage+quantity combination → reject
+//   3. Near-duplicate (floor/ceil/round of quantity) → anomaly-gated reject
+// ═══════════════════════════════════════════════════════════════════════════
+
+circuit verra_dedup_check(graph_id: bytes(32), sc_serial: string, methodology_id: bytes(16), vintage_year: u16, tonnes_co2e: f64) -> bool
     lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/dedup
     precision C
     observe metrics: [sc_serial, methodology_id, vintage_year]
 {
+    // Layer 1: SC serial already mapped?
+    let serial_mapping = eslite_query("bridge_serial_by_sc", sc_serial)
+    if serial_mapping != null {
+        return false
+    }
+
+    // Layer 2: Exact methodology + vintage + quantity combination
+    let qty: f64 = tonnes_co2e
+    let dedup_key = vrf_prove(methodology_id ++ vintage_year ++ qty)
+    let exact_dup = eslite_query("bridge_dedup_index", dedup_key)
+    if exact_dup != null {
+        return false
+    }
+
+    // Layer 3: Near-duplicate detection (catches rounding/unit-conversion drift)
+    let qty_floor: f64 = floor(qty)
+    let qty_ceil: f64 = ceil(qty)
+    let qty_rounded: f64 = round(qty)
+
+    let key_floor = vrf_prove(methodology_id ++ vintage_year ++ qty_floor)
+    let key_ceil = vrf_prove(methodology_id ++ vintage_year ++ qty_ceil)
+    let key_rounded = vrf_prove(methodology_id ++ vintage_year ++ qty_rounded)
+
+    let dup_floor = eslite_query("bridge_dedup_index", key_floor)
+    let dup_ceil = eslite_query("bridge_dedup_index", key_ceil)
+    let dup_rounded = eslite_query("bridge_dedup_index", key_rounded)
+
+    if dup_floor != null || dup_ceil != null || dup_rounded != null {
+        let near_dup_score: f64 = stream_sight_anomaly("bridge_near_duplicate", qty)
+        if near_dup_score > 0.9 {
+            return false
+        }
+    }
+
+    // Sanity bound: single credits above 1M tCO2e are suspicious
+    let max_single: f64 = 1000000.0
+    if qty > max_single {
+        let large_score: f64 = stream_sight_anomaly("bridge_large_credit", qty)
+        if large_score > 0.95 {
+            return false
+        }
+    }
+
     true
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Bridge lock query: external circuits call this before allowing SC-side
+// transfer or retirement to enforce the BRIDGE_LOCKED invariant.
+//
+// BRIDGE_LOCKED iff state ∈ {SUBMITTED(1), LISTED(2)}
+//
+// Self-heals inconsistencies between the lock table and mapping state.
+// ═══════════════════════════════════════════════════════════════════════════
+
+circuit verra_is_bridge_locked(graph_id: bytes(32), credit_id: bytes(32)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/is_locked
+    precision C
+    observe metrics: [credit_id]
+{
+    let mapping = eslite_query("bridge_mappings", credit_id)
+    if mapping == null {
+        return false
+    }
+
+    let state: u8 = mapping.state
+    let locked_by_state: bool = state == 1 || state == 2
+
+    let lock_flag = eslite_query("bridge_locks", credit_id)
+
+    // Self-heal: lock table disagrees with FSM state
+    if lock_flag == true && !locked_by_state {
+        eslite_insert("bridge_locks", credit_id, false)
+        let anomaly: f64 = stream_sight_anomaly("bridge_lock_inconsistency", state as f64)
+        return false
+    }
+
+    if lock_flag != true && locked_by_state {
+        eslite_insert("bridge_locks", credit_id, true)
+        let anomaly: f64 = stream_sight_anomaly("bridge_lock_inconsistency", state as f64)
+        return true
+    }
+
+    locked_by_state
 }

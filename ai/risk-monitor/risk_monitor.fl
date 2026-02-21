@@ -1,45 +1,70 @@
 // Risk Monitoring Circuit
 // Multi-dimensional risk scoring: counterparty, delivery, market, methodology
 // Risk scores 0–100: Low (0–25), Moderate (26–50), Elevated (51–75), Critical (76–100)
+// Migrated from risk_engine.ts + alerts.ts
+
+// ── Threshold constants ─────────────────────────────────────────────────────
+
+const THRESHOLD_LOW_MAX: f64 = 25.0
+const THRESHOLD_MODERATE_MAX: f64 = 50.0
+const THRESHOLD_ELEVATED_MAX: f64 = 75.0
+
+const WEIGHT_COUNTERPARTY: f64 = 0.30
+const WEIGHT_DELIVERY: f64 = 0.30
+const WEIGHT_MARKET: f64 = 0.25
+const WEIGHT_METHODOLOGY: f64 = 0.15
+
+const ALERT_WARN_DEFAULT: f64 = 50.0
+const ALERT_CRIT_DEFAULT: f64 = 75.0
+const COOLDOWN_COUNTERPARTY: u64 = 3600
+const COOLDOWN_DELIVERY: u64 = 3600
+const COOLDOWN_MARKET: u64 = 1800
+const COOLDOWN_METHODOLOGY: u64 = 7200
+const ESCALATE_ELEVATED_S: u64 = 7200
+const ESCALATE_CRITICAL_S: u64 = 1800
+
+// ── Input types ─────────────────────────────────────────────────────────────
 
 type CounterpartyInput = struct {
     counterparty_hash: bytes(32),
-    payment_history_score: u64,
-    completion_rate: u64,
-    reputation_score: u64,
+    payment_history_score: f64,
+    completion_rate: f64,
+    reputation_score: f64,
     days_since_default: u32,
-    outstanding_volume: u64,
+    outstanding_volume: f64,
 }
 
 type DeliveryInput = struct {
     source_id: bytes(16),
-    forecast_tco2e: u64,
-    committed_tco2e: u64,
-    site_health: u64,
-    weather_outlook: u64,
-    delivery_history: u64,
+    forecast_tco2e: f64,
+    committed_tco2e: f64,
+    site_health: f64,
+    weather_outlook: f64,
+    delivery_history: f64,
 }
 
 type MarketInput = struct {
-    volatility_30d: u64,
-    bid_ask_spread_pct: u64,
-    order_book_depth: u64,
-    volume_trend: i64,
+    volatility_30d: f64,
+    bid_ask_spread_pct: f64,
+    order_book_depth: f64,
+    volume_trend: f64,
 }
 
 type MethodologyInput = struct {
     methodology_id: bytes(32),
     governance_proposals: u32,
-    compliance_flags: u64,
-    registry_status: u64,
+    compliance_flags: f64,
+    registry_status: f64,
     age_years: u32,
-    peer_review_score: u64,
+    peer_review_score: f64,
 }
+
+// ── Output types ────────────────────────────────────────────────────────────
 
 type RiskResult = struct {
     target_id: bytes(16),
     risk_type: u8,
-    score: u64,
+    score: f64,
     severity: u8,
     assessed_at: u64,
     mitigation_hash: bytes(32),
@@ -50,13 +75,39 @@ type RiskAlertEvent = struct {
     target_id: bytes(16),
     risk_type: u8,
     severity: u8,
-    score: u64,
-    threshold: u64,
+    score: f64,
+    threshold: f64,
+    is_critical: bool,
+    escalated: bool,
     timestamp: u64,
+}
+
+type CompositeResult = struct {
+    target_id: bytes(16),
+    counterparty_score: f64,
+    delivery_score: f64,
+    market_score: f64,
+    methodology_score: f64,
+    composite_score: f64,
+    composite_severity: u8,
+    assessed_at: u64,
+}
+
+type PortfolioResult = struct {
+    source_count: u32,
+    avg_risk: f64,
+    max_risk: f64,
+    weighted_risk: f64,
+    low_count: u32,
+    moderate_count: u32,
+    elevated_count: u32,
+    critical_count: u32,
 }
 
 // risk_type: 0=counterparty, 1=delivery, 2=market, 3=methodology
 // severity: 0=low, 1=moderate, 2=elevated, 3=critical
+
+// ── Graph ───────────────────────────────────────────────────────────────────
 
 graph risk_monitor_graph {
     node CounterpartyInput
@@ -65,14 +116,17 @@ graph risk_monitor_graph {
     node MethodologyInput
     node RiskResult
     node RiskAlertEvent
+    node CompositeResult
+    node PortfolioResult
     edge scores_counterparty: CounterpartyInput -> RiskResult { guard data_valid }
     edge scores_delivery: DeliveryInput -> RiskResult { guard data_valid }
     edge scores_market: MarketInput -> RiskResult { guard data_valid }
     edge scores_methodology: MethodologyInput -> RiskResult { guard data_valid }
     edge triggers: RiskResult -> RiskAlertEvent { guard threshold_exceeded }
-    overlay risk_score: u64 bitmask delta_curate
+    edge composites: RiskResult -> CompositeResult { guard dimensions_complete }
+    overlay risk_score: f64 bitmask delta_curate
     overlay alert_frequency: u64 bitmask delta_curate
-    overlay composite_risk: u64 bitmask delta_curate
+    overlay composite_risk: f64 bitmask delta_curate
     storage csr {
         hot @bram,
         warm @ddr,
@@ -85,58 +139,406 @@ graph risk_monitor_graph {
     }
 }
 
+// ── Helper functions ────────────────────────────────────────────────────────
+
+fn max_f64(a: f64, b: f64) -> f64 {
+    if a > b { a } else { b }
+}
+
+fn min_f64(a: f64, b: f64) -> f64 {
+    if a < b { a } else { b }
+}
+
+fn clamp_score(raw: f64) -> f64 {
+    let clamped = max_f64(0.0, min_f64(100.0, raw))
+    round(clamped * 100.0) / 100.0
+}
+
+fn severity_for(score: f64) -> u8 {
+    if score <= THRESHOLD_LOW_MAX { 0 }
+    else { if score <= THRESHOLD_MODERATE_MAX { 1 }
+    else { if score <= THRESHOLD_ELEVATED_MAX { 2 }
+    else { 3 } } }
+}
+
+fn cooldown_for_risk_type(risk_type: u8) -> u64 {
+    if risk_type == 0 { COOLDOWN_COUNTERPARTY }
+    else { if risk_type == 1 { COOLDOWN_DELIVERY }
+    else { if risk_type == 2 { COOLDOWN_MARKET }
+    else { COOLDOWN_METHODOLOGY } } }
+}
+
+// ── Counterparty Risk Scoring ───────────────────────────────────────────────
+// Weights: payment 0.30, completion 0.25, reputation 0.25, default 0.10, exposure 0.10
+
 circuit score_counterparty(graph_id: bytes(32), input: CounterpartyInput) -> RiskResult
     lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/counterparty
     precision C
     observe metrics: [counterparty_hash, score, severity]
 {
+    let payment_risk = (1.0 - input.payment_history_score) * 100.0
+    let completion_risk = (1.0 - input.completion_rate) * 100.0
+    let reputation_risk = (1.0 - input.reputation_score) * 100.0
+
+    let default_recency = if input.days_since_default < 365 {
+        max_f64(0.0, 80.0 - (input.days_since_default as f64) * 0.2)
+    } else {
+        0.0
+    }
+
+    let exposure_risk = min_f64(100.0, input.outstanding_volume / 1000.0 * 10.0)
+
+    let weighted_sum = payment_risk * 0.30
+        + completion_risk * 0.25
+        + reputation_risk * 0.25
+        + default_recency * 0.10
+        + exposure_risk * 0.10
+    let raw = weighted_sum / 1.0
+
+    let score = clamp_score(raw)
+    let sev = severity_for(score)
+
+    let mitigation = ai_infer("risk_mitigation_counterparty", score, input.completion_rate, input.reputation_score)
+
+    stream_sight_anomaly(graph_id, "counterparty_risk", score, 0.80)
+
     RiskResult {
         target_id: input.counterparty_hash,
         risk_type: 0,
-        score: 0,
-        severity: 0,
-        assessed_at: 0,
-        mitigation_hash: input.counterparty_hash,
+        score: score,
+        severity: sev,
+        assessed_at: eslite_query("clock", "now"),
+        mitigation_hash: mitigation,
     }
 }
+
+// ── Delivery Risk Scoring ───────────────────────────────────────────────────
+// Weights: coverage_gap 0.40, site_health 0.25, weather 0.15, history 0.20
 
 circuit score_delivery(graph_id: bytes(32), input: DeliveryInput) -> RiskResult
     lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/delivery
     precision C
     observe metrics: [source_id, forecast_tco2e, committed_tco2e, score, severity]
 {
+    let coverage = if input.committed_tco2e > 0.0 {
+        input.forecast_tco2e / input.committed_tco2e
+    } else {
+        1.0
+    }
+    let coverage_gap = max_f64(0.0, (1.0 - coverage) * 150.0)
+
+    let site_risk = (1.0 - input.site_health) * 100.0
+    let weather_risk = (1.0 - input.weather_outlook) * 100.0
+    let history_risk = (1.0 - input.delivery_history) * 100.0
+
+    let weighted_sum = coverage_gap * 0.40
+        + site_risk * 0.25
+        + weather_risk * 0.15
+        + history_risk * 0.20
+    let raw = weighted_sum / 1.0
+
+    let score = clamp_score(raw)
+    let sev = severity_for(score)
+
+    let mitigation = ai_infer("risk_mitigation_delivery", score, input.site_health, coverage)
+
+    stream_sight_anomaly(graph_id, "delivery_risk", score, 0.80)
+
     RiskResult {
         target_id: input.source_id,
         risk_type: 1,
-        score: 0,
-        severity: 0,
-        assessed_at: 0,
-        mitigation_hash: input.source_id,
+        score: score,
+        severity: sev,
+        assessed_at: eslite_query("clock", "now"),
+        mitigation_hash: mitigation,
     }
 }
+
+// ── Market Risk Scoring ─────────────────────────────────────────────────────
+// Weights: volatility 0.35, spread 0.25, liquidity 0.25, volume 0.15
 
 circuit score_market(graph_id: bytes(32), input: MarketInput) -> RiskResult
     lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/market
     precision C
     observe metrics: [volatility_30d, bid_ask_spread_pct, score, severity]
 {
+    let volatility_risk = min_f64(100.0, input.volatility_30d * 200.0)
+    let spread_risk = min_f64(100.0, input.bid_ask_spread_pct * 20.0)
+
+    let depth_normalized = min_f64(100.0, input.order_book_depth / 10000.0 * 100.0)
+    let liquidity_risk = max_f64(0.0, 100.0 - depth_normalized)
+
+    let volume_risk = if input.volume_trend < 0.0 {
+        min_f64(100.0, abs(input.volume_trend) * 100.0)
+    } else {
+        0.0
+    }
+
+    let weighted_sum = volatility_risk * 0.35
+        + spread_risk * 0.25
+        + liquidity_risk * 0.25
+        + volume_risk * 0.15
+    let raw = weighted_sum / 1.0
+
+    let score = clamp_score(raw)
+    let sev = severity_for(score)
+
+    let market_id = vrf_prove(graph_id)
+
+    stream_sight_anomaly(graph_id, "market_risk", score, 0.80)
+
     RiskResult {
-        target_id: 0x00000000000000000000000000000000,
+        target_id: market_id,
         risk_type: 2,
-        score: 0,
-        severity: 0,
-        assessed_at: 0,
-        mitigation_hash: 0x00000000000000000000000000000000,
+        score: score,
+        severity: sev,
+        assessed_at: eslite_query("clock", "now"),
+        mitigation_hash: vrf_prove(graph_id),
     }
 }
 
-circuit portfolio_composite(graph_id: bytes(32), source_ids: list<bytes(16)>) -> u64
+// ── Methodology Risk Scoring ────────────────────────────────────────────────
+// Weights: governance 0.25, compliance 0.25, registry 0.20, maturity 0.15, peer 0.15
+
+circuit score_methodology(graph_id: bytes(32), input: MethodologyInput) -> RiskResult
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/methodology
+    precision C
+    observe metrics: [methodology_id, governance_proposals, score, severity]
+{
+    let governance_risk = min_f64(100.0, (input.governance_proposals as f64) * 15.0)
+    let compliance_risk = min_f64(100.0, input.compliance_flags * 100.0)
+    let registry_risk = (1.0 - input.registry_status) * 100.0
+    let maturity_risk = if input.age_years < 2 { 40.0 } else { 0.0 }
+    let peer_risk = (1.0 - input.peer_review_score) * 100.0
+
+    let weighted_sum = governance_risk * 0.25
+        + compliance_risk * 0.25
+        + registry_risk * 0.20
+        + maturity_risk * 0.15
+        + peer_risk * 0.15
+    let raw = weighted_sum / 1.0
+
+    let score = clamp_score(raw)
+    let sev = severity_for(score)
+
+    let mitigation = ai_infer("risk_mitigation_methodology", score, input.registry_status, input.peer_review_score)
+
+    stream_sight_anomaly(graph_id, "methodology_risk", score, 0.80)
+
+    RiskResult {
+        target_id: input.methodology_id,
+        risk_type: 3,
+        score: score,
+        severity: sev,
+        assessed_at: eslite_query("clock", "now"),
+        mitigation_hash: mitigation,
+    }
+}
+
+// ── Composite Risk Scoring ──────────────────────────────────────────────────
+// Aggregates all four dimensions into a single weighted composite.
+// Weights: counterparty 0.30, delivery 0.30, market 0.25, methodology 0.15
+
+circuit compute_composite(graph_id: bytes(32), target_id: bytes(16),
+                          cp: RiskResult, dl: RiskResult, mk: RiskResult, mt: RiskResult) -> CompositeResult
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/composite
+    precision C
+    observe metrics: [target_id, composite_score, composite_severity]
+{
+    let weighted_sum = cp.score * WEIGHT_COUNTERPARTY
+        + dl.score * WEIGHT_DELIVERY
+        + mk.score * WEIGHT_MARKET
+        + mt.score * WEIGHT_METHODOLOGY
+    let weight_total = WEIGHT_COUNTERPARTY + WEIGHT_DELIVERY + WEIGHT_MARKET + WEIGHT_METHODOLOGY
+    let composite = clamp_score(weighted_sum / weight_total)
+    let sev = severity_for(composite)
+
+    stream_sight_anomaly(graph_id, "composite_risk", composite, 0.80)
+
+    CompositeResult {
+        target_id: target_id,
+        counterparty_score: cp.score,
+        delivery_score: dl.score,
+        market_score: mk.score,
+        methodology_score: mt.score,
+        composite_score: composite,
+        composite_severity: sev,
+        assessed_at: eslite_query("clock", "now"),
+    }
+}
+
+// ── Portfolio Composite ─────────────────────────────────────────────────────
+// Aggregates risk across a portfolio of sources: avg, max, weighted mean,
+// and per-severity bucket counts.
+
+circuit portfolio_composite(graph_id: bytes(32), source_ids: list<bytes(16)>) -> PortfolioResult
     lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
     precision C
     observe metrics: [source_count, avg_risk, max_risk, weighted_risk]
 {
-    0
+    let count = len(source_ids) as u32
+
+    if count == 0 {
+        return PortfolioResult {
+            source_count: 0,
+            avg_risk: 0.0,
+            max_risk: 0.0,
+            weighted_risk: 0.0,
+            low_count: 0,
+            moderate_count: 0,
+            elevated_count: 0,
+            critical_count: 0,
+        }
+    }
+
+    let sum_score: f64 = 0.0
+    let max_score: f64 = 0.0
+    let w_sum: f64 = 0.0
+    let w_total: f64 = 0.0
+    let n_low: u32 = 0
+    let n_mod: u32 = 0
+    let n_elev: u32 = 0
+    let n_crit: u32 = 0
+
+    for sid in source_ids {
+        let entry = eslite_query("risk_results", sid)
+        let s: f64 = entry.score
+        let w: f64 = entry.weight
+
+        sum_score = sum_score + s
+        max_score = max_f64(max_score, s)
+        w_sum = w_sum + s * w
+        w_total = w_total + w
+
+        let sev = severity_for(s)
+        if sev == 0 { n_low = n_low + 1 }
+        else { if sev == 1 { n_mod = n_mod + 1 }
+        else { if sev == 2 { n_elev = n_elev + 1 }
+        else { n_crit = n_crit + 1 } } }
+    }
+
+    let avg = round(sum_score / (count as f64) * 100.0) / 100.0
+    let weighted = if w_total > 0.0 {
+        round(w_sum / w_total * 100.0) / 100.0
+    } else {
+        0.0
+    }
+
+    stream_sight_anomaly(graph_id, "portfolio_risk", weighted, 0.80)
+
+    PortfolioResult {
+        source_count: count,
+        avg_risk: avg,
+        max_risk: max_score,
+        weighted_risk: weighted,
+        low_count: n_low,
+        moderate_count: n_mod,
+        elevated_count: n_elev,
+        critical_count: n_crit,
+    }
 }
+
+// ── Alert Evaluation ────────────────────────────────────────────────────────
+// Checks a RiskResult against warning/critical thresholds with per-type
+// cooldown enforcement. Returns a populated RiskAlertEvent when a threshold
+// is exceeded and cooldown has elapsed; otherwise returns a zero-timestamp
+// sentinel (no-op alert).
+
+circuit evaluate_alert(graph_id: bytes(32), target_id: bytes(16), result: RiskResult, now: u64) -> RiskAlertEvent
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/alert
+    precision C
+    observe metrics: [target_id, risk_type, score, severity, is_critical]
+{
+    let warning_threshold = ALERT_WARN_DEFAULT
+    let critical_threshold = ALERT_CRIT_DEFAULT
+    let cooldown = cooldown_for_risk_type(result.risk_type)
+
+    let is_warning = result.score >= warning_threshold
+    let is_critical = result.score >= critical_threshold
+
+    let last_alert_time = eslite_query("alert_cooldowns", target_id) as u64
+    let cooled_down = (now - last_alert_time) >= cooldown
+
+    if is_warning && cooled_down {
+        let alert_id = vrf_prove(graph_id)
+        let threshold_used = if is_critical { critical_threshold } else { warning_threshold }
+
+        eslite_insert("alert_cooldowns", target_id, now)
+        eslite_insert("active_alerts", alert_id, result)
+
+        stream_sight_anomaly(graph_id, "risk_alert_fired", result.score, 0.70)
+
+        RiskAlertEvent {
+            alert_id: alert_id,
+            target_id: target_id,
+            risk_type: result.risk_type,
+            severity: result.severity,
+            score: result.score,
+            threshold: threshold_used,
+            is_critical: is_critical,
+            escalated: false,
+            timestamp: now,
+        }
+    } else {
+        if !is_warning {
+            eslite_insert("resolved_alerts", target_id, now)
+        }
+
+        RiskAlertEvent {
+            alert_id: 0x00000000000000000000000000000000,
+            target_id: target_id,
+            risk_type: result.risk_type,
+            severity: 0,
+            score: result.score,
+            threshold: warning_threshold,
+            is_critical: false,
+            escalated: false,
+            timestamp: 0,
+        }
+    }
+}
+
+// ── Alert Escalation ────────────────────────────────────────────────────────
+// Checks whether an unacknowledged alert has exceeded its auto-escalation
+// window. Elevated alerts escalate after 2h, critical after 30m.
+
+circuit check_escalation(graph_id: bytes(32), alert: RiskAlertEvent, now: u64) -> RiskAlertEvent
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/escalation
+    precision C
+    observe metrics: [alert_id, severity, escalated]
+{
+    if alert.timestamp == 0 || alert.escalated {
+        return alert
+    }
+
+    let elapsed = now - alert.timestamp
+
+    let escalation_limit = if alert.severity >= 3 { ESCALATE_CRITICAL_S }
+        else { if alert.severity >= 2 { ESCALATE_ELEVATED_S }
+        else { 0 } }
+
+    if escalation_limit > 0 && elapsed >= escalation_limit {
+        eslite_insert("escalated_alerts", alert.alert_id, now)
+
+        stream_sight_anomaly(graph_id, "alert_escalated", alert.score, 0.60)
+
+        RiskAlertEvent {
+            alert_id: alert.alert_id,
+            target_id: alert.target_id,
+            risk_type: alert.risk_type,
+            severity: alert.severity,
+            score: alert.score,
+            threshold: alert.threshold,
+            is_critical: alert.is_critical,
+            escalated: true,
+            timestamp: alert.timestamp,
+        }
+    } else {
+        alert
+    }
+}
+
+// ── Streams ─────────────────────────────────────────────────────────────────
 
 stream risk_assessments: event<RiskResult>
     retention 5y

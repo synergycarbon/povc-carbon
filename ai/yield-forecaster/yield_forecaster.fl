@@ -3,6 +3,19 @@
 // Inputs: energy telemetry, weather, market data, historical credits
 // Outputs: tCO2e yield forecast with 80%/95% confidence intervals
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const PI: f64 = 3.14159265358979323846;
+const SCALE: f64 = 1000000.0;
+const FEATURE_COUNT: u32 = 20;
+const Z_80: f64 = 1.282;
+const Z_95: f64 = 1.960;
+const EWMA_ALPHA: f64 = 0.1;
+const UNCERTAINTY_FACTOR: f64 = 0.15;
+const DEGRADATION_PER_DAY: f64 = 0.0001;
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 type FeatureVector = struct {
     power_mean: u64,
     trend_slope: i64,
@@ -46,6 +59,72 @@ type DeviationAlert = struct {
     severity: u8,
 }
 
+type TelemetryInput = struct {
+    power_mean_w: f64,
+    capacity_factor: f64,
+    trend_slope: f64,
+    power_r_squared: f64,
+    minting_rate_tco2e_hour: f64,
+    gas_flow_mcf_hour: f64,
+    ch4_mass_kg: f64,
+    attestation_success_rate: f64,
+    spot_price_usd: f64,
+    volume_24h_tco2e: f64,
+    forward_committed_pct: f64,
+    ambient_temp_c: f64,
+    wind_speed_ms: f64,
+    irradiance_wm2: f64,
+    precipitation_mm: f64,
+    timestamp: u64,
+}
+
+type SmoothedState = struct {
+    power_mean: f64,
+    trend_slope: f64,
+    r_squared: f64,
+    capacity_factor: f64,
+    minting_rate: f64,
+    gas_flow: f64,
+    ch4_mass: f64,
+    attestation_rate: f64,
+    spot_price: f64,
+    volume_24h: f64,
+    forward_committed_pct: f64,
+    ambient_temp: f64,
+    wind_speed: f64,
+    irradiance: f64,
+    precipitation: f64,
+    hour_sin: f64,
+    hour_cos: f64,
+    day_sin: f64,
+    day_cos: f64,
+    is_weekend: f64,
+}
+
+type AccuracyRecord = struct {
+    horizon: u8,
+    predicted: f64,
+    actual: f64,
+    timestamp: u64,
+}
+
+type AccuracyMetrics = struct {
+    mae: f64,
+    mape: f64,
+    r_squared: f64,
+    sample_count: u64,
+}
+
+type CapacityForecast = struct {
+    current_capacity_factor: f64,
+    projected_7d: f64,
+    projected_30d: f64,
+    projected_90d: f64,
+    nameplate_kw: f64,
+}
+
+// ─── Graph ───────────────────────────────────────────────────────────────────
+
 graph yield_forecaster_graph {
     node FeatureVector
     node ForecastResult
@@ -66,19 +145,108 @@ graph yield_forecaster_graph {
     }
 }
 
+// ─── Helper Functions ────────────────────────────────────────────────────────
+
+fn clamp_f64(val: f64, lo: f64, hi: f64) -> f64 {
+    if val < lo { lo }
+    else if val > hi { hi }
+    else { val }
+}
+
+fn max_f64(a: f64, b: f64) -> f64 {
+    if a > b { a } else { b }
+}
+
+fn to_scaled_u64(val: f64) -> u64 {
+    floor(max_f64(val, 0.0) * SCALE) as u64
+}
+
+fn to_scaled_i64(val: f64) -> i64 {
+    round(val * SCALE) as i64
+}
+
+fn from_scaled_u64(val: u64) -> f64 {
+    val as f64 / SCALE
+}
+
+fn from_scaled_i64(val: i64) -> f64 {
+    val as f64 / SCALE
+}
+
+fn horizon_to_days(h: u8) -> f64 {
+    if h == 0 { 1.0 }
+    else if h == 1 { 7.0 }
+    else if h == 2 { 30.0 }
+    else if h == 3 { 90.0 }
+    else { 365.0 }
+}
+
+fn ewma_step(alpha: f64, current: f64, prev: f64) -> f64 {
+    alpha * current + (1.0 - alpha) * prev
+}
+
+fn normalize_power(watts: f64) -> f64 { clamp_f64(watts / 100000.0, 0.0, 1.0) }
+fn normalize_minting_rate(rate: f64) -> f64 { clamp_f64(rate / 10.0, 0.0, 1.0) }
+fn normalize_gas_flow(mcf: f64) -> f64 { clamp_f64(mcf / 100.0, 0.0, 1.0) }
+fn normalize_ch4_mass(kg: f64) -> f64 { clamp_f64(kg / 1000.0, 0.0, 1.0) }
+fn normalize_price(usd: f64) -> f64 { clamp_f64(usd / 200.0, 0.0, 1.0) }
+fn normalize_volume(tco2e: f64) -> f64 { clamp_f64(tco2e / 100000.0, 0.0, 1.0) }
+fn normalize_temperature(c: f64) -> f64 { clamp_f64((c + 40.0) / 100.0, 0.0, 1.0) }
+fn normalize_wind(ms: f64) -> f64 { clamp_f64(ms / 50.0, 0.0, 1.0) }
+fn normalize_irradiance(wm2: f64) -> f64 { clamp_f64(wm2 / 1200.0, 0.0, 1.0) }
+fn normalize_precipitation(mm: f64) -> f64 { clamp_f64(mm / 100.0, 0.0, 1.0) }
+
+// ─── Feature Extraction ─────────────────────────────────────────────────────
+
 circuit extract_features(graph_id: bytes(32), source_id: bytes(16), timestamp: u64) -> FeatureVector
     lex esn/sustainability/carbon/org/synergycarbon/ops/ai/features/extract
     precision D
     observe metrics: [source_id, timestamp, feature_count]
 {
+    let telemetry: TelemetryInput = eslite_query(graph_id, "telemetry", source_id, timestamp);
+
+    let ts: f64 = timestamp as f64;
+    let secs_per_day: f64 = 86400.0;
+    let secs_per_hour: f64 = 3600.0;
+
+    // Calendar decomposition from unix timestamp
+    let hour: f64 = floor((ts % secs_per_day) / secs_per_hour);
+    let day_of_year: f64 = floor((ts % 31536000.0) / secs_per_day);
+    let day_of_week: f64 = floor(ts / secs_per_day + 4.0) % 7.0;
+
+    // Cyclical encoding — projects periodic features onto unit circle
+    let h_sin: f64 = sin(2.0 * PI * hour / 24.0);
+    let h_cos: f64 = cos(2.0 * PI * hour / 24.0);
+    let d_sin: f64 = sin(2.0 * PI * day_of_year / 365.0);
+    let d_cos: f64 = cos(2.0 * PI * day_of_year / 365.0);
+    let weekend: u8 = if day_of_week == 0.0 || day_of_week == 6.0 { 1 } else { 0 };
+
+    // Normalized feature vector with domain-specific scaling
     FeatureVector {
-        power_mean: 0, trend_slope: 0, r_squared: 0, capacity_factor: 0,
-        minting_rate: 0, gas_flow: 0, ch4_mass: 0, attestation_rate: 0,
-        spot_price: 0, volume_24h: 0, forward_committed_pct: 0,
-        ambient_temp: 0, wind_speed: 0, irradiance: 0, precipitation: 0,
-        hour_sin: 0, hour_cos: 0, day_sin: 0, day_cos: 0, is_weekend: 0,
+        power_mean: to_scaled_u64(normalize_power(telemetry.power_mean_w)),
+        trend_slope: to_scaled_i64(clamp_f64(telemetry.trend_slope, -1.0, 1.0)),
+        r_squared: to_scaled_u64(clamp_f64(telemetry.power_r_squared, 0.0, 1.0)),
+        capacity_factor: to_scaled_u64(clamp_f64(telemetry.capacity_factor, 0.0, 1.0)),
+        minting_rate: to_scaled_u64(normalize_minting_rate(telemetry.minting_rate_tco2e_hour)),
+        gas_flow: to_scaled_u64(normalize_gas_flow(telemetry.gas_flow_mcf_hour)),
+        ch4_mass: to_scaled_u64(normalize_ch4_mass(telemetry.ch4_mass_kg)),
+        attestation_rate: to_scaled_u64(clamp_f64(telemetry.attestation_success_rate, 0.0, 1.0)),
+        spot_price: to_scaled_u64(normalize_price(telemetry.spot_price_usd)),
+        volume_24h: to_scaled_u64(normalize_volume(telemetry.volume_24h_tco2e)),
+        forward_committed_pct: to_scaled_u64(clamp_f64(telemetry.forward_committed_pct, 0.0, 1.0)),
+        ambient_temp: to_scaled_i64(normalize_temperature(telemetry.ambient_temp_c)),
+        wind_speed: to_scaled_u64(normalize_wind(telemetry.wind_speed_ms)),
+        irradiance: to_scaled_u64(normalize_irradiance(telemetry.irradiance_wm2)),
+        precipitation: to_scaled_u64(normalize_precipitation(telemetry.precipitation_mm)),
+        hour_sin: to_scaled_i64(h_sin),
+        hour_cos: to_scaled_i64(h_cos),
+        day_sin: to_scaled_i64(d_sin),
+        day_cos: to_scaled_i64(d_cos),
+        is_weekend: weekend,
     }
 }
+
+// ─── Model Inference ─────────────────────────────────────────────────────────
 
 circuit infer_yield(graph_id: bytes(32), model_id: bytes(16), features: FeatureVector, horizon: u8) -> ForecastResult
     lex esn/sustainability/carbon/org/synergycarbon/ops/ai/yield/infer
@@ -86,32 +254,249 @@ circuit infer_yield(graph_id: bytes(32), model_id: bytes(16), features: FeatureV
     povc true
     observe metrics: [model_id, horizon, predicted_tco2e, confidence_80_lo, confidence_80_hi]
 {
+    // Decode fixed-point features to f64 for computation
+    let f0: f64 = from_scaled_u64(features.power_mean);
+    let f1: f64 = from_scaled_i64(features.trend_slope);
+    let f2: f64 = from_scaled_u64(features.r_squared);
+    let f3: f64 = from_scaled_u64(features.capacity_factor);
+    let f4: f64 = from_scaled_u64(features.minting_rate);
+    let f5: f64 = from_scaled_u64(features.gas_flow);
+    let f6: f64 = from_scaled_u64(features.ch4_mass);
+    let f7: f64 = from_scaled_u64(features.attestation_rate);
+    let f8: f64 = from_scaled_u64(features.spot_price);
+    let f9: f64 = from_scaled_u64(features.volume_24h);
+    let f10: f64 = from_scaled_u64(features.forward_committed_pct);
+    let f11: f64 = from_scaled_i64(features.ambient_temp);
+    let f12: f64 = from_scaled_u64(features.wind_speed);
+    let f13: f64 = from_scaled_u64(features.irradiance);
+    let f14: f64 = from_scaled_u64(features.precipitation);
+    let f15: f64 = from_scaled_i64(features.hour_sin);
+    let f16: f64 = from_scaled_i64(features.hour_cos);
+    let f17: f64 = from_scaled_i64(features.day_sin);
+    let f18: f64 = from_scaled_i64(features.day_cos);
+    let f19: f64 = features.is_weekend as f64;
+
+    // ── EWMA smoothing ──────────────────────────────────────────────────
+    // Query previous smoothed state; incremental update avoids storing full history
+    let prev: SmoothedState = eslite_query(graph_id, "ewma_state", model_id);
+
+    let s0: f64 = ewma_step(EWMA_ALPHA, f0, prev.power_mean);
+    let s1: f64 = ewma_step(EWMA_ALPHA, f1, prev.trend_slope);
+    let s2: f64 = ewma_step(EWMA_ALPHA, f2, prev.r_squared);
+    let s3: f64 = ewma_step(EWMA_ALPHA, f3, prev.capacity_factor);
+    let s4: f64 = ewma_step(EWMA_ALPHA, f4, prev.minting_rate);
+    let s5: f64 = ewma_step(EWMA_ALPHA, f5, prev.gas_flow);
+    let s6: f64 = ewma_step(EWMA_ALPHA, f6, prev.ch4_mass);
+    let s7: f64 = ewma_step(EWMA_ALPHA, f7, prev.attestation_rate);
+    let s8: f64 = ewma_step(EWMA_ALPHA, f8, prev.spot_price);
+    let s9: f64 = ewma_step(EWMA_ALPHA, f9, prev.volume_24h);
+    let s10: f64 = ewma_step(EWMA_ALPHA, f10, prev.forward_committed_pct);
+    let s11: f64 = ewma_step(EWMA_ALPHA, f11, prev.ambient_temp);
+    let s12: f64 = ewma_step(EWMA_ALPHA, f12, prev.wind_speed);
+    let s13: f64 = ewma_step(EWMA_ALPHA, f13, prev.irradiance);
+    let s14: f64 = ewma_step(EWMA_ALPHA, f14, prev.precipitation);
+    let s15: f64 = ewma_step(EWMA_ALPHA, f15, prev.hour_sin);
+    let s16: f64 = ewma_step(EWMA_ALPHA, f16, prev.hour_cos);
+    let s17: f64 = ewma_step(EWMA_ALPHA, f17, prev.day_sin);
+    let s18: f64 = ewma_step(EWMA_ALPHA, f18, prev.day_cos);
+    let s19: f64 = ewma_step(EWMA_ALPHA, f19, prev.is_weekend);
+
+    // Persist updated EWMA state for next invocation
+    eslite_insert(graph_id, "ewma_state", model_id, SmoothedState {
+        power_mean: s0, trend_slope: s1, r_squared: s2, capacity_factor: s3,
+        minting_rate: s4, gas_flow: s5, ch4_mass: s6, attestation_rate: s7,
+        spot_price: s8, volume_24h: s9, forward_committed_pct: s10,
+        ambient_temp: s11, wind_speed: s12, irradiance: s13, precipitation: s14,
+        hour_sin: s15, hour_cos: s16, day_sin: s17, day_cos: s18, is_weekend: s19,
+    });
+
+    // Pack smoothed features back into FeatureVector for ai_infer
+    let smoothed_vec: FeatureVector = FeatureVector {
+        power_mean: to_scaled_u64(s0), trend_slope: to_scaled_i64(s1),
+        r_squared: to_scaled_u64(s2), capacity_factor: to_scaled_u64(s3),
+        minting_rate: to_scaled_u64(s4), gas_flow: to_scaled_u64(s5),
+        ch4_mass: to_scaled_u64(s6), attestation_rate: to_scaled_u64(s7),
+        spot_price: to_scaled_u64(s8), volume_24h: to_scaled_u64(s9),
+        forward_committed_pct: to_scaled_u64(s10), ambient_temp: to_scaled_i64(s11),
+        wind_speed: to_scaled_u64(s12), irradiance: to_scaled_u64(s13),
+        precipitation: to_scaled_u64(s14), hour_sin: to_scaled_i64(s15),
+        hour_cos: to_scaled_i64(s16), day_sin: to_scaled_i64(s17),
+        day_cos: to_scaled_i64(s18), is_weekend: if s19 >= 0.5 { 1 } else { 0 },
+    };
+
+    // ── Model inference ─────────────────────────────────────────────────
+    let raw_prediction: f64 = ai_infer(model_id, smoothed_vec);
+    let days: f64 = horizon_to_days(horizon);
+    let prediction: f64 = max_f64(0.0, raw_prediction * days);
+
+    // ── Uncertainty propagation ─────────────────────────────────────────
+    // Variance from EWMA state; uncertainty grows with sqrt(horizon) reflecting
+    // the random-walk component of the SSM state transition
+    let sum_sq: f64 = s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3 + s4 * s4
+        + s5 * s5 + s6 * s6 + s7 * s7 + s8 * s8 + s9 * s9 + s10 * s10
+        + s11 * s11 + s12 * s12 + s13 * s13 + s14 * s14 + s15 * s15
+        + s16 * s16 + s17 * s17 + s18 * s18 + s19 * s19;
+    let variance: f64 = sum_sq / 20.0;
+    let base_uncertainty: f64 = sqrt(variance) * UNCERTAINTY_FACTOR;
+    let uncertainty: f64 = base_uncertainty * sqrt(days);
+
+    // ── Confidence intervals ────────────────────────────────────────────
+    let ci_80: f64 = uncertainty * Z_80;
+    let ci_95: f64 = uncertainty * Z_95;
+
+    let now: u64 = eslite_query(graph_id, "timestamp");
+
     ForecastResult {
         source_id: model_id,
         horizon: horizon,
-        predicted_tco2e: 0,
-        confidence_80_lo: 0,
-        confidence_80_hi: 0,
-        confidence_95_lo: 0,
-        confidence_95_hi: 0,
+        predicted_tco2e: to_scaled_u64(prediction),
+        confidence_80_lo: to_scaled_u64(max_f64(0.0, prediction - ci_80)),
+        confidence_80_hi: to_scaled_u64(prediction + ci_80),
+        confidence_95_lo: to_scaled_u64(max_f64(0.0, prediction - ci_95)),
+        confidence_95_hi: to_scaled_u64(prediction + ci_95),
         model_version: model_id,
-        generated_at: 0,
+        generated_at: now,
     }
 }
+
+// ─── Deviation Detection ─────────────────────────────────────────────────────
 
 circuit check_deviation(graph_id: bytes(32), source_id: bytes(16), forecast: u64, actual: u64, threshold_pct: u64) -> DeviationAlert
     lex esn/sustainability/carbon/org/synergycarbon/ops/ai/yield/deviation
     precision C
     observe metrics: [source_id, deviation_pct, severity]
 {
+    let forecast_f: f64 = from_scaled_u64(forecast);
+    let actual_f: f64 = from_scaled_u64(actual);
+    let threshold_f: f64 = from_scaled_u64(threshold_pct);
+
+    let dev_pct: f64 = if forecast_f > 0.0 {
+        abs(forecast_f - actual_f) / forecast_f * 100.0
+    } else {
+        0.0
+    };
+
+    // Severity tiers: 3 = critical (≥80%), 2 = major (≥50%), 1 = warning (≥threshold), 0 = normal
+    let sev: u8 = if dev_pct >= 80.0 { 3 }
+                  else if dev_pct >= 50.0 { 2 }
+                  else if dev_pct >= threshold_f { 1 }
+                  else { 0 };
+
+    // Classify probable cause via ai_classify for ops triage
+    let cause_tag: u8 = if actual_f == 0.0 { ai_classify(source_id, "complete_shutdown") }
+                        else if dev_pct >= 70.0 { ai_classify(source_id, "equipment_degradation") }
+                        else if dev_pct >= 40.0 { ai_classify(source_id, "fuel_supply_reduction") }
+                        else { ai_classify(source_id, "weather_impact") };
+
     DeviationAlert {
         source_id: source_id,
         forecast_tco2e: forecast,
         actual_tco2e: actual,
-        deviation_pct: 0,
-        severity: 0,
+        deviation_pct: to_scaled_u64(dev_pct),
+        severity: sev,
     }
 }
+
+// ─── Capacity Forecast ───────────────────────────────────────────────────────
+
+circuit forecast_capacity(graph_id: bytes(32), source_id: bytes(16), current_cf: f64, nameplate_kw: f64) -> CapacityForecast
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/capacity/forecast
+    precision C
+    observe metrics: [source_id, current_cf, projected_7d]
+{
+    CapacityForecast {
+        current_capacity_factor: current_cf,
+        projected_7d: max_f64(0.0, current_cf - DEGRADATION_PER_DAY * 7.0),
+        projected_30d: max_f64(0.0, current_cf - DEGRADATION_PER_DAY * 30.0),
+        projected_90d: max_f64(0.0, current_cf - DEGRADATION_PER_DAY * 90.0),
+        nameplate_kw: nameplate_kw,
+    }
+}
+
+// ─── Accuracy Tracking ───────────────────────────────────────────────────────
+
+circuit record_actual(graph_id: bytes(32), source_id: bytes(16), horizon: u8, predicted: u64, actual: u64, timestamp: u64) -> AccuracyRecord
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/accuracy/record
+    precision C
+    observe metrics: [source_id, horizon]
+{
+    let pred_f: f64 = from_scaled_u64(predicted);
+    let act_f: f64 = from_scaled_u64(actual);
+
+    let record: AccuracyRecord = AccuracyRecord {
+        horizon: horizon,
+        predicted: pred_f,
+        actual: act_f,
+        timestamp: timestamp,
+    };
+
+    eslite_insert(graph_id, "accuracy_records", source_id, record);
+    record
+}
+
+circuit compute_accuracy(graph_id: bytes(32), source_id: bytes(16), horizon: u8, window_size: u64) -> AccuracyMetrics
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/accuracy/compute
+    precision D
+    observe metrics: [source_id, horizon, mae, mape, r_squared]
+{
+    let records: list<AccuracyRecord> = eslite_query(
+        graph_id, "accuracy_records", source_id, horizon, window_size
+    );
+    let n: f64 = len(records) as f64;
+
+    if n < 1.0 {
+        AccuracyMetrics { mae: 0.0, mape: 0.0, r_squared: 0.0, sample_count: 0 }
+    } else {
+        // ── Pass 1: MAE, MAPE numerators, mean actual, SS_res ───────────
+        let sum_abs_err: f64 = 0.0;
+        let sum_pct_err: f64 = 0.0;
+        let valid_pct_n: f64 = 0.0;
+        let sum_actual: f64 = 0.0;
+        let ss_res: f64 = 0.0;
+
+        for rec in records {
+            let err: f64 = abs(rec.predicted - rec.actual);
+            sum_abs_err = sum_abs_err + err;
+            sum_actual = sum_actual + rec.actual;
+
+            let residual: f64 = rec.actual - rec.predicted;
+            ss_res = ss_res + residual * residual;
+
+            if abs(rec.actual) > 0.0 {
+                sum_pct_err = sum_pct_err + err / abs(rec.actual);
+                valid_pct_n = valid_pct_n + 1.0;
+            }
+        }
+
+        let mae: f64 = sum_abs_err / n;
+        let mape: f64 = if valid_pct_n > 0.0 {
+            (sum_pct_err / valid_pct_n) * 100.0
+        } else { 0.0 };
+
+        // ── Pass 2: SS_tot for R² ───────────────────────────────────────
+        let mean_actual: f64 = sum_actual / n;
+        let ss_tot: f64 = 0.0;
+
+        for rec in records {
+            let diff: f64 = rec.actual - mean_actual;
+            ss_tot = ss_tot + diff * diff;
+        }
+
+        // R² = 1 − SS_res / SS_tot, clamped to [0, 1]
+        let r_sq: f64 = if ss_tot > 0.0 {
+            max_f64(0.0, 1.0 - ss_res / ss_tot)
+        } else { 1.0 };
+
+        AccuracyMetrics {
+            mae: mae,
+            mape: mape,
+            r_squared: r_sq,
+            sample_count: len(records) as u64,
+        }
+    }
+}
+
+// ─── Streams ─────────────────────────────────────────────────────────────────
 
 stream yield_forecasts: event<ForecastResult>
     retention 5y

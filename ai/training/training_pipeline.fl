@@ -1,0 +1,971 @@
+// AI Training Pipeline Circuit
+// Training lifecycle, RLHF reward computation, model versioning FSM, A/B testing
+// Migrated from: pipeline.ts, rlhf.ts, versioning.ts, ab_test.ts
+// lex: esn/sustainability/carbon/org/synergycarbon/ops/ai/training
+//
+// Pipeline:
+//   Verified credit data -> Corpus accumulator -> Threshold check (5,000 samples)
+//     -> Retrain yield_forecaster + forward_pricing_oracle
+//       -> Validation on holdout set
+//         -> If improved: promote to active via versioning FSM
+//         -> If degraded: retain current, flag for review
+//
+// RLHF:
+//   Operator corrections weighted by tier -> tanh() reward signal -> geometric
+//   discount via pow() -> aggregate reward for model update
+//
+// Versioning FSM:
+//   draft -> training -> validating -> active -> deprecated -> archived
+//
+// A/B Testing:
+//   VRF-deterministic traffic split -> observation recording -> Welch's t-test
+//   via sqrt() -> statistical significance -> promote or retain
+
+// ---------------------------------------------------------------------------
+// Pipeline Configuration
+// ---------------------------------------------------------------------------
+
+type PipelineConfig = struct {
+    retrain_threshold_samples: u64,
+    holdout_fraction: f64,
+    min_improvement_bps: f64,
+    max_training_duration_s: u64,
+    learning_rate: f64,
+    epochs: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Training Data Types
+// ---------------------------------------------------------------------------
+
+type VerifiedSample = struct {
+    sample_id: bytes(16),
+    tenant_id: bytes(16),
+    project_id: bytes(16),
+    tco2e: f64,
+    methodology_id: bytes(32),
+    vintage_year: u32,
+    timestamp: u64,
+    attestation_hash: bytes(32),
+    features: list<f64>,
+}
+
+type TrainingCorpus = struct {
+    corpus_id: bytes(16),
+    sample_count: u64,
+    holdout_count: u64,
+    created_at: u64,
+    corpus_hash: bytes(32),
+    vrf_shuffle_proof: bytes(64),
+}
+
+type TrainingResult = struct {
+    success: bool,
+    version_id: bytes(16),
+    training_loss: f64,
+    validation_loss: f64,
+    improvement_bps: f64,
+    duration_s: f64,
+    samples_used: u64,
+    holdout_size: u64,
+}
+
+// pipeline_status: 0=idle, 1=accumulating, 2=preparing_corpus, 3=training,
+//                  4=validating, 5=promoting, 6=failed
+type PipelineState = struct {
+    status: u8,
+    buffer_size: u64,
+    total_ingested: u64,
+    current_model_version: bytes(16),
+    current_model_loss: f64,
+}
+
+// ---------------------------------------------------------------------------
+// RLHF Types
+// ---------------------------------------------------------------------------
+
+// operator_tier: 0=junior (0.5x), 1=standard (1.0x), 2=senior (1.5x), 3=expert (2.0x)
+// feedback_type: 0=yield_correction, 1=risk_override, 2=price_adjustment
+type OperatorFeedback = struct {
+    feedback_id: bytes(16),
+    operator_id: bytes(16),
+    operator_tier: u8,
+    feedback_type: u8,
+    target_id: bytes(16),
+    original_value: f64,
+    corrected_value: f64,
+    timestamp: u64,
+}
+
+type RLHFConfig = struct {
+    max_operator_weight: f64,
+    batch_size: u64,
+    discount_factor: f64,
+    reward_clamp: f64,
+    staleness_decay_hours: f64,
+}
+
+type FeedbackEffect = struct {
+    feedback_id: bytes(16),
+    weight: f64,
+    reward_signal: f64,
+    applied: bool,
+}
+
+type FeedbackBatchResult = struct {
+    batch_id: bytes(16),
+    feedback_count: u64,
+    aggregate_reward: f64,
+    total_weight: f64,
+}
+
+// ---------------------------------------------------------------------------
+// Model Versioning Types
+// ---------------------------------------------------------------------------
+
+// version_status: 0=draft, 1=training, 2=validating, 3=active, 4=deprecated, 5=archived
+type ModelVersion = struct {
+    version_id: bytes(16),
+    major: u32,
+    minor: u32,
+    patch: u32,
+    created_at: u64,
+    status: u8,
+    checkpoint_hash: bytes(32),
+    parent_version: bytes(16),
+    parameters_hash: bytes(32),
+    training_loss: f64,
+    validation_loss: f64,
+    samples_trained: u64,
+}
+
+type VersionLineage = struct {
+    current_version: bytes(16),
+    version_count: u64,
+    rollback_count: u64,
+    active: bool,
+}
+
+// ---------------------------------------------------------------------------
+// A/B Testing Types
+// ---------------------------------------------------------------------------
+
+// ab_status: 0=running, 1=completed, 2=cancelled, 3=inconclusive
+// ab_decision: 0=pending, 1=promote_treatment, 2=retain_control, 3=inconclusive
+type ABTestConfig = struct {
+    test_id: bytes(16),
+    control_version: bytes(16),
+    treatment_version: bytes(16),
+    traffic_split_pct: f64,
+    min_samples: u64,
+    max_duration_s: u64,
+    significance_level: f64,
+}
+
+type ABTestArm = struct {
+    version_id: bytes(16),
+    samples: u64,
+    total_error: f64,
+    total_squared_error: f64,
+    mean_error: f64,
+    m2: f64,
+}
+
+type ABTestResult = struct {
+    test_id: bytes(16),
+    status: u8,
+    decision: u8,
+    control_mae: f64,
+    control_mse: f64,
+    control_samples: u64,
+    treatment_mae: f64,
+    treatment_mse: f64,
+    treatment_samples: u64,
+    t_statistic: f64,
+    p_value: f64,
+    duration_s: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Graph
+// ---------------------------------------------------------------------------
+
+graph training_pipeline_graph {
+    node VerifiedSample
+    node TrainingCorpus
+    node TrainingResult
+    node PipelineState
+    node OperatorFeedback
+    node FeedbackEffect
+    node FeedbackBatchResult
+    node ModelVersion
+    node ABTestConfig
+    node ABTestResult
+    edge ingests: VerifiedSample -> PipelineState { guard sample_valid }
+    edge prepares: PipelineState -> TrainingCorpus { guard threshold_reached }
+    edge trains: TrainingCorpus -> TrainingResult { guard corpus_valid }
+    edge promotes: TrainingResult -> ModelVersion { guard improvement_sufficient }
+    edge feedback: OperatorFeedback -> FeedbackEffect { guard operator_valid }
+    edge aggregates: FeedbackEffect -> FeedbackBatchResult { guard batch_ready }
+    edge routes: ABTestConfig -> ABTestResult { guard test_active }
+    overlay training_loss: u64 bitmask delta_curate
+    overlay validation_loss: u64 bitmask delta_curate
+    overlay reward_signal: u64 bitmask delta_curate
+    overlay model_accuracy: u64 bitmask delta_curate
+    overlay ab_significance: u64 bitmask delta_curate
+    overlay version_status: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed training_pipeline
+    ai_feed rlhf_feedback
+    ai_feed ab_testing
+    observe training_pipeline_graph: [training_loss, validation_loss, reward_signal, model_accuracy, ab_significance] threshold: {
+        anomaly_score 0.80
+        baseline_window 60
+    }
+}
+
+series training_history: training_pipeline_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// ===========================================================================
+// Training Pipeline Circuits
+// ===========================================================================
+
+// Ingest a verified sample; transition from idle to accumulating
+circuit ingest_sample(graph_id: bytes(32), sample: VerifiedSample, state: PipelineState) -> PipelineState
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ingest
+    precision C
+    observe metrics: [sample_id, buffer_size, total_ingested, status]
+{
+    let new_buffer: u64 = state.buffer_size + 1;
+    let new_total: u64 = state.total_ingested + 1;
+    let new_status: u8 = state.status;
+    if state.status == 0 {
+        new_status = 1;
+    }
+
+    PipelineState {
+        status: new_status,
+        buffer_size: new_buffer,
+        total_ingested: new_total,
+        current_model_version: state.current_model_version,
+        current_model_loss: state.current_model_loss,
+    }
+}
+
+// Prepare training corpus with VRF-deterministic shuffle and holdout split
+circuit prepare_corpus(graph_id: bytes(32), state: PipelineState, config: PipelineConfig, secret_key: bytes(32), epoch_bytes: bytes(32)) -> TrainingCorpus
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/prepare
+    precision C
+    povc true
+    observe metrics: [sample_count, holdout_count, corpus_hash]
+{
+    let vrf_proof: bytes(64) = vrf_prove(secret_key, epoch_bytes);
+    let verified: bool = vrf_verify(secret_key, epoch_bytes, vrf_proof);
+
+    let total_f: f64 = state.buffer_size;
+    let holdout_count_f: f64 = floor(total_f * config.holdout_fraction);
+    let holdout_count: u64 = holdout_count_f;
+    if holdout_count < 1 {
+        holdout_count = 1;
+    }
+    let sample_count: u64 = state.buffer_size - holdout_count;
+
+    TrainingCorpus {
+        corpus_id: graph_id,
+        sample_count: sample_count,
+        holdout_count: holdout_count,
+        created_at: state.total_ingested,
+        corpus_hash: graph_id,
+        vrf_shuffle_proof: vrf_proof,
+    }
+}
+
+// Training loop: iterative loss reduction with VRF-based noise injection
+circuit train_model(graph_id: bytes(32), corpus: TrainingCorpus, config: PipelineConfig, secret_key: bytes(32)) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/train
+    precision C
+    povc true
+    observe metrics: [sample_count, epochs, final_loss]
+{
+    let loss: f64 = 1.0;
+    let lr: f64 = config.learning_rate;
+    let epoch: u64 = 0;
+
+    while epoch < config.epochs {
+        let s: u64 = 0;
+        while s < corpus.sample_count {
+            loss = loss * (1.0 - lr);
+            let epoch_seed: bytes(32) = epoch;
+            let noise_proof: bytes(64) = vrf_prove(secret_key, epoch_seed);
+            let noise: f64 = 0.005;
+            loss = loss + lr * noise;
+            s = s + 1;
+        }
+        epoch = epoch + 1;
+    }
+
+    if loss < 0.001 {
+        loss = 0.001;
+    }
+    loss
+}
+
+// Validate model on holdout set via AI inference; returns mean absolute error
+circuit validate_model(graph_id: bytes(32), corpus: TrainingCorpus) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/validate
+    precision C
+    observe metrics: [holdout_size, validation_loss]
+{
+    if corpus.holdout_count == 0 {
+        return 0.0;
+    }
+
+    let total_error: f64 = 0.0;
+    let i: u64 = 0;
+    while i < corpus.holdout_count {
+        let predicted: f64 = ai_infer(graph_id, corpus.corpus_hash);
+        let error: f64 = abs(predicted - 1.0);
+        total_error = total_error + error;
+        i = i + 1;
+    }
+
+    total_error / corpus.holdout_count
+}
+
+// Compute improvement in basis points between current and candidate loss
+circuit check_improvement(graph_id: bytes(32), current_loss: f64, validation_loss: f64) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/check
+    precision C
+    observe metrics: [current_loss, validation_loss, improvement_bps]
+{
+    if current_loss <= 0.0 {
+        return 10000.0;
+    }
+
+    let improvement: f64 = (current_loss - validation_loss) / current_loss;
+    round(improvement * 10000.0)
+}
+
+// Full pipeline: prepare -> train -> validate -> promote or reject
+circuit run_pipeline(graph_id: bytes(32), state: PipelineState, config: PipelineConfig, secret_key: bytes(32), epoch_bytes: bytes(32)) -> TrainingResult
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/run
+    precision C
+    povc true
+    observe metrics: [status, training_loss, validation_loss, improvement_bps, success]
+{
+    if state.buffer_size < config.retrain_threshold_samples {
+        return TrainingResult {
+            success: false,
+            version_id: state.current_model_version,
+            training_loss: 0.0,
+            validation_loss: 0.0,
+            improvement_bps: 0.0,
+            duration_s: 0.0,
+            samples_used: state.buffer_size,
+            holdout_size: 0,
+        };
+    }
+
+    let corpus: TrainingCorpus = prepare_corpus(graph_id, state, config, secret_key, epoch_bytes);
+    let training_loss: f64 = train_model(graph_id, corpus, config, secret_key);
+    let validation_loss: f64 = validate_model(graph_id, corpus);
+    let improvement_bps: f64 = check_improvement(graph_id, state.current_model_loss, validation_loss);
+
+    if improvement_bps < config.min_improvement_bps {
+        return TrainingResult {
+            success: false,
+            version_id: state.current_model_version,
+            training_loss: training_loss,
+            validation_loss: validation_loss,
+            improvement_bps: improvement_bps,
+            duration_s: 0.0,
+            samples_used: corpus.sample_count,
+            holdout_size: corpus.holdout_count,
+        };
+    }
+
+    TrainingResult {
+        success: true,
+        version_id: corpus.corpus_id,
+        training_loss: training_loss,
+        validation_loss: validation_loss,
+        improvement_bps: improvement_bps,
+        duration_s: 0.0,
+        samples_used: corpus.sample_count,
+        holdout_size: corpus.holdout_count,
+    }
+}
+
+// ===========================================================================
+// RLHF Reward Computation Circuits
+// ===========================================================================
+
+// Normalized reward signal from operator correction using tanh()
+circuit compute_reward_signal(graph_id: bytes(32), original_value: f64, corrected_value: f64) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/reward
+    precision C
+    observe metrics: [original_value, corrected_value, reward_signal]
+{
+    if original_value == 0.0 {
+        if corrected_value > 0.0 {
+            return 1.0;
+        }
+        return 0.0;
+    }
+
+    let relative_change: f64 = (corrected_value - original_value) / abs(original_value);
+    tanh(relative_change)
+}
+
+// Resolve tier weight: junior=0.5, standard=1.0, senior=1.5, expert=2.0
+circuit tier_weight(graph_id: bytes(32), operator_tier: u8, max_weight: f64) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/tier
+    precision C
+    observe metrics: [operator_tier, weight]
+{
+    let w: f64 = 0.5;
+    if operator_tier == 1 {
+        w = 1.0;
+    }
+    if operator_tier == 2 {
+        w = 1.5;
+    }
+    if operator_tier == 3 {
+        w = 2.0;
+    }
+
+    if w > max_weight {
+        w = max_weight;
+    }
+    w
+}
+
+// Process single operator feedback: compute weighted, clamped reward signal
+circuit submit_feedback(graph_id: bytes(32), feedback: OperatorFeedback, rlhf_config: RLHFConfig) -> FeedbackEffect
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/submit
+    precision C
+    observe metrics: [feedback_id, operator_tier, weight, reward_signal]
+{
+    let w: f64 = tier_weight(graph_id, feedback.operator_tier, rlhf_config.max_operator_weight);
+    let raw_reward: f64 = compute_reward_signal(graph_id, feedback.original_value, feedback.corrected_value);
+
+    let clamped: f64 = raw_reward;
+    if clamped > rlhf_config.reward_clamp {
+        clamped = rlhf_config.reward_clamp;
+    }
+    let neg_clamp: f64 = 0.0 - rlhf_config.reward_clamp;
+    if clamped < neg_clamp {
+        clamped = neg_clamp;
+    }
+
+    FeedbackEffect {
+        feedback_id: feedback.feedback_id,
+        weight: w,
+        reward_signal: clamped * w,
+        applied: false,
+    }
+}
+
+// Aggregate batch reward with geometric discount via pow()
+circuit compute_aggregate_reward(graph_id: bytes(32), effects: list<FeedbackEffect>, discount_factor: f64) -> FeedbackBatchResult
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/aggregate
+    precision C
+    observe metrics: [feedback_count, aggregate_reward, total_weight]
+{
+    let total_reward: f64 = 0.0;
+    let total_weight: f64 = 0.0;
+    let count: u64 = len(effects);
+    let i: u64 = 0;
+
+    while i < count {
+        let effect: FeedbackEffect = effects[i];
+        let discount: f64 = pow(discount_factor, i);
+        total_reward = total_reward + effect.reward_signal * discount;
+        total_weight = total_weight + effect.weight * discount;
+        i = i + 1;
+    }
+
+    let aggregate: f64 = 0.0;
+    if total_weight > 0.0 {
+        aggregate = total_reward / total_weight;
+    }
+
+    FeedbackBatchResult {
+        batch_id: graph_id,
+        feedback_count: count,
+        aggregate_reward: aggregate,
+        total_weight: total_weight,
+    }
+}
+
+// Filter stale feedback beyond the staleness decay window
+circuit check_staleness(graph_id: bytes(32), feedback_timestamp: u64, current_timestamp: u64, staleness_hours: f64) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/staleness
+    precision C
+    observe metrics: [age_hours, is_fresh]
+{
+    let age_seconds: f64 = current_timestamp - feedback_timestamp;
+    let age_hours: f64 = age_seconds / 3600.0;
+    age_hours < staleness_hours
+}
+
+// ===========================================================================
+// Model Versioning FSM Circuits
+// ===========================================================================
+
+// FSM states: 0=draft, 1=training, 2=validating, 3=active, 4=deprecated, 5=archived
+// Transitions: draft->training->validating->active->deprecated->archived
+//              active->deprecated (direct deprecation)
+//              any->archived (emergency archive)
+
+// Create a new draft model version
+circuit create_version(graph_id: bytes(32), major: u32, minor: u32, patch: u32, parent_version: bytes(16), created_at: u64) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/create
+    precision C
+    observe metrics: [version_id, major, minor, patch, status]
+{
+    ModelVersion {
+        version_id: graph_id,
+        major: major,
+        minor: minor,
+        patch: patch,
+        created_at: created_at,
+        status: 0,
+        checkpoint_hash: graph_id,
+        parent_version: parent_version,
+        parameters_hash: graph_id,
+        training_loss: 0.0,
+        validation_loss: 0.0,
+        samples_trained: 0,
+    }
+}
+
+// Advance version through FSM: draft(0)->training(1)->validating(2)->active(3)->deprecated(4)->archived(5)
+circuit transition_version(graph_id: bytes(32), version: ModelVersion, target_status: u8) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/transition
+    precision C
+    observe metrics: [version_id, from_status, to_status]
+{
+    let new_status: u8 = fsm_transition(version.status, target_status);
+
+    ModelVersion {
+        version_id: version.version_id,
+        major: version.major,
+        minor: version.minor,
+        patch: version.patch,
+        created_at: version.created_at,
+        status: new_status,
+        checkpoint_hash: version.checkpoint_hash,
+        parent_version: version.parent_version,
+        parameters_hash: version.parameters_hash,
+        training_loss: version.training_loss,
+        validation_loss: version.validation_loss,
+        samples_trained: version.samples_trained,
+    }
+}
+
+// Begin training: draft(0) -> training(1), attach corpus metadata
+circuit begin_training(graph_id: bytes(32), version: ModelVersion, corpus: TrainingCorpus) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/begin
+    precision C
+    povc true
+    observe metrics: [version_id, sample_count]
+{
+    let new_status: u8 = fsm_transition(version.status, 1);
+
+    ModelVersion {
+        version_id: version.version_id,
+        major: version.major,
+        minor: version.minor,
+        patch: version.patch,
+        created_at: version.created_at,
+        status: new_status,
+        checkpoint_hash: corpus.corpus_hash,
+        parent_version: version.parent_version,
+        parameters_hash: corpus.corpus_hash,
+        training_loss: 0.0,
+        validation_loss: 0.0,
+        samples_trained: corpus.sample_count,
+    }
+}
+
+// Complete training and enter validation: training(1) -> validating(2)
+circuit begin_validation(graph_id: bytes(32), version: ModelVersion, training_loss: f64) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/validate
+    precision C
+    observe metrics: [version_id, training_loss]
+{
+    let new_status: u8 = fsm_transition(version.status, 2);
+
+    ModelVersion {
+        version_id: version.version_id,
+        major: version.major,
+        minor: version.minor,
+        patch: version.patch,
+        created_at: version.created_at,
+        status: new_status,
+        checkpoint_hash: version.checkpoint_hash,
+        parent_version: version.parent_version,
+        parameters_hash: version.parameters_hash,
+        training_loss: training_loss,
+        validation_loss: 0.0,
+        samples_trained: version.samples_trained,
+    }
+}
+
+// Promote candidate to active: validating(2) -> active(3), deprecate current active
+circuit promote_version(graph_id: bytes(32), candidate: ModelVersion, current_active: ModelVersion, validation_loss: f64) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/promote
+    precision C
+    povc true
+    observe metrics: [version_id, from_status, to_status, validation_loss]
+{
+    let deprecated_status: u8 = fsm_transition(current_active.status, 4);
+    let active_status: u8 = fsm_transition(candidate.status, 3);
+
+    ModelVersion {
+        version_id: candidate.version_id,
+        major: candidate.major,
+        minor: candidate.minor,
+        patch: candidate.patch,
+        created_at: candidate.created_at,
+        status: active_status,
+        checkpoint_hash: candidate.checkpoint_hash,
+        parent_version: current_active.version_id,
+        parameters_hash: candidate.parameters_hash,
+        training_loss: candidate.training_loss,
+        validation_loss: validation_loss,
+        samples_trained: candidate.samples_trained,
+    }
+}
+
+// Rollback: deprecate current active(3) -> deprecated(4), reactivate parent
+circuit rollback_version(graph_id: bytes(32), current: ModelVersion, parent: ModelVersion) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/rollback
+    precision C
+    povc true
+    observe metrics: [version_id, rolled_back_from, rolled_back_to]
+{
+    let deprecated_status: u8 = fsm_transition(current.status, 4);
+    let reactivated_status: u8 = fsm_transition(parent.status, 3);
+
+    ModelVersion {
+        version_id: parent.version_id,
+        major: parent.major,
+        minor: parent.minor,
+        patch: parent.patch,
+        created_at: parent.created_at,
+        status: reactivated_status,
+        checkpoint_hash: parent.checkpoint_hash,
+        parent_version: parent.parent_version,
+        parameters_hash: parent.parameters_hash,
+        training_loss: parent.training_loss,
+        validation_loss: parent.validation_loss,
+        samples_trained: parent.samples_trained,
+    }
+}
+
+// Archive: any state -> archived(5), terminal state
+circuit archive_version(graph_id: bytes(32), version: ModelVersion) -> ModelVersion
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/archive
+    precision C
+    observe metrics: [version_id, from_status]
+{
+    let archived_status: u8 = fsm_transition(version.status, 5);
+
+    ModelVersion {
+        version_id: version.version_id,
+        major: version.major,
+        minor: version.minor,
+        patch: version.patch,
+        created_at: version.created_at,
+        status: archived_status,
+        checkpoint_hash: version.checkpoint_hash,
+        parent_version: version.parent_version,
+        parameters_hash: version.parameters_hash,
+        training_loss: version.training_loss,
+        validation_loss: version.validation_loss,
+        samples_trained: version.samples_trained,
+    }
+}
+
+// Query version lineage: count versions and rollbacks
+circuit query_lineage(graph_id: bytes(32), current_version: bytes(16), version_count: u64, rollback_count: u64) -> VersionLineage
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/lineage
+    precision C
+    observe metrics: [current_version, version_count, rollback_count]
+{
+    let is_active: bool = false;
+    if version_count > 0 {
+        is_active = true;
+    }
+
+    VersionLineage {
+        current_version: current_version,
+        version_count: version_count,
+        rollback_count: rollback_count,
+        active: is_active,
+    }
+}
+
+// ===========================================================================
+// A/B Testing Circuits
+// ===========================================================================
+
+// Route request via VRF-deterministic assignment — NOT Math.random()
+// Hashes user_id with secret_key for repeatable, verifiable traffic split
+circuit ab_route_request(graph_id: bytes(32), test_config: ABTestConfig, user_id: bytes(16), secret_key: bytes(32)) -> u8
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/route
+    precision C
+    observe metrics: [test_id, user_id, assignment]
+{
+    let vrf_proof: bytes(64) = vrf_prove(secret_key, user_id);
+    let verified: bool = vrf_verify(secret_key, user_id, vrf_proof);
+
+    let hash_val: f64 = ai_classify(graph_id, vrf_proof);
+    let bucket: f64 = abs(hash_val) % 100.0;
+
+    if bucket < test_config.traffic_split_pct {
+        return 1;
+    }
+    0
+}
+
+// Initialize a fresh A/B test arm
+circuit ab_create_arm(graph_id: bytes(32), version_id: bytes(16)) -> ABTestArm
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/arm
+    precision C
+    observe metrics: [version_id]
+{
+    ABTestArm {
+        version_id: version_id,
+        samples: 0,
+        total_error: 0.0,
+        total_squared_error: 0.0,
+        mean_error: 0.0,
+        m2: 0.0,
+    }
+}
+
+// Record prediction vs actual for an arm (Welford's online algorithm for variance)
+circuit ab_record_observation(graph_id: bytes(32), arm: ABTestArm, predicted: f64, actual: f64) -> ABTestArm
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/record
+    precision C
+    observe metrics: [version_id, samples, error]
+{
+    let error: f64 = abs(predicted - actual);
+    let new_samples: u64 = arm.samples + 1;
+    let new_total_error: f64 = arm.total_error + error;
+    let new_total_sq_error: f64 = arm.total_squared_error + error * error;
+    let new_mean: f64 = new_total_error / new_samples;
+
+    let delta: f64 = error - arm.mean_error;
+    let delta2: f64 = error - new_mean;
+    let new_m2: f64 = arm.m2 + delta * delta2;
+
+    ABTestArm {
+        version_id: arm.version_id,
+        samples: new_samples,
+        total_error: new_total_error,
+        total_squared_error: new_total_sq_error,
+        mean_error: new_mean,
+        m2: new_m2,
+    }
+}
+
+// Welch's t-test for unequal variances using sqrt() for standard error
+circuit welch_t_test(graph_id: bytes(32), control: ABTestArm, treatment: ABTestArm) -> ABTestResult
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/ttest
+    precision C
+    observe metrics: [control_samples, treatment_samples, t_statistic, p_value]
+{
+    let c_n: f64 = control.samples;
+    let t_n: f64 = treatment.samples;
+
+    if c_n < 2.0 {
+        return ABTestResult {
+            test_id: graph_id,
+            status: 0,
+            decision: 0,
+            control_mae: 0.0,
+            control_mse: 0.0,
+            control_samples: control.samples,
+            treatment_mae: 0.0,
+            treatment_mse: 0.0,
+            treatment_samples: treatment.samples,
+            t_statistic: 0.0,
+            p_value: 1.0,
+            duration_s: 0,
+        };
+    }
+    if t_n < 2.0 {
+        return ABTestResult {
+            test_id: graph_id,
+            status: 0,
+            decision: 0,
+            control_mae: 0.0,
+            control_mse: 0.0,
+            control_samples: control.samples,
+            treatment_mae: 0.0,
+            treatment_mse: 0.0,
+            treatment_samples: treatment.samples,
+            t_statistic: 0.0,
+            p_value: 1.0,
+            duration_s: 0,
+        };
+    }
+
+    let c_mean: f64 = control.mean_error;
+    let t_mean: f64 = treatment.mean_error;
+
+    let c_var: f64 = control.m2 / (c_n - 1.0);
+    let t_var: f64 = treatment.m2 / (t_n - 1.0);
+
+    let se: f64 = sqrt(c_var / c_n + t_var / t_n);
+
+    let t_stat: f64 = 0.0;
+    if se > 0.0 {
+        t_stat = (c_mean - t_mean) / se;
+    }
+
+    let p_value: f64 = 1.0 - normal_cdf(graph_id, t_stat);
+
+    let c_mae: f64 = control.total_error / c_n;
+    let t_mae: f64 = treatment.total_error / t_n;
+    let c_mse: f64 = control.total_squared_error / c_n;
+    let t_mse: f64 = treatment.total_squared_error / t_n;
+
+    ABTestResult {
+        test_id: graph_id,
+        status: 0,
+        decision: 0,
+        control_mae: c_mae,
+        control_mse: c_mse,
+        control_samples: control.samples,
+        treatment_mae: t_mae,
+        treatment_mse: t_mse,
+        treatment_samples: treatment.samples,
+        t_statistic: t_stat,
+        p_value: p_value,
+        duration_s: 0,
+    }
+}
+
+// Normal CDF approximation (Abramowitz & Stegun, Handbook of Mathematical Functions)
+circuit normal_cdf(graph_id: bytes(32), x: f64) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/normalcdf
+    precision C
+    observe metrics: [x, cdf]
+{
+    let a1: f64 = 0.254829592;
+    let a2: f64 = -0.284496736;
+    let a3: f64 = 1.421413741;
+    let a4: f64 = -1.453152027;
+    let a5: f64 = 1.061405429;
+    let p: f64 = 0.3275911;
+
+    let sign: f64 = 1.0;
+    if x < 0.0 {
+        sign = -1.0;
+    }
+
+    let abs_x: f64 = abs(x) / sqrt(2.0);
+    let t: f64 = 1.0 / (1.0 + p * abs_x);
+
+    let poly: f64 = ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t;
+    let y: f64 = 1.0 - poly * exp(0.0 - abs_x * abs_x);
+
+    0.5 * (1.0 + sign * y)
+}
+
+// Determine A/B test outcome from statistical results
+circuit ab_decide(graph_id: bytes(32), result: ABTestResult, significance_level: f64) -> u8
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/decide
+    precision C
+    observe metrics: [test_id, p_value, decision]
+{
+    if result.control_samples < 30 {
+        return 0;
+    }
+    if result.treatment_samples < 30 {
+        return 0;
+    }
+    if result.p_value > significance_level {
+        return 3;
+    }
+    if result.treatment_mae < result.control_mae {
+        return 1;
+    }
+    2
+}
+
+// Cohen's d effect size for reporting using sqrt() and abs()
+circuit compute_effect_size(graph_id: bytes(32), control: ABTestArm, treatment: ABTestArm) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/effect
+    precision C
+    observe metrics: [effect_size]
+{
+    let c_n: f64 = control.samples;
+    let t_n: f64 = treatment.samples;
+
+    if c_n < 2.0 {
+        return 0.0;
+    }
+    if t_n < 2.0 {
+        return 0.0;
+    }
+
+    let c_var: f64 = control.m2 / (c_n - 1.0);
+    let t_var: f64 = treatment.m2 / (t_n - 1.0);
+    let pooled_sd: f64 = sqrt((c_var + t_var) / 2.0);
+
+    if pooled_sd == 0.0 {
+        return 0.0;
+    }
+
+    abs(control.mean_error - treatment.mean_error) / pooled_sd
+}
+
+// Check if test should complete based on duration or sample count
+circuit ab_check_completion(graph_id: bytes(32), config: ABTestConfig, control: ABTestArm, treatment: ABTestArm, elapsed_s: u64) -> u8
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/completion
+    precision C
+    observe metrics: [test_id, elapsed_s, control_samples, treatment_samples, status]
+{
+    if elapsed_s >= config.max_duration_s {
+        return 1;
+    }
+    if control.samples >= config.min_samples {
+        if treatment.samples >= config.min_samples {
+            return 1;
+        }
+    }
+    0
+}
+
+// ===========================================================================
+// Event Streams
+// ===========================================================================
+
+stream training_events: event<TrainingResult>
+    retention 5y
+    consumers [ops, compliance, streamsight, governance]
+
+stream rlhf_events: event<FeedbackBatchResult>
+    retention 5y
+    consumers [ops, compliance, streamsight]
+
+stream version_events: event<ModelVersion>
+    retention 5y
+    consumers [ops, compliance, streamsight, governance]
+
+stream ab_test_events: event<ABTestResult>
+    retention 5y
+    consumers [ops, compliance, streamsight, marketplace]

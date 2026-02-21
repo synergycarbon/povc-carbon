@@ -12,6 +12,10 @@
 //   1.0  — Monitoring-grade (operational telemetry)
 //   2.0  — Indicative (non-revenue informational)
 //
+// Expanded: f64 meter readings, calibration drift detection, advanced tamper
+// detection, totalizer rollover handling, CT/VT ratio validation, demand
+// interval computation, statistical analysis. All computation migrated from TS.
+//
 // Depends on: eStream IEC 62053 circuits (polyquantum/estream-io #145)
 // Closes: synergycarbon/povc-carbon #79, #70
 
@@ -91,6 +95,126 @@ type MeteringEdge = struct {
     created_at: u64,
 }
 
+// ---------------------------------------------------------------------------
+// f64 Meter Reading (high-precision for computation)
+// ---------------------------------------------------------------------------
+
+type MeterReadingF64 = struct {
+    meter_id: MeterId,
+    meter_type: MeterType,
+    accuracy_class: AccuracyClass,
+    voltage_v: f64,
+    current_a: f64,
+    active_power_w: f64,
+    reactive_power_var: f64,
+    apparent_power_va: f64,
+    power_factor: f64,          // 0.0–1.0
+    frequency_hz: f64,
+    energy_kwh: f64,            // cumulative kilowatt-hours
+    energy_kvarh: f64,          // cumulative reactive kVARh
+    timestamp: u64,
+    site_id: bytes(32),
+    hardware_attestation: bytes(64),
+    ct_ratio_primary: f64,
+    ct_ratio_secondary: f64,
+    vt_ratio_primary: f64,
+    vt_ratio_secondary: f64,
+}
+
+// ---------------------------------------------------------------------------
+// CT/VT Transformer Configuration
+// ---------------------------------------------------------------------------
+
+type CTVTConfig = struct {
+    config_id: bytes(32),
+    meter_id: MeterId,
+    ct_primary_a: f64,         // e.g. 200.0
+    ct_secondary_a: f64,       // e.g. 5.0
+    vt_primary_v: f64,         // e.g. 11000.0
+    vt_secondary_v: f64,       // e.g. 110.0
+    ct_accuracy_class: f64,    // e.g. 0.2
+    vt_accuracy_class: f64,    // e.g. 0.2
+    burden_va: f64,
+    rated_burden_va: f64,
+    installed_at: u64,
+    last_verified_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Demand Interval
+// ---------------------------------------------------------------------------
+
+type DemandInterval = struct {
+    interval_id: bytes(32),
+    meter_id: MeterId,
+    start_timestamp: u64,
+    end_timestamp: u64,
+    interval_seconds: u64,
+    energy_start_kwh: f64,
+    energy_end_kwh: f64,
+    demand_kw: f64,
+    max_demand_kw: f64,
+    reactive_demand_kvar: f64,
+    power_factor_avg: f64,
+    reading_count: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Calibration Drift
+// ---------------------------------------------------------------------------
+
+type CalibrationDriftResult = struct {
+    result_id: bytes(32),
+    meter_id: MeterId,
+    drift_detected: bool,
+    error_trend_5: f64,        // basis points trend at 5% load
+    error_trend_20: f64,
+    error_trend_100: f64,
+    error_trend_120: f64,
+    drift_rate_bp_per_day: f64,
+    days_to_out_of_spec: f64,
+    recalibration_recommended: bool,
+    computed_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Totalizer Rollover
+// ---------------------------------------------------------------------------
+
+type RolloverEvent = struct {
+    event_id: bytes(32),
+    meter_id: MeterId,
+    prev_reading_kwh: f64,
+    curr_reading_kwh: f64,
+    rollover_max_kwh: f64,
+    corrected_delta_kwh: f64,
+    rollover_count: u64,
+    detected_at: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Meter Statistics
+// ---------------------------------------------------------------------------
+
+type MeterStatistics = struct {
+    stats_id: bytes(32),
+    meter_id: MeterId,
+    sample_count: u64,
+    voltage_mean: f64,
+    voltage_std: f64,
+    current_mean: f64,
+    current_std: f64,
+    power_mean: f64,
+    power_std: f64,
+    pf_mean: f64,
+    pf_std: f64,
+    frequency_mean: f64,
+    frequency_std: f64,
+    energy_delta_total_kwh: f64,
+    anomaly_score: f64,
+    computed_at: u64,
+}
+
 state_machine metering_validation_lifecycle {
     initial RECEIVED
     persistence wal
@@ -107,17 +231,41 @@ state_machine metering_validation_lifecycle {
     PF_CHECKED -> QUARANTINED when tamper_detected
 }
 
+state_machine calibration_drift_lifecycle {
+    initial NOMINAL
+    persistence wal
+    terminal [RECALIBRATED, DECOMMISSIONED]
+    li_anomaly_detection true
+
+    NOMINAL -> DRIFTING when drift_detected guard drift_rate_bp_per_day > 0.1
+    NOMINAL -> NOMINAL when within_spec
+    DRIFTING -> ALERT when approaching_limit guard days_to_out_of_spec < 30.0
+    DRIFTING -> NOMINAL when drift_corrected
+    ALERT -> QUARANTINED when out_of_spec
+    ALERT -> RECALIBRATED when recalibration_complete
+    QUARANTINED -> RECALIBRATED when recalibration_complete
+    QUARANTINED -> DECOMMISSIONED when meter_retired
+}
+
 dag iec62053_metering {
     node MeterReading
+    node MeterReadingF64
     node CalibrationCertificate
     node MeteringValidationResult
     node TamperEvent
+    node CTVTConfig
+    node DemandInterval
+    node CalibrationDriftResult
+    node RolloverEvent
+    node MeterStatistics
     edge MeteringEdge
     overlay metering_status: u8 curate delta_curate
     overlay accuracy_deviation: u64 bitmask delta_curate
     overlay calibration_health: u8 curate delta_curate
     overlay tamper_score: u64 bitmask delta_curate
     overlay power_factor_band: u8 curate delta_curate
+    overlay drift_rate: f64 curate delta_curate
+    overlay demand_peak: f64 curate delta_curate
     storage csr {
         hot @bram,
         warm @ddr,
@@ -125,7 +273,8 @@ dag iec62053_metering {
     }
     ai_feed metering_anomaly
     ai_feed calibration_drift
-    observe iec62053_metering: [metering_status, accuracy_deviation, calibration_health, tamper_score] threshold: {
+    ai_feed tamper_pattern
+    observe iec62053_metering: [metering_status, accuracy_deviation, calibration_health, tamper_score, drift_rate] threshold: {
         anomaly_score 0.85
         baseline_window 120
     }
@@ -168,11 +317,6 @@ circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: 
     let hw_valid = mldsa_verify(reading_hash, reading.hardware_attestation, reading.meter_id)
     let kem = mlkem_encaps(pk)
 
-    // Accuracy class error limits (basis points): [5% load, 20% load, 100% load, 120% load]
-    // Class 0.2S: ±0.4%, ±0.2%, ±0.2%, ±0.2%  → [40, 20, 20, 20]
-    // Class 0.5S: ±1.0%, ±0.5%, ±0.5%, ±0.5%  → [100, 50, 50, 50]
-    // Class 1.0:  ±2.0%, ±1.0%, ±1.0%, ±1.5%  → [200, 100, 100, 150]
-    // Class 2.0:  ±4.0%, ±2.0%, ±2.0%, ±3.0%  → [400, 200, 200, 300]
     let max_error_5 = accuracy_limit(reading.accuracy_class, 0)
     let max_error_20 = accuracy_limit(reading.accuracy_class, 1)
     let max_error_100 = accuracy_limit(reading.accuracy_class, 2)
@@ -183,29 +327,23 @@ circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: 
         && cert.error_pct_at_100 <= max_error_100
         && cert.error_pct_at_120 <= max_error_120
 
-    // Calibration certificate validity: SE050 attestation + expiry
     let cert_hash = sha3_256(cert.cert_id ++ cert.meter_id ++ cert.calibrated_at)
     let cert_sig_valid = mldsa_verify(cert_hash, cert.se050_attestation, cert.calibration_lab_id)
     let calibration_valid = cert_sig_valid && cert.expires_at > now()
 
-    // Power factor validation: cos(φ) must be ≥ 0.50 (50.00%) for valid metering
-    // Revenue metering (0.2S) requires ≥ 0.80 (80.00%)
     let pf_threshold = power_factor_threshold(reading.accuracy_class)
     let power_factor_valid = reading.power_factor_pct >= pf_threshold
 
-    // Apparent power consistency check: S² ≈ P² + Q²
-    // Detects tamper via inconsistent power triangle
     let p_sq = reading.active_power_mw * reading.active_power_mw
     let q_sq = reading.reactive_power_mvar * reading.reactive_power_mvar
     let s_sq = reading.apparent_power_mva * reading.apparent_power_mva
     let pq_sum = p_sq + q_sq
     let triangle_error = abs_diff(s_sq, pq_sum)
-    let triangle_tolerance = s_sq / 100  // 1% tolerance
+    let triangle_tolerance = s_sq / 100
     let tamper_detected = triangle_error > triangle_tolerance
 
-    let anomaly = streamsight_anomaly(reading_hash)
+    let anomaly = stream_sight_anomaly(reading_hash)
 
-    // Compliance flags: bit 0 = accuracy, bit 1 = calibration, bit 2 = power_factor, bit 3 = tamper-free
     let flags = 0
     if accuracy_valid { flags = flags | 0x01 }
     if calibration_valid { flags = flags | 0x02 }
@@ -214,7 +352,7 @@ circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: 
 
     let validation_id = sha3_256(reading.meter_id ++ reading.timestamp ++ flags)
 
-    store("metering_validations", validation_id, validation_id)
+    eslite_insert("metering_validations", validation_id, validation_id)
 
     MeteringValidationResult {
         validation_id: validation_id,
@@ -228,6 +366,679 @@ circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: 
         compliance_flags: flags,
         validated_at: now(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// f64 Meter Reading Validation (comprehensive, migrated from TS)
+// ---------------------------------------------------------------------------
+// Operates on high-precision f64 readings. Performs accuracy class checks,
+// calibration validation, power factor validation, power triangle
+// consistency, CT/VT ratio validation, and frequency bounds checking.
+
+circuit validate_meter_reading_f64(dag_id: bytes(32), reading: MeterReadingF64, cert: CalibrationCertificate, ct_vt: CTVTConfig, pk: bytes(1568)) -> MeteringValidationResult
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053 {
+        governance hierarchical
+        approval_required true
+        audit_trail true
+        sovereignty us
+        compliance [iec_62053_21, iec_62053_22, epa_ghg, iso_14064]
+    }
+    precision A
+    constant_time true
+    witness threshold(3, 5)
+    rbac [metering_operator, verifier, registry_admin]
+    observe metrics: [meter_id, accuracy_class, power_factor, voltage_v, frequency_hz]
+    invariant "power_positive" { reading.active_power_w > 0.0 }
+    invariant "meter_match" { reading.meter_id == cert.meter_id }
+    invariant "class_match" { reading.accuracy_class == cert.accuracy_class }
+    invariant "ct_vt_match" { reading.meter_id == ct_vt.meter_id }
+    fuzz_target
+    esz_emit "verify/iec62053_metering_f64.esz"
+    li_feed full_escir true, optimized_ir true
+{
+    let reading_hash = sha3_256(reading.meter_id ++ reading.timestamp)
+    let hw_valid = mldsa_verify(reading_hash, reading.hardware_attestation, reading.meter_id)
+    let kem = mlkem_encaps(pk)
+
+    // --- Accuracy class error limits (migrated from types.ts) ---
+    let max_err_5 = accuracy_limit_f64(reading.accuracy_class, 0)
+    let max_err_20 = accuracy_limit_f64(reading.accuracy_class, 1)
+    let max_err_100 = accuracy_limit_f64(reading.accuracy_class, 2)
+    let max_err_120 = accuracy_limit_f64(reading.accuracy_class, 3)
+
+    let err_5_f64: f64 = cert.error_pct_at_5
+    let err_20_f64: f64 = cert.error_pct_at_20
+    let err_100_f64: f64 = cert.error_pct_at_100
+    let err_120_f64: f64 = cert.error_pct_at_120
+
+    let accuracy_valid = err_5_f64 <= max_err_5
+        && err_20_f64 <= max_err_20
+        && err_100_f64 <= max_err_100
+        && err_120_f64 <= max_err_120
+
+    // --- Calibration validity (migrated from types.ts isCalibrationValid) ---
+    let cert_hash = sha3_256(cert.cert_id ++ cert.meter_id ++ cert.calibrated_at)
+    let cert_sig_valid = mldsa_verify(cert_hash, cert.se050_attestation, cert.calibration_lab_id)
+    let calibration_valid = cert_sig_valid && cert.expires_at > now()
+
+    // --- Power factor validation (migrated from types.ts validatePowerFactor) ---
+    let pf_threshold = power_factor_threshold_f64(reading.accuracy_class)
+    let power_factor_valid = reading.power_factor >= pf_threshold
+
+    // --- Power triangle: S² ≈ P² + Q² (migrated from types.ts checkPowerTriangle) ---
+    let p_sq = reading.active_power_w * reading.active_power_w
+    let q_sq = reading.reactive_power_var * reading.reactive_power_var
+    let s_sq = reading.apparent_power_va * reading.apparent_power_va
+    let pq_sum = p_sq + q_sq
+    let triangle_error_pct: f64 = 0.0
+    if s_sq > 0.0 {
+        triangle_error_pct = abs(s_sq - pq_sum) / s_sq * 100.0
+    }
+    let triangle_consistent = triangle_error_pct <= 1.0
+
+    // --- Power factor cross-check: PF = P / S ---
+    let computed_pf: f64 = 0.0
+    if reading.apparent_power_va > 0.0 {
+        computed_pf = reading.active_power_w / reading.apparent_power_va
+    }
+    let pf_deviation = abs(reading.power_factor - computed_pf)
+    let pf_cross_valid = pf_deviation <= 0.02
+
+    // --- CT/VT ratio validation ---
+    let ct_ratio_valid = validate_ct_vt_ratios(reading, ct_vt)
+
+    // --- Frequency bounds check (nominal ±0.5 Hz for IEC compliance) ---
+    let freq_nominal: f64 = 60.0
+    let freq_deviation = abs(reading.frequency_hz - freq_nominal)
+    let freq_valid = freq_deviation <= 0.5
+
+    // --- Voltage bounds (±10% of nominal for IEC 62053) ---
+    let voltage_nominal: f64 = 240.0
+    let voltage_deviation_pct = abs(reading.voltage_v - voltage_nominal) / voltage_nominal * 100.0
+    let voltage_valid = voltage_deviation_pct <= 10.0
+
+    // --- Tamper detection: combine triangle + PF cross-check ---
+    let tamper_detected = !triangle_consistent || !pf_cross_valid
+
+    // --- anomaly detection ---
+    let anomaly = stream_sight_anomaly(reading_hash)
+
+    // --- Compliance flags (migrated from types.ts computeComplianceFlags) ---
+    let flags: u32 = 0
+    if accuracy_valid { flags = flags | 0x01 }
+    if calibration_valid { flags = flags | 0x02 }
+    if power_factor_valid && ct_ratio_valid && freq_valid && voltage_valid { flags = flags | 0x04 }
+    if !tamper_detected { flags = flags | 0x08 }
+
+    let validation_id = sha3_256(reading.meter_id ++ reading.timestamp ++ flags)
+
+    eslite_insert("metering_validations", validation_id, validation_id)
+
+    // Store in metering history for drift analysis
+    eslite_insert("metering_history", reading.meter_id ++ reading.timestamp, reading)
+
+    MeteringValidationResult {
+        validation_id: validation_id,
+        meter_id: reading.meter_id,
+        accuracy_class: reading.accuracy_class,
+        accuracy_valid: accuracy_valid,
+        calibration_valid: calibration_valid,
+        power_factor_valid: power_factor_valid && ct_ratio_valid && freq_valid,
+        tamper_detected: tamper_detected,
+        energy_wh_validated: floor(reading.energy_kwh * 1000.0),
+        compliance_flags: flags,
+        validated_at: now(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Calibration Drift Detection
+// ---------------------------------------------------------------------------
+// Compares a new calibration certificate's error readings against the
+// previous one stored in eslite. Computes the drift rate in basis points
+// per day and estimates days until the meter drifts out of spec.
+
+circuit detect_calibration_drift(dag_id: bytes(32), meter_id: MeterId, new_cert: CalibrationCertificate) -> CalibrationDriftResult
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, calibration_authority]
+    observe metrics: [meter_id, drift_rate_bp_per_day, days_to_out_of_spec, recalibration_recommended]
+    invariant "cert_for_meter" { new_cert.meter_id == meter_id }
+{
+    let prev_cert = eslite_query("calibration_certs", meter_id)
+
+    let days_elapsed: f64 = (new_cert.calibrated_at - prev_cert.calibrated_at) / 86400.0
+    if days_elapsed <= 0.0 { days_elapsed = 1.0 }
+
+    let drift_5: f64 = (new_cert.error_pct_at_5 - prev_cert.error_pct_at_5)
+    let drift_20: f64 = (new_cert.error_pct_at_20 - prev_cert.error_pct_at_20)
+    let drift_100: f64 = (new_cert.error_pct_at_100 - prev_cert.error_pct_at_100)
+    let drift_120: f64 = (new_cert.error_pct_at_120 - prev_cert.error_pct_at_120)
+
+    let drift_rate_5 = abs(drift_5) / days_elapsed
+    let drift_rate_20 = abs(drift_20) / days_elapsed
+    let drift_rate_100 = abs(drift_100) / days_elapsed
+    let drift_rate_120 = abs(drift_120) / days_elapsed
+
+    let max_drift_rate = drift_rate_5
+    if drift_rate_20 > max_drift_rate { max_drift_rate = drift_rate_20 }
+    if drift_rate_100 > max_drift_rate { max_drift_rate = drift_rate_100 }
+    if drift_rate_120 > max_drift_rate { max_drift_rate = drift_rate_120 }
+
+    // Accuracy limits for this class
+    let limit_5 = accuracy_limit_f64(new_cert.accuracy_class, 0)
+    let limit_20 = accuracy_limit_f64(new_cert.accuracy_class, 1)
+    let limit_100 = accuracy_limit_f64(new_cert.accuracy_class, 2)
+    let limit_120 = accuracy_limit_f64(new_cert.accuracy_class, 3)
+
+    // Worst-case: headroom remaining at each load point
+    let headroom_5 = limit_5 - abs(new_cert.error_pct_at_5)
+    let headroom_20 = limit_20 - abs(new_cert.error_pct_at_20)
+    let headroom_100 = limit_100 - abs(new_cert.error_pct_at_100)
+    let headroom_120 = limit_120 - abs(new_cert.error_pct_at_120)
+
+    let min_headroom = headroom_5
+    if headroom_20 < min_headroom { min_headroom = headroom_20 }
+    if headroom_100 < min_headroom { min_headroom = headroom_100 }
+    if headroom_120 < min_headroom { min_headroom = headroom_120 }
+
+    let days_to_oos: f64 = 99999.0
+    if max_drift_rate > 0.0 {
+        days_to_oos = min_headroom / max_drift_rate
+    }
+
+    let drift_detected = max_drift_rate > 0.1
+    let recal_recommended = days_to_oos < 180.0
+
+    let anomaly = stream_sight_anomaly(meter_id)
+
+    eslite_insert("calibration_certs", meter_id, new_cert)
+    eslite_insert("calibration_drift", meter_id, CalibrationDriftResult {
+        result_id: sha3_256(meter_id ++ new_cert.calibrated_at),
+        meter_id: meter_id,
+        drift_detected: drift_detected,
+        error_trend_5: drift_5,
+        error_trend_20: drift_20,
+        error_trend_100: drift_100,
+        error_trend_120: drift_120,
+        drift_rate_bp_per_day: max_drift_rate,
+        days_to_out_of_spec: days_to_oos,
+        recalibration_recommended: recal_recommended,
+        computed_at: now(),
+    })
+
+    CalibrationDriftResult {
+        result_id: sha3_256(meter_id ++ new_cert.calibrated_at),
+        meter_id: meter_id,
+        drift_detected: drift_detected,
+        error_trend_5: drift_5,
+        error_trend_20: drift_20,
+        error_trend_100: drift_100,
+        error_trend_120: drift_120,
+        drift_rate_bp_per_day: max_drift_rate,
+        days_to_out_of_spec: days_to_oos,
+        recalibration_recommended: recal_recommended,
+        computed_at: now(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Advanced Tamper Detection
+// ---------------------------------------------------------------------------
+// Multi-signal tamper detection combining: power triangle inconsistency,
+// magnetic interference (sudden current drop), reverse energy flow,
+// bypass detection (current imbalance), and clock drift analysis.
+
+circuit detect_tamper_advanced(dag_id: bytes(32), reading: MeterReadingF64, prev_reading: MeterReadingF64) -> TamperEvent
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, verifier]
+    observe metrics: [meter_id, tamper_type, severity]
+    invariant "same_meter" { reading.meter_id == prev_reading.meter_id }
+{
+    let tamper_type: u8 = 255
+    let severity: u8 = 0
+    let evidence_parts = reading.meter_id ++ reading.timestamp
+
+    // Magnetic tamper: sudden >50% current drop with stable voltage
+    let voltage_change_pct = abs(reading.voltage_v - prev_reading.voltage_v) / prev_reading.voltage_v * 100.0
+    let current_change_pct: f64 = 0.0
+    if prev_reading.current_a > 0.0 {
+        current_change_pct = (prev_reading.current_a - reading.current_a) / prev_reading.current_a * 100.0
+    }
+    if current_change_pct > 50.0 && voltage_change_pct < 5.0 {
+        tamper_type = 0
+        severity = 2
+    }
+
+    // Bypass: current flowing but no power registered
+    if tamper_type == 255 {
+        if reading.current_a > 1.0 && reading.active_power_w < 0.1 {
+            tamper_type = 2
+            severity = 2
+        }
+    }
+
+    // Reverse flow: energy counter decreased
+    if tamper_type == 255 {
+        if reading.energy_kwh < prev_reading.energy_kwh && prev_reading.energy_kwh > 0.0 {
+            let decrease_kwh = prev_reading.energy_kwh - reading.energy_kwh
+            let rollover_threshold: f64 = prev_reading.energy_kwh * 0.9
+            if decrease_kwh < rollover_threshold {
+                tamper_type = 3
+                severity = 2
+            }
+        }
+    }
+
+    // Clock drift: timestamp regression or large gap
+    if tamper_type == 255 {
+        if reading.timestamp <= prev_reading.timestamp {
+            tamper_type = 4
+            severity = 1
+        }
+        let time_gap = reading.timestamp - prev_reading.timestamp
+        let expected_interval: u64 = 900
+        if time_gap > expected_interval * 10 {
+            tamper_type = 4
+            severity = 1
+        }
+    }
+
+    // Power triangle tamper
+    if tamper_type == 255 {
+        let p_sq = reading.active_power_w * reading.active_power_w
+        let q_sq = reading.reactive_power_var * reading.reactive_power_var
+        let s_sq = reading.apparent_power_va * reading.apparent_power_va
+        if s_sq > 0.0 {
+            let tri_err = abs(s_sq - (p_sq + q_sq)) / s_sq * 100.0
+            if tri_err > 5.0 {
+                tamper_type = 2
+                severity = 1
+            }
+        }
+    }
+
+    let event_id = sha3_256(evidence_parts)
+
+    if tamper_type != 255 {
+        let anomaly = stream_sight_anomaly(reading.meter_id)
+
+        eslite_insert("tamper_events", event_id, TamperEvent {
+            event_id: event_id,
+            meter_id: reading.meter_id,
+            tamper_type: tamper_type,
+            severity: severity,
+            detected_at: now(),
+            evidence_hash: sha3_256(evidence_parts ++ tamper_type),
+        })
+        eslite_insert("quarantined_meters", reading.meter_id, now())
+    }
+
+    TamperEvent {
+        event_id: event_id,
+        meter_id: reading.meter_id,
+        tamper_type: tamper_type,
+        severity: severity,
+        detected_at: now(),
+        evidence_hash: sha3_256(evidence_parts ++ tamper_type),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Totalizer Rollover Handling
+// ---------------------------------------------------------------------------
+// Detects when a cumulative energy counter rolls over its maximum value
+// and computes the corrected delta. Handles both register-width rollovers
+// (e.g. 999999.999 → 0.0) and configurable max values.
+
+circuit handle_totalizer_rollover(dag_id: bytes(32), meter_id: MeterId, prev_kwh: f64, curr_kwh: f64, rollover_max_kwh: f64) -> RolloverEvent
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, verifier]
+    observe metrics: [meter_id, corrected_delta_kwh, rollover_count]
+    invariant "max_positive" { rollover_max_kwh > 0.0 }
+{
+    let prev_rollovers = eslite_query("rollover_counts", meter_id)
+    let rollover_count = prev_rollovers + 0
+
+    let corrected_delta: f64 = 0.0
+
+    if curr_kwh >= prev_kwh {
+        corrected_delta = curr_kwh - prev_kwh
+    } else {
+        corrected_delta = (rollover_max_kwh - prev_kwh) + curr_kwh
+        rollover_count = rollover_count + 1
+
+        let anomaly = stream_sight_anomaly(meter_id)
+    }
+
+    // Sanity: delta should not exceed rollover_max (indicates multiple rollovers or error)
+    if corrected_delta > rollover_max_kwh {
+        corrected_delta = rollover_max_kwh
+    }
+
+    let event_id = sha3_256(meter_id ++ prev_kwh ++ curr_kwh ++ now())
+
+    eslite_insert("rollover_counts", meter_id, rollover_count)
+    eslite_insert("rollover_events", event_id, RolloverEvent {
+        event_id: event_id,
+        meter_id: meter_id,
+        prev_reading_kwh: prev_kwh,
+        curr_reading_kwh: curr_kwh,
+        rollover_max_kwh: rollover_max_kwh,
+        corrected_delta_kwh: corrected_delta,
+        rollover_count: rollover_count,
+        detected_at: now(),
+    })
+
+    RolloverEvent {
+        event_id: event_id,
+        meter_id: meter_id,
+        prev_reading_kwh: prev_kwh,
+        curr_reading_kwh: curr_kwh,
+        rollover_max_kwh: rollover_max_kwh,
+        corrected_delta_kwh: corrected_delta,
+        rollover_count: rollover_count,
+        detected_at: now(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CT/VT Ratio Validation
+// ---------------------------------------------------------------------------
+// Validates current transformer and voltage transformer ratios. The actual
+// measured ratio must match the rated ratio within the transformer's
+// accuracy class tolerance. Also checks burden loading.
+
+circuit validate_ct_vt_config(dag_id: bytes(32), ct_vt: CTVTConfig) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, calibration_authority]
+    observe metrics: [meter_id, ct_ratio_primary, ct_ratio_secondary, vt_ratio_primary, vt_ratio_secondary]
+    invariant "ct_secondary_positive" { ct_vt.ct_secondary_a > 0.0 }
+    invariant "vt_secondary_positive" { ct_vt.vt_secondary_v > 0.0 }
+{
+    let ct_ratio = ct_vt.ct_primary_a / ct_vt.ct_secondary_a
+    let vt_ratio = ct_vt.vt_primary_v / ct_vt.vt_secondary_v
+
+    // Standard CT secondaries: 1A or 5A
+    let ct_secondary_valid = ct_vt.ct_secondary_a == 1.0 || ct_vt.ct_secondary_a == 5.0
+
+    // Standard VT secondaries: 100V, 110V, or 120V
+    let vt_secondary_valid = ct_vt.vt_secondary_v == 100.0
+        || ct_vt.vt_secondary_v == 110.0
+        || ct_vt.vt_secondary_v == 120.0
+
+    // CT ratio sanity: typically 1:1 to 5000:5
+    let ct_ratio_valid = ct_ratio >= 1.0 && ct_ratio <= 1000.0
+
+    // VT ratio sanity: typically 1:1 to 200:1
+    let vt_ratio_valid = vt_ratio >= 1.0 && vt_ratio <= 200.0
+
+    // Burden must not exceed rated burden
+    let burden_valid = ct_vt.burden_va <= ct_vt.rated_burden_va
+
+    // CT accuracy class check: 0.1, 0.2, 0.5, 1.0 are IEC standard classes
+    let ct_class_valid = ct_vt.ct_accuracy_class == 0.1
+        || ct_vt.ct_accuracy_class == 0.2
+        || ct_vt.ct_accuracy_class == 0.5
+        || ct_vt.ct_accuracy_class == 1.0
+
+    let all_valid = ct_secondary_valid && vt_secondary_valid
+        && ct_ratio_valid && vt_ratio_valid
+        && burden_valid && ct_class_valid
+
+    eslite_insert("ct_vt_configs", ct_vt.meter_id, ct_vt)
+
+    all_valid
+}
+
+// Internal helper: validate reading CT/VT ratios against configuration
+circuit validate_ct_vt_ratios(reading: MeterReadingF64, ct_vt: CTVTConfig) -> bool
+    precision C
+    constant_time true
+{
+    let ct_ratio_expected = ct_vt.ct_primary_a / ct_vt.ct_secondary_a
+    let vt_ratio_expected = ct_vt.vt_primary_v / ct_vt.vt_secondary_v
+
+    let ct_ratio_actual = reading.ct_ratio_primary / reading.ct_ratio_secondary
+    let vt_ratio_actual = reading.vt_ratio_primary / reading.vt_ratio_secondary
+
+    let ct_tolerance = ct_ratio_expected * ct_vt.ct_accuracy_class / 100.0
+    let vt_tolerance = vt_ratio_expected * ct_vt.vt_accuracy_class / 100.0
+
+    let ct_valid = abs(ct_ratio_actual - ct_ratio_expected) <= ct_tolerance
+    let vt_valid = abs(vt_ratio_actual - vt_ratio_expected) <= vt_tolerance
+
+    ct_valid && vt_valid
+}
+
+// ---------------------------------------------------------------------------
+// Demand Interval Computation
+// ---------------------------------------------------------------------------
+// Computes average demand (kW) over a configurable interval from a series
+// of f64 meter readings stored in eslite. Also tracks peak demand and
+// average power factor for the interval.
+
+circuit compute_demand_interval(dag_id: bytes(32), meter_id: MeterId, start_ts: u64, end_ts: u64, readings_energy_start: f64, readings_energy_end: f64, readings_count: u64, readings_pf_sum: f64, max_instantaneous_kw: f64) -> DemandInterval
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, verifier]
+    observe metrics: [meter_id, demand_kw, max_demand_kw, power_factor_avg]
+    invariant "end_after_start" { end_ts > start_ts }
+    invariant "count_positive" { readings_count > 0 }
+{
+    let interval_seconds: f64 = end_ts - start_ts
+    let interval_hours = interval_seconds / 3600.0
+
+    let energy_delta = readings_energy_end - readings_energy_start
+
+    // Handle rollover
+    if energy_delta < 0.0 {
+        let rollover_data = eslite_query("rollover_counts", meter_id)
+        energy_delta = energy_delta + 999999.999
+    }
+
+    let demand_kw: f64 = 0.0
+    if interval_hours > 0.0 {
+        demand_kw = energy_delta / interval_hours
+    }
+
+    let pf_avg: f64 = 0.0
+    if readings_count > 0 {
+        pf_avg = readings_pf_sum / readings_count
+    }
+
+    let reactive_demand: f64 = 0.0
+    if pf_avg > 0.0 && pf_avg < 1.0 {
+        let phi = sqrt(1.0 - pf_avg * pf_avg) / pf_avg
+        reactive_demand = demand_kw * phi
+    }
+
+    let interval_id = sha3_256(meter_id ++ start_ts ++ end_ts)
+
+    let prev_max = eslite_query("peak_demand", meter_id)
+    if max_instantaneous_kw > prev_max {
+        eslite_insert("peak_demand", meter_id, max_instantaneous_kw)
+    }
+
+    eslite_insert("demand_intervals", interval_id, DemandInterval {
+        interval_id: interval_id,
+        meter_id: meter_id,
+        start_timestamp: start_ts,
+        end_timestamp: end_ts,
+        interval_seconds: end_ts - start_ts,
+        energy_start_kwh: readings_energy_start,
+        energy_end_kwh: readings_energy_end,
+        demand_kw: demand_kw,
+        max_demand_kw: max_instantaneous_kw,
+        reactive_demand_kvar: reactive_demand,
+        power_factor_avg: pf_avg,
+        reading_count: readings_count,
+    })
+
+    DemandInterval {
+        interval_id: interval_id,
+        meter_id: meter_id,
+        start_timestamp: start_ts,
+        end_timestamp: end_ts,
+        interval_seconds: end_ts - start_ts,
+        energy_start_kwh: readings_energy_start,
+        energy_end_kwh: readings_energy_end,
+        demand_kw: demand_kw,
+        max_demand_kw: max_instantaneous_kw,
+        reactive_demand_kvar: reactive_demand,
+        power_factor_avg: pf_avg,
+        reading_count: readings_count,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Meter Statistics Computation
+// ---------------------------------------------------------------------------
+// Computes mean and standard deviation for voltage, current, power,
+// power factor, and frequency from a window of readings.
+// Uses the two-pass algorithm: first pass for mean, second for variance.
+// Runs anomaly detection on the aggregated statistics.
+
+circuit compute_meter_statistics(dag_id: bytes(32), meter_id: MeterId, count: u64, v_sum: f64, v_sq_sum: f64, i_sum: f64, i_sq_sum: f64, p_sum: f64, p_sq_sum: f64, pf_sum: f64, pf_sq_sum: f64, freq_sum: f64, freq_sq_sum: f64, energy_delta_kwh: f64) -> MeterStatistics
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, verifier]
+    observe metrics: [meter_id, voltage_mean, voltage_std, power_mean, anomaly_score]
+    invariant "count_positive" { count > 0 }
+{
+    let n: f64 = count
+
+    let v_mean = v_sum / n
+    let i_mean = i_sum / n
+    let p_mean = p_sum / n
+    let pf_mean = pf_sum / n
+    let freq_mean = freq_sum / n
+
+    // Variance = E[X²] - (E[X])²
+    let v_var = (v_sq_sum / n) - (v_mean * v_mean)
+    let i_var = (i_sq_sum / n) - (i_mean * i_mean)
+    let p_var = (p_sq_sum / n) - (p_mean * p_mean)
+    let pf_var = (pf_sq_sum / n) - (pf_mean * pf_mean)
+    let freq_var = (freq_sq_sum / n) - (freq_mean * freq_mean)
+
+    if v_var < 0.0 { v_var = 0.0 }
+    if i_var < 0.0 { i_var = 0.0 }
+    if p_var < 0.0 { p_var = 0.0 }
+    if pf_var < 0.0 { pf_var = 0.0 }
+    if freq_var < 0.0 { freq_var = 0.0 }
+
+    let v_std = sqrt(v_var)
+    let i_std = sqrt(i_var)
+    let p_std = sqrt(p_var)
+    let pf_std = sqrt(pf_var)
+    let freq_std = sqrt(freq_var)
+
+    let anomaly = stream_sight_anomaly(meter_id)
+
+    // Composite anomaly score: weighted Z-scores of each parameter deviation
+    // Voltage and frequency deviations weighted higher for metering integrity
+    let v_z: f64 = 0.0
+    if v_std > 0.0 { v_z = abs(v_mean - 240.0) / v_std }
+    let freq_z: f64 = 0.0
+    if freq_std > 0.0 { freq_z = abs(freq_mean - 60.0) / freq_std }
+
+    let composite_score = (v_z * 0.3 + freq_z * 0.3 + pf_std * 0.2 + p_std / (p_mean + 0.001) * 0.2)
+    if composite_score > 1.0 { composite_score = 1.0 }
+
+    let stats_id = sha3_256(meter_id ++ count ++ now())
+
+    eslite_insert("meter_statistics", meter_id, MeterStatistics {
+        stats_id: stats_id,
+        meter_id: meter_id,
+        sample_count: count,
+        voltage_mean: v_mean,
+        voltage_std: v_std,
+        current_mean: i_mean,
+        current_std: i_std,
+        power_mean: p_mean,
+        power_std: p_std,
+        pf_mean: pf_mean,
+        pf_std: pf_std,
+        frequency_mean: freq_mean,
+        frequency_std: freq_std,
+        energy_delta_total_kwh: energy_delta_kwh,
+        anomaly_score: composite_score,
+        computed_at: now(),
+    })
+
+    MeterStatistics {
+        stats_id: stats_id,
+        meter_id: meter_id,
+        sample_count: count,
+        voltage_mean: v_mean,
+        voltage_std: v_std,
+        current_mean: i_mean,
+        current_std: i_std,
+        power_mean: p_mean,
+        power_std: p_std,
+        pf_mean: pf_mean,
+        pf_std: pf_std,
+        frequency_mean: freq_mean,
+        frequency_std: freq_std,
+        energy_delta_total_kwh: energy_delta_kwh,
+        anomaly_score: composite_score,
+        computed_at: now(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Power Factor Correction Validation
+// ---------------------------------------------------------------------------
+// Validates that the power factor after correction equipment (capacitor
+// banks) meets the accuracy class threshold. Computes the required
+// reactive compensation and verifies the corrected PF.
+
+circuit validate_power_factor_correction(dag_id: bytes(32), reading: MeterReadingF64, target_pf: f64) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    constant_time true
+    rbac [metering_operator, verifier]
+    observe metrics: [meter_id, power_factor, target_pf, correction_kvar]
+    invariant "target_valid" { target_pf > 0.0 && target_pf <= 1.0 }
+{
+    let pf_threshold = power_factor_threshold_f64(reading.accuracy_class)
+
+    // Current reactive power and angle
+    let phi_current: f64 = 0.0
+    if reading.power_factor > 0.0 && reading.power_factor < 1.0 {
+        phi_current = sqrt(1.0 - reading.power_factor * reading.power_factor) / reading.power_factor
+    }
+
+    // Target reactive power angle
+    let phi_target: f64 = 0.0
+    if target_pf > 0.0 && target_pf < 1.0 {
+        phi_target = sqrt(1.0 - target_pf * target_pf) / target_pf
+    }
+
+    // Required compensation in kVAR
+    let correction_kvar = reading.active_power_w / 1000.0 * (phi_current - phi_target)
+    if correction_kvar < 0.0 { correction_kvar = 0.0 }
+
+    // Corrected apparent power
+    let corrected_q = reading.reactive_power_var - correction_kvar * 1000.0
+    if corrected_q < 0.0 { corrected_q = 0.0 }
+    let corrected_s = sqrt(reading.active_power_w * reading.active_power_w + corrected_q * corrected_q)
+
+    let corrected_pf: f64 = 0.0
+    if corrected_s > 0.0 {
+        corrected_pf = reading.active_power_w / corrected_s
+    }
+
+    corrected_pf >= pf_threshold
 }
 
 // ---------------------------------------------------------------------------
@@ -248,12 +1059,12 @@ circuit register_calibration_cert(dag_id: bytes(32), cert: CalibrationCertificat
         cert.se050_attestation,
         cert.calibration_lab_id
     )
-    store("calibration_certs", cert.meter_id, cert)
+    eslite_insert("calibration_certs", cert.meter_id, cert)
     cert.cert_id
 }
 
 // ---------------------------------------------------------------------------
-// Tamper Detection
+// Tamper Detection (simple)
 // ---------------------------------------------------------------------------
 
 circuit record_tamper_event(dag_id: bytes(32), event: TamperEvent) -> bytes(32)
@@ -263,9 +1074,8 @@ circuit record_tamper_event(dag_id: bytes(32), event: TamperEvent) -> bytes(32)
     rbac [metering_operator, verifier, registry_admin]
     observe metrics: [event_id, meter_id, tamper_type, severity]
 {
-    store("tamper_events", event.event_id, event)
-    // Quarantine the meter: all subsequent readings rejected until re-calibration
-    store("quarantined_meters", event.meter_id, event.detected_at)
+    eslite_insert("tamper_events", event.event_id, event)
+    eslite_insert("quarantined_meters", event.meter_id, event.detected_at)
     event.event_id
 }
 
@@ -289,41 +1099,69 @@ circuit forward_metering_to_pipeline(dag_id: bytes(32), validation: MeteringVali
 // ---------------------------------------------------------------------------
 // Helper Lookups
 // ---------------------------------------------------------------------------
-// Accuracy error limits in basis points per IEC 62053-21/22
-// Returns the maximum permissible error for a given class and load point.
 
 circuit accuracy_limit(class: AccuracyClass, load_point: u8) -> u16
     precision C
     constant_time true
 {
-    // load_point: 0=5%, 1=20%, 2=100%, 3=120%
-    if class == 0 {  // 0.2S
+    if class == 0 {
         if load_point == 0 { 40 }
         else { 20 }
-    } else if class == 1 {  // 0.5S
+    } else if class == 1 {
         if load_point == 0 { 100 }
         else { 50 }
-    } else if class == 2 {  // 1.0
+    } else if class == 2 {
         if load_point == 0 { 200 }
         else if load_point == 3 { 150 }
         else { 100 }
-    } else {  // 2.0
+    } else {
         if load_point == 0 { 400 }
         else if load_point == 3 { 300 }
         else { 200 }
     }
 }
 
-// Power factor threshold per accuracy class (basis points of cos φ)
+// f64 accuracy limits (basis points as f64)
+circuit accuracy_limit_f64(class: AccuracyClass, load_point: u8) -> f64
+    precision C
+    constant_time true
+{
+    if class == 0 {
+        if load_point == 0 { 40.0 }
+        else { 20.0 }
+    } else if class == 1 {
+        if load_point == 0 { 100.0 }
+        else { 50.0 }
+    } else if class == 2 {
+        if load_point == 0 { 200.0 }
+        else if load_point == 3 { 150.0 }
+        else { 100.0 }
+    } else {
+        if load_point == 0 { 400.0 }
+        else if load_point == 3 { 300.0 }
+        else { 200.0 }
+    }
+}
 
 circuit power_factor_threshold(class: AccuracyClass) -> u16
     precision C
     constant_time true
 {
-    if class == 0 { 8000 }      // 0.2S: cos φ ≥ 0.80
-    else if class == 1 { 5000 } // 0.5S: cos φ ≥ 0.50
-    else if class == 2 { 5000 } // 1.0:  cos φ ≥ 0.50
-    else { 2000 }               // 2.0:  cos φ ≥ 0.20
+    if class == 0 { 8000 }
+    else if class == 1 { 5000 }
+    else if class == 2 { 5000 }
+    else { 2000 }
+}
+
+// f64 power factor thresholds (0.0–1.0 scale)
+circuit power_factor_threshold_f64(class: AccuracyClass) -> f64
+    precision C
+    constant_time true
+{
+    if class == 0 { 0.80 }
+    else if class == 1 { 0.50 }
+    else if class == 2 { 0.50 }
+    else { 0.20 }
 }
 
 circuit abs_diff(a: u64, b: u64) -> u64
@@ -352,3 +1190,23 @@ stream tamper_events: event<TamperEvent>
     retention 99y
     consumers [compliance, audit, governance, streamsight]
     classify meter_id: METADATA, tamper_type: COMPLIANCE, severity: COMPLIANCE
+
+stream calibration_drift_events: event<CalibrationDriftResult>
+    retention 99y
+    consumers [registry, audit, compliance, streamsight]
+    classify meter_id: METADATA, drift_rate_bp_per_day: COMPLIANCE, recalibration_recommended: COMPLIANCE
+
+stream demand_interval_events: event<DemandInterval>
+    retention 99y
+    consumers [verification_pipeline, registry, audit, streamsight]
+    classify meter_id: METADATA, demand_kw: VERIFIED_DATA, max_demand_kw: VERIFIED_DATA
+
+stream rollover_events: event<RolloverEvent>
+    retention 99y
+    consumers [registry, audit, compliance, streamsight]
+    classify meter_id: METADATA, corrected_delta_kwh: VERIFIED_DATA, rollover_count: METADATA
+
+stream meter_statistics_events: event<MeterStatistics>
+    retention 99y
+    consumers [verification_pipeline, registry, audit, streamsight]
+    classify meter_id: METADATA, anomaly_score: COMPLIANCE, voltage_mean: VERIFIED_DATA

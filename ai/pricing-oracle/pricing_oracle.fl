@@ -1,6 +1,9 @@
 // Forward Pricing Oracle Circuit
 // Generates forward price curves from spot prices, yield forecasts, and cost-of-carry
+// F = S * e^((r - y + s/S + i) * T) with supply/vintage adjustments
 // Outputs: forward curve by maturity (1M, 3M, 6M, 1Y, 2Y)
+
+// ─── Input / Output Types ──────────────────────────────────────────────────────
 
 type SpotInput = struct {
     price_usd_cents: u64,
@@ -28,6 +31,63 @@ type BasisAlert = struct {
     timestamp: u64,
 }
 
+// ─── Cost-of-Carry Types ───────────────────────────────────────────────────────
+
+type CarryConfig = struct {
+    risk_free_rate: f64,
+    convenience_yield: f64,
+    storage_cost_per_tonne: f64,
+    insurance_rate: f64,
+}
+
+type CarryCostBreakdown = struct {
+    tenor_days: u32,
+    time_value: f64,
+    storage_cost: f64,
+    insurance_cost: f64,
+    convenience_yield: f64,
+    net_carry_cost: f64,
+    carry_multiplier: f64,
+}
+
+// ─── Yield / Supply Types ──────────────────────────────────────────────────────
+
+type YieldHorizon = struct {
+    horizon_days: u32,
+    projected_tco2e: f64,
+    confidence_80_lo: f64,
+    confidence_80_hi: f64,
+}
+
+type YieldForecast = struct {
+    horizons: list<YieldHorizon>,
+    forecast_time: u64,
+}
+
+type HistoricalYield = struct {
+    avg_daily_tco2e_30d: f64,
+    avg_daily_tco2e_90d: f64,
+    avg_daily_tco2e_365d: f64,
+    timestamp: u64,
+}
+
+// ─── Curve Interpolation Types ─────────────────────────────────────────────────
+
+type CurvePoint = struct {
+    tenor_days: u32,
+    price: f64,
+    confidence_lo: f64,
+    confidence_hi: f64,
+}
+
+type InterpolatedCurve = struct {
+    points: list<CurvePoint>,
+    spot_price: f64,
+    generated_at: u64,
+}
+
+// ─── Graph ─────────────────────────────────────────────────────────────────────
+
 // curve_position: 0=spot, 1=1m, 2=3m, 3=6m, 4=1y, 5=2y
 
 graph pricing_oracle_graph {
@@ -51,12 +111,271 @@ graph pricing_oracle_graph {
     }
 }
 
+// ─── Cost-of-Carry Functions ───────────────────────────────────────────────────
+
+fn default_carry_config() -> CarryConfig {
+    CarryConfig {
+        risk_free_rate: 0.05,
+        convenience_yield: 0.02,
+        storage_cost_per_tonne: 0.25,
+        insurance_rate: 0.005,
+    }
+}
+
+// F = S * e^((r - y + s/S + i) * T)
+fn forward_price(spot: f64, tenor_days: u32, cfg: CarryConfig) -> f64 {
+    let t: f64 = (tenor_days as f64) / 365.0;
+    let storage_rate: f64 = cfg.storage_cost_per_tonne / spot;
+    let net_rate: f64 = cfg.risk_free_rate
+        - cfg.convenience_yield
+        + storage_rate
+        + cfg.insurance_rate;
+    spot * exp(net_rate * t)
+}
+
+fn carry_breakdown(spot: f64, tenor_days: u32, cfg: CarryConfig) -> CarryCostBreakdown {
+    let t: f64 = (tenor_days as f64) / 365.0;
+    let tv: f64 = spot * (exp(cfg.risk_free_rate * t) - 1.0);
+    let sc: f64 = cfg.storage_cost_per_tonne * t;
+    let ic: f64 = spot * cfg.insurance_rate * t;
+    let cy: f64 = spot * (exp(cfg.convenience_yield * t) - 1.0);
+    let net: f64 = tv + sc + ic - cy;
+    let fwd: f64 = forward_price(spot, tenor_days, cfg);
+    let mult: f64 = if spot > 0.0 { fwd / spot } else { 1.0 };
+    CarryCostBreakdown {
+        tenor_days: tenor_days,
+        time_value: tv,
+        storage_cost: sc,
+        insurance_cost: ic,
+        convenience_yield: cy,
+        net_carry_cost: net,
+        carry_multiplier: mult,
+    }
+}
+
+// y_implied = r + s/S + i - ln(F/S) / T
+fn implied_convenience_yield(spot: f64, fwd: f64, tenor_days: u32, cfg: CarryConfig) -> f64 {
+    if spot <= 0.0 || fwd <= 0.0 || tenor_days == 0 { return 0.0; }
+    let t: f64 = (tenor_days as f64) / 365.0;
+    let storage_rate: f64 = cfg.storage_cost_per_tonne / spot;
+    let observed_rate: f64 = log(fwd / spot) / t;
+    cfg.risk_free_rate + storage_rate + cfg.insurance_rate - observed_rate
+}
+
+// ─── Supply & Vintage Adjustment Functions ─────────────────────────────────────
+
+fn find_horizon(horizons: list<YieldHorizon>, tenor_days: u32) -> YieldHorizon {
+    let fallback: YieldHorizon = horizons[len(horizons) - 1];
+    for h in horizons {
+        if h.horizon_days >= tenor_days {
+            return h;
+        }
+    }
+    fallback
+}
+
+fn supply_adjustment(spot: f64, tenor_days: u32,
+                     forecast: YieldForecast, historical: HistoricalYield) -> f64 {
+    if len(forecast.horizons) == 0 { return 0.0; }
+    let horizon: YieldHorizon = find_horizon(forecast.horizons, tenor_days);
+    let hist_daily: f64 = if tenor_days <= 30 {
+        historical.avg_daily_tco2e_30d
+    } else if tenor_days <= 90 {
+        historical.avg_daily_tco2e_90d
+    } else {
+        historical.avg_daily_tco2e_365d
+    };
+    if hist_daily <= 0.0 { return 0.0; }
+    let fc_daily: f64 = horizon.projected_tco2e / (horizon.horizon_days as f64);
+    let supply_ratio: f64 = fc_daily / hist_daily;
+    let scarcity: f64 = if supply_ratio < 1.0 { 1.0 - supply_ratio } else { 0.0 };
+    let elasticity: f64 = 0.3;
+    spot * scarcity * elasticity
+}
+
+fn vintage_decay(spot: f64, vintage_year: u32, current_year: u32) -> f64 {
+    if current_year <= vintage_year { return 0.0; }
+    let age: f64 = (current_year as f64) - (vintage_year as f64);
+    let decay_rate: f64 = 0.02;
+    spot * decay_rate * age
+}
+
+// ─── Curve Interpolation Functions ─────────────────────────────────────────────
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + t * (b - a)
+}
+
+fn lerp_curve_point(a: CurvePoint, b: CurvePoint, target_days: u32) -> CurvePoint {
+    let span: f64 = (b.tenor_days as f64) - (a.tenor_days as f64);
+    let t: f64 = ((target_days as f64) - (a.tenor_days as f64)) / span;
+    CurvePoint {
+        tenor_days: target_days,
+        price: lerp(a.price, b.price, t),
+        confidence_lo: lerp(a.confidence_lo, b.confidence_lo, t),
+        confidence_hi: lerp(a.confidence_hi, b.confidence_hi, t),
+    }
+}
+
+fn extrapolate_near(a: CurvePoint, b: CurvePoint, target_days: u32) -> CurvePoint {
+    let slope: f64 = (b.price - a.price) / ((b.tenor_days as f64) - (a.tenor_days as f64));
+    let delta: f64 = (target_days as f64) - (a.tenor_days as f64);
+    CurvePoint {
+        tenor_days: target_days,
+        price: a.price + slope * delta,
+        confidence_lo: a.confidence_lo,
+        confidence_hi: a.confidence_hi,
+    }
+}
+
+fn extrapolate_far(a: CurvePoint, b: CurvePoint, target_days: u32) -> CurvePoint {
+    let slope: f64 = (b.price - a.price) / ((b.tenor_days as f64) - (a.tenor_days as f64));
+    let delta: f64 = (target_days as f64) - (b.tenor_days as f64);
+    let uncertainty_growth: f64 = 1.0 + (delta / 365.0) * 0.5;
+    CurvePoint {
+        tenor_days: target_days,
+        price: b.price + slope * delta,
+        confidence_lo: b.confidence_lo * uncertainty_growth,
+        confidence_hi: b.confidence_hi * uncertainty_growth,
+    }
+}
+
+fn interpolate_linear(points: list<CurvePoint>, target_days: u32) -> CurvePoint {
+    if len(points) == 1 {
+        return CurvePoint {
+            tenor_days: target_days,
+            price: points[0].price,
+            confidence_lo: points[0].confidence_lo,
+            confidence_hi: points[0].confidence_hi,
+        };
+    }
+    if target_days <= points[0].tenor_days {
+        return extrapolate_near(points[0], points[1], target_days);
+    }
+    let last: u32 = len(points) - 1;
+    if target_days >= points[last].tenor_days {
+        return extrapolate_far(points[last - 1], points[last], target_days);
+    }
+    for i in 0..(len(points) - 1) {
+        if target_days >= points[i].tenor_days && target_days <= points[i + 1].tenor_days {
+            return lerp_curve_point(points[i], points[i + 1], target_days);
+        }
+    }
+    points[0]
+}
+
+fn curve_slope(near: CurvePoint, far: CurvePoint) -> f64 {
+    if near.price == 0.0 || far.tenor_days == near.tenor_days { return 0.0; }
+    let price_change: f64 = (far.price - near.price) / near.price;
+    let tenor_years: f64 = ((far.tenor_days as f64) - (near.tenor_days as f64)) / 365.0;
+    price_change / tenor_years
+}
+
+fn smooth_curve(points: list<CurvePoint>, window: u32) -> list<CurvePoint> {
+    if len(points) <= window { return points; }
+    let half: u32 = window / 2;
+    let result: list<CurvePoint> = [];
+    for i in 0..len(points) {
+        let price_sum: f64 = 0.0;
+        let lo_sum: f64 = 0.0;
+        let hi_sum: f64 = 0.0;
+        let weight_sum: f64 = 0.0;
+        let j_start: u32 = if i > half { i - half } else { 0 };
+        let j_end: u32 = if (i + half) < len(points) { i + half } else { len(points) - 1 };
+        for j in j_start..=j_end {
+            let dist: f64 = abs((j as f64) - (i as f64));
+            let w: f64 = 1.0 / (1.0 + dist);
+            price_sum = price_sum + points[j].price * w;
+            lo_sum = lo_sum + points[j].confidence_lo * w;
+            hi_sum = hi_sum + points[j].confidence_hi * w;
+            weight_sum = weight_sum + w;
+        }
+        result = append(result, CurvePoint {
+            tenor_days: points[i].tenor_days,
+            price: price_sum / weight_sum,
+            confidence_lo: lo_sum / weight_sum,
+            confidence_hi: hi_sum / weight_sum,
+        });
+    }
+    result
+}
+
+// ─── Rounding Helpers ──────────────────────────────────────────────────────────
+
+fn round_cents(usd: f64) -> u64 {
+    (round(usd * 100.0)) as u64
+}
+
+fn round_signed_cents(usd: f64) -> i64 {
+    (round(usd * 100.0)) as i64
+}
+
+// ─── Tenor Point Builder ───────────────────────────────────────────────────────
+
+fn build_tenor_point(
+    spot: f64, tenor_days: u32, tenor_label: bytes(4),
+    cfg: CarryConfig, premium: f64,
+    supply_adj: f64, vint_decay: f64,
+) -> ForwardCurvePoint {
+    let base_fwd: f64 = forward_price(spot, tenor_days, cfg);
+    let carry: CarryCostBreakdown = carry_breakdown(spot, tenor_days, cfg);
+    let adjusted: f64 = (base_fwd + supply_adj - vint_decay) * premium;
+    let ci_pct: f64 = 0.02 * sqrt((tenor_days as f64) / 30.0);
+    let lo: f64 = adjusted * (1.0 - ci_pct);
+    let hi: f64 = adjusted * (1.0 + ci_pct);
+    ForwardCurvePoint {
+        tenor_label: tenor_label,
+        tenor_days: tenor_days,
+        forward_price_cents: round_cents(adjusted),
+        carry_cost_cents: round_cents(carry.net_carry_cost),
+        supply_adj_cents: round_signed_cents(supply_adj),
+        methodology_premium_bps: (round(premium * 10000.0)) as u32,
+        confidence_lo_cents: round_cents(lo),
+        confidence_hi_cents: round_cents(hi),
+    }
+}
+
+// ─── Main Circuits ─────────────────────────────────────────────────────────────
+
 circuit compute_forward_curve(graph_id: bytes(32), spot: SpotInput, methodology: bytes(32)) -> list<ForwardCurvePoint>
     lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/forward/compute
     precision D
     observe metrics: [spot_price, methodology, tenor_count]
 {
-    []
+    let cfg: CarryConfig = default_carry_config();
+    let spot_usd: f64 = (spot.price_usd_cents as f64) / 100.0;
+
+    let premium: f64 = eslite_query(graph_id, "methodology_premium", methodology);
+    let premium_val: f64 = if premium > 0.0 { premium } else { 1.0 };
+
+    let forecast: YieldForecast = eslite_query(graph_id, "yield_forecast", methodology);
+    let historical: HistoricalYield = eslite_query(graph_id, "historical_yield", methodology);
+    let vintage_year: u32 = eslite_query(graph_id, "vintage_year", methodology);
+    let current_year: u32 = eslite_query(graph_id, "current_year", methodology);
+
+    let has_forecast: bool = len(forecast.horizons) > 0;
+    let tenor_days_list: list<u32> = [30, 90, 180, 365, 730];
+    let tenor_labels: list<bytes(4)> = [b"1M\0\0", b"3M\0\0", b"6M\0\0", b"1Y\0\0", b"2Y\0\0"];
+
+    let curve: list<ForwardCurvePoint> = [];
+    for idx in 0..5 {
+        let td: u32 = tenor_days_list[idx];
+        let sa: f64 = if has_forecast {
+            supply_adjustment(spot_usd, td, forecast, historical)
+        } else {
+            0.0
+        };
+        let vd: f64 = vintage_decay(spot_usd, vintage_year, current_year);
+        let pt: ForwardCurvePoint = build_tenor_point(
+            spot_usd, td, tenor_labels[idx], cfg, premium_val, sa, vd
+        );
+        curve = append(curve, pt);
+    }
+
+    eslite_insert(graph_id, "last_spot_price", spot_usd);
+    eslite_insert(graph_id, "last_curve_timestamp", spot.timestamp);
+
+    curve
 }
 
 circuit check_basis(graph_id: bytes(32), expected_cents: u64, observed_cents: u64, tenor_days: u32) -> BasisAlert
@@ -64,14 +383,77 @@ circuit check_basis(graph_id: bytes(32), expected_cents: u64, observed_cents: u6
     precision C
     observe metrics: [tenor_days, sigma_deviation]
 {
+    let expected_usd: f64 = (expected_cents as f64) / 100.0;
+    let observed_usd: f64 = (observed_cents as f64) / 100.0;
+
+    let stored_std: f64 = eslite_query(graph_id, "price_std_dev", tenor_days);
+    let std_dev: f64 = if stored_std > 0.0 { stored_std } else { expected_usd * 0.05 };
+
+    let deviation: f64 = if std_dev > 0.0 {
+        abs(observed_usd - expected_usd) / std_dev
+    } else {
+        0.0
+    };
+
+    let sigma_u64: u64 = (round(deviation * 100.0)) as u64;
+    let ts: u64 = eslite_query(graph_id, "block_timestamp");
+
     BasisAlert {
         tenor_days: tenor_days,
         expected_cents: expected_cents,
         observed_cents: observed_cents,
-        sigma_deviation: 0,
-        timestamp: 0,
+        sigma_deviation: sigma_u64,
+        timestamp: ts,
     }
 }
+
+circuit interpolate_curve(graph_id: bytes(32), known: list<ForwardCurvePoint>,
+                          spot_cents: u64, timestamp: u64) -> InterpolatedCurve
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/curve/interpolate
+    precision C
+    observe metrics: [point_count, slope]
+{
+    let spot_usd: f64 = (spot_cents as f64) / 100.0;
+
+    let raw_points: list<CurvePoint> = [];
+    for p in known {
+        raw_points = append(raw_points, CurvePoint {
+            tenor_days: p.tenor_days,
+            price: (p.forward_price_cents as f64) / 100.0,
+            confidence_lo: (p.confidence_lo_cents as f64) / 100.0,
+            confidence_hi: (p.confidence_hi_cents as f64) / 100.0,
+        });
+    }
+
+    let target_days: list<u32> = [30, 90, 180, 365, 730];
+    let interp_points: list<CurvePoint> = [];
+    for td in target_days {
+        let cp: CurvePoint = interpolate_linear(raw_points, td);
+        interp_points = append(interp_points, cp);
+    }
+
+    let smoothed: list<CurvePoint> = smooth_curve(interp_points, 3);
+
+    InterpolatedCurve {
+        points: smoothed,
+        spot_price: spot_usd,
+        generated_at: timestamp,
+    }
+}
+
+circuit compute_implied_yield(graph_id: bytes(32), spot_cents: u64,
+                              forward_cents: u64, tenor_days: u32) -> f64
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/carry/implied_yield
+    precision C
+    observe metrics: [tenor_days, implied_yield]
+{
+    let spot_usd: f64 = (spot_cents as f64) / 100.0;
+    let fwd_usd: f64 = (forward_cents as f64) / 100.0;
+    let cfg: CarryConfig = default_carry_config();
+    implied_convenience_yield(spot_usd, fwd_usd, tenor_days, cfg)
+}
+
+// ─── Streams ───────────────────────────────────────────────────────────────────
 
 stream forward_curves: event<list<ForwardCurvePoint>>
     retention 5y
