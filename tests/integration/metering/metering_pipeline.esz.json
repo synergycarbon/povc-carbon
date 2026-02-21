@@ -1,0 +1,319 @@
+{
+  "circuit": "iec62053_metering_pipeline",
+  "escir_version": "0.8.1",
+  "description": "End-to-end IEC 62053 metering validation through SC verification pipeline and TZ adapter",
+  "vectors": [
+    {
+      "id": "metering-e2e-tz-with-metering",
+      "description": "TZ attestation with IEC 62053-22 metering telemetry: metering validated, then ingested into SC pipeline",
+      "tags": ["iec-62053", "end-to-end", "thermogenzero", "happy-path", "pipeline"],
+      "inputs": {
+        "tz_attestation": {
+          "attestation_hash": "0xA1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718",
+          "reduction_tonnes": 260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 500,
+          "timestamp": 1708000000000000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "metering": {
+            "meter_id": "0xMETER_02S_ALPHA_01",
+            "accuracy_class": 0,
+            "voltage_v": 240000,
+            "current_ma": 5000,
+            "active_power_mw": 1100000,
+            "reactive_power_mvar": 484000,
+            "apparent_power_mva": 1202000,
+            "power_factor_pct": 9150,
+            "frequency_mhz": 60000,
+            "energy_wh": 212500
+          }
+        },
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_02S_001",
+          "meter_id": "0xMETER_02S_ALPHA_01",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_001",
+          "calibrated_at": 1700000000000,
+          "expires_at": 1740000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 35,
+          "error_pct_at_20": 18,
+          "error_pct_at_100": 15,
+          "error_pct_at_120": 19,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "pipeline_config": {
+          "witness_threshold": "3-of-5",
+          "compliance_frameworks": ["iec_62053_21", "iec_62053_22", "epa_ghg", "iso_14064", "verra_vcs"]
+        }
+      },
+      "expected_outputs": {
+        "metering_validation": {
+          "metering_valid": true,
+          "accuracy_class": 0,
+          "accuracy_class_label": "0.2S",
+          "accuracy_valid": true,
+          "calibration_valid": true,
+          "power_factor_valid": true,
+          "tamper_detected": false,
+          "compliance_flags": "0x0F"
+        },
+        "methane_calc": {
+          "compliant": true,
+          "tco2e_gt": 0
+        },
+        "adapter_result": {
+          "bridged": true,
+          "measurement_unit": 5
+        },
+        "pipeline_ingestion": {
+          "ingest_metered_measurement_called": true,
+          "compliance_iec_62053_21": true,
+          "compliance_iec_62053_22": true,
+          "verification_state": "PENDING -> ATTESTED -> COMMITTED -> WITNESSED -> ELIGIBLE"
+        }
+      }
+    },
+    {
+      "id": "metering-e2e-tz-metering-fail-blocks-bridge",
+      "description": "TZ attestation with failing metering validation — entire attestation rejected even though methane calc passes",
+      "tags": ["iec-62053", "end-to-end", "thermogenzero", "rejection", "pipeline"],
+      "inputs": {
+        "tz_attestation": {
+          "attestation_hash": "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+          "reduction_tonnes": 260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 501,
+          "timestamp": 1708003600000000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "metering": {
+            "meter_id": "0xMETER_TAMPERED",
+            "accuracy_class": 0,
+            "voltage_v": 240000,
+            "current_ma": 5000,
+            "active_power_mw": 1100000,
+            "reactive_power_mvar": 200000,
+            "apparent_power_mva": 400000,
+            "power_factor_pct": 9150,
+            "frequency_mhz": 60000,
+            "energy_wh": 5000
+          }
+        },
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_TAMPERED",
+          "meter_id": "0xMETER_TAMPERED",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_001",
+          "calibrated_at": 1700000000000,
+          "expires_at": 1740000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 12,
+          "error_pct_at_120": 18,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "metering_validation": {
+          "metering_valid": false,
+          "tamper_detected": true,
+          "power_triangle_consistent": false,
+          "compliance_flags": "0x07"
+        },
+        "methane_calc": {
+          "compliant": true,
+          "note": "Methane calculation passes but metering tamper blocks the bridge"
+        },
+        "adapter_result": {
+          "bridged": false,
+          "reason": "IEC 62053 metering validation failed — tamper detected"
+        },
+        "pipeline_ingestion": {
+          "ingest_metered_measurement_called": false,
+          "note": "Attestation never reaches SC pipeline due to metering failure"
+        }
+      }
+    },
+    {
+      "id": "metering-e2e-no-metering-telemetry",
+      "description": "TZ attestation without metering telemetry — standard pipeline path, no IEC 62053 validation",
+      "tags": ["iec-62053", "end-to-end", "thermogenzero", "no-metering", "happy-path"],
+      "inputs": {
+        "tz_attestation": {
+          "attestation_hash": "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+          "reduction_tonnes": 260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "site_id": "esz-wellpad-bravo",
+          "epoch_id": 502,
+          "timestamp": 1708007200000000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5
+        }
+      },
+      "expected_outputs": {
+        "metering_validation": null,
+        "methane_calc": {
+          "compliant": true,
+          "tco2e_gt": 0
+        },
+        "adapter_result": {
+          "bridged": true,
+          "note": "No metering telemetry present — metering check skipped, standard bridge path"
+        },
+        "pipeline_ingestion": {
+          "submit_measurement_called": true,
+          "ingest_metered_measurement_called": false
+        }
+      }
+    },
+    {
+      "id": "metering-e2e-batch-mixed-metering",
+      "description": "Epoch batch with 3 attestations: 1 metered-pass, 1 metered-fail (expired cert), 1 no metering",
+      "tags": ["iec-62053", "end-to-end", "batch", "mixed"],
+      "inputs": {
+        "attestations": [
+          {
+            "id": "batch-item-1-metered-pass",
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 600,
+            "gas_consumed_mcf": 0.5,
+            "flare_temp_c": 800,
+            "teg_power_w": 212.5,
+            "metering": {
+              "meter_id": "0xMETER_BATCH_01",
+              "accuracy_class": 0,
+              "active_power_mw": 1100000,
+              "reactive_power_mvar": 484000,
+              "apparent_power_mva": 1202000,
+              "power_factor_pct": 9150,
+              "energy_wh": 212500
+            },
+            "calibration_cert_status": "valid"
+          },
+          {
+            "id": "batch-item-2-metered-expired-cert",
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 600,
+            "gas_consumed_mcf": 0.4,
+            "flare_temp_c": 810,
+            "teg_power_w": 200.0,
+            "metering": {
+              "meter_id": "0xMETER_BATCH_02",
+              "accuracy_class": 1,
+              "active_power_mw": 900000,
+              "reactive_power_mvar": 396000,
+              "apparent_power_mva": 984000,
+              "power_factor_pct": 9150,
+              "energy_wh": 180000
+            },
+            "calibration_cert_status": "expired"
+          },
+          {
+            "id": "batch-item-3-no-metering",
+            "site_id": "esz-wellpad-bravo",
+            "epoch_id": 600,
+            "gas_consumed_mcf": 0.6,
+            "flare_temp_c": 820,
+            "teg_power_w": 280.0,
+            "metering": null
+          }
+        ],
+        "baseline_power_w": 215
+      },
+      "expected_outputs": {
+        "total_results": 3,
+        "compliant_count": 2,
+        "rejected_count": 1,
+        "metering_validated_count": 1,
+        "metering_rejected_count": 1,
+        "rejections": [
+          {
+            "epoch_id": 600,
+            "reason_contains": "Calibration expired"
+          }
+        ],
+        "total_tco2e_gt": 0,
+        "note": "Item 1 and Item 3 bridge; Item 2 rejected for expired calibration"
+      }
+    },
+    {
+      "id": "metering-e2e-multiple-accuracy-classes",
+      "description": "Pipeline handles multiple accuracy classes across sites: 0.2S for revenue, 1.0 for monitoring",
+      "tags": ["iec-62053", "end-to-end", "multi-class", "pipeline"],
+      "inputs": {
+        "revenue_meter": {
+          "meter_id": "0xMETER_REVENUE_02S",
+          "accuracy_class": 0,
+          "use_case": "PPA settlement, custody transfer",
+          "site_id": "esz-wellpad-alpha"
+        },
+        "monitoring_meter": {
+          "meter_id": "0xMETER_MONITORING_10",
+          "accuracy_class": 2,
+          "use_case": "Operational telemetry, non-revenue",
+          "site_id": "esz-wellpad-bravo"
+        },
+        "pipeline_accepts_both": true
+      },
+      "expected_outputs": {
+        "revenue_meter_validated": true,
+        "revenue_meter_accuracy_label": "0.2S",
+        "revenue_meter_pf_threshold": 8000,
+        "monitoring_meter_validated": true,
+        "monitoring_meter_accuracy_label": "1.0",
+        "monitoring_meter_pf_threshold": 5000,
+        "note": "Both classes accepted — pipeline uses accuracy class to weight credit confidence"
+      }
+    },
+    {
+      "id": "metering-forward-to-verification-pipeline",
+      "description": "Validated metering result forwarded via ingest_metered_measurement circuit to SC verification DAG",
+      "tags": ["iec-62053", "pipeline", "forward", "verification"],
+      "inputs": {
+        "metering_validation_result": {
+          "validation_id": "0xVAL_FORWARD_001",
+          "meter_id": "0xMETER_02S_ALPHA_01",
+          "accuracy_class": 0,
+          "accuracy_valid": true,
+          "calibration_valid": true,
+          "power_factor_valid": true,
+          "tamper_detected": false,
+          "energy_wh_validated": 212500,
+          "compliance_flags": "0x0F",
+          "validated_at": 1708000000000000
+        },
+        "sensor_id": "esz-wellpad-alpha",
+        "methodology_id": "EPA-AP42-CH4-FLARE",
+        "location_hash": "0xLOCATION_HASH_ALPHA",
+        "pipeline_circuit": "circuits/fl/verification_pipeline.fl",
+        "target_circuit": "ingest_metered_measurement"
+      },
+      "expected_outputs": {
+        "measurement_created": true,
+        "measurement_unit": 1,
+        "measurement_value": 212500,
+        "invariants_checked": {
+          "metering_compliant": true,
+          "no_tamper": true,
+          "energy_positive": true
+        },
+        "compliance_frameworks": ["iec_62053_21", "iec_62053_22", "epa_ghg", "iso_14064", "verra_vcs"],
+        "published_to": "sc.metering.iec62053.validated",
+        "verification_lifecycle": "PENDING -> ATTESTED"
+      }
+    }
+  ]
+}
