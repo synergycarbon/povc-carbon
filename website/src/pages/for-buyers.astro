@@ -1,0 +1,197 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="For Buyers" description="Browse verified carbon credits, secure forward contracts, and generate retirement certificates with SynergyCarbon.">
+
+  <header class="page-hero">
+    <h1>For Carbon Credit Buyers</h1>
+    <p>
+      Browse, trade, and retire verified carbon credits with full provenance
+      transparency and ESG reporting tools.
+    </p>
+  </header>
+
+  <!-- Marketplace Overview -->
+  <section class="section">
+    <h2 class="section-title reveal">Browse the Marketplace</h2>
+    <p class="section-subtitle reveal delay-1">
+      Every credit is hardware-verified with a complete provenance chain
+      from witness node to your portfolio.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>Filter &amp; Search</h3>
+        <p>
+          Browse credits by source type (solar, wind, biogas, thermoelectric, CCS),
+          vintage year, methodology, registry, and price range. Smart matching
+          suggests credits aligned with your ESG goals.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>Verified Provenance</h3>
+        <p>
+          Click any credit to view its full attestation chain: which witness nodes
+          recorded it, quorum verification results, methodology applied, and
+          emission factor calculations.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>Escrow-Protected Trading</h3>
+        <p>
+          All transactions are escrow-protected. Funds release only after credit
+          transfer is confirmed across registries. Dispute resolution through
+          governance circuit arbitration.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Forward Contracts -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Forward Contracts</h2>
+      <p class="section-subtitle reveal delay-1">
+        Guarantee future carbon credit supply at locked-in prices.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-card reveal delay-1">
+          <h3>Contract Lifecycle</h3>
+          <p>
+            Forward contracts follow a 9-state lifecycle:
+            <strong>Draft</strong> &rarr; <strong>Proposed</strong> &rarr;
+            <strong>Accepted</strong> &rarr; <strong>Active</strong> &rarr;
+            <strong>Delivering</strong> &rarr; <strong>Fulfilled</strong>.
+            Contracts can also enter Disputed, Cancelled, or Expired states.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-2">
+          <h3>Terms &amp; Delivery</h3>
+          <p>
+            Specify volume (tCO&#8322;e), delivery schedule, source type preferences,
+            and price per credit. Automated delivery triggers release credits as
+            they mint, matched to your contract terms.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-3">
+          <h3>AI Price Forecasting</h3>
+          <p>
+            Forward pricing oracle uses Mamba/S4 models to forecast supply and
+            price across 7, 30, 90, and 365-day horizons. Helps negotiate
+            optimal contract terms with confidence intervals.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Retirement & ESG -->
+  <section class="section">
+    <h2 class="section-title reveal">Retirement &amp; ESG Reporting</h2>
+    <p class="section-subtitle reveal delay-1">
+      Retire credits permanently and generate verifiable proof for stakeholders.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>Retirement Certificates</h3>
+        <p>
+          Each retired credit generates a signed certificate with QR verification
+          link. Certificate includes serial numbers, vintage, source type,
+          methodology, and total tCO&#8322;e retired. Tamper-proof and publicly verifiable.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>ESG Report Exports</h3>
+        <p>
+          One-click exports to GHG Protocol, CDP, TCFD, and SOC2 formats.
+          Retirement data syncs to Verra VCS, Gold Standard, CDM, and ISCC
+          registries automatically. Audit-ready compliance packages.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>Impact Widgets</h3>
+        <p>
+          Embed live impact counters, power meters, and retirement tickers
+          on your corporate website. Customizable branding, animated
+          visualizations, and public verification links.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Five Retirement Triggers -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Automated Retirement Triggers</h2>
+      <p class="section-subtitle reveal delay-1">
+        Five ways to automate credit retirement for your workflows.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-card reveal delay-1">
+          <h3>API Trigger</h3>
+          <p>Call the retirement endpoint directly from your systems for programmatic retirement on demand.</p>
+        </div>
+        <div class="detail-card reveal delay-2">
+          <h3>Stream Trigger</h3>
+          <p>Subscribe to real-time credit events via WebTransport and retire credits as conditions are met.</p>
+        </div>
+        <div class="detail-card reveal delay-3">
+          <h3>Schedule Trigger</h3>
+          <p>Configure cron-based retirement schedules&mdash;monthly, quarterly, or annually aligned to reporting periods.</p>
+        </div>
+        <div class="detail-card reveal delay-4">
+          <h3>Threshold Trigger</h3>
+          <p>Auto-retire when your portfolio reaches a target tCO&#8322;e balance. Keeps inventory aligned with commitments.</p>
+        </div>
+        <div class="detail-card reveal delay-5">
+          <h3>Circuit Trigger</h3>
+          <p>SmartCircuit invocation fires retirement as part of complex multi-step business logic flows.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="section">
+    <h2 class="section-title reveal">Transparent Pricing</h2>
+    <p class="section-subtitle reveal delay-1">
+      Simple, predictable fees with no hidden costs.
+    </p>
+
+    <div style="max-width: 700px; margin: 0 auto;">
+      <table class="info-table reveal">
+        <thead>
+          <tr>
+            <th>Fee Type</th>
+            <th>Amount</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Trade Fee</td><td><strong>0.5%</strong></td><td>Per transaction, paid by seller</td></tr>
+          <tr><td>Retirement Fee</td><td><strong>$0.10</strong></td><td>Per credit, covers certificate + registry sync</td></tr>
+          <tr><td>Forward Contract</td><td><strong>No fee</strong></td><td>No additional fee beyond trade fee at delivery</td></tr>
+          <tr><td>API Access</td><td><strong>Free</strong></td><td>100 req/s included with marketplace account</td></tr>
+          <tr><td>Impact Widgets</td><td><strong>Free</strong></td><td>Unlimited embeds with active account</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section-surface" style="text-align: center; padding-bottom: 5rem;">
+    <h2 class="section-title reveal">Start Buying</h2>
+    <p class="section-subtitle reveal delay-1">
+      Create an account, browse the marketplace, and retire your first credits.
+    </p>
+    <div class="reveal delay-2">
+      <a href="/marketplace" class="btn-primary" style="margin-right: 0.75rem;">View Marketplace</a>
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">Try Demo</a>
+    </div>
+  </section>
+
+</Base>

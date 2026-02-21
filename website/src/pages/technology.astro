@@ -1,0 +1,255 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Technology" description="Deep dive into the eStream platform, post-quantum security, SmartCircuits, and AI analytics powering SynergyCarbon.">
+
+  <header class="page-hero">
+    <h1>Technology</h1>
+    <p>
+      Built on the eStream network with post-quantum cryptography, real-time
+      verification, and AI-powered analytics.
+    </p>
+  </header>
+
+  <!-- eStream Platform -->
+  <section class="section">
+    <h2 class="section-title reveal">eStream Platform</h2>
+    <p class="section-subtitle reveal delay-1">
+      SynergyCarbon runs on the eStream v0.8.3 distributed application platform
+      from PolyQuantum Labs.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>SmartCircuits</h3>
+        <p>
+          13 SmartCircuits power the platform: PoVCR Verifier, Credit Lifecycle,
+          Marketplace Matching, Forward Contract FSM, Retirement Engine,
+          Governance Voting, Anomaly Detection, and more. Compiled from
+          FastLang .fl to Rust/WASM via ESCIR.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>Real-Time Data</h3>
+        <p>
+          WebTransport delivers sub-second attestation verification and live
+          telemetry to all connected clients. No polling, no batching, no HTTP
+          fallback. DAG-based event ordering ensures consistency.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>Scatter-CAS Storage</h3>
+        <p>
+          Content-addressable storage with k-of-n erasure coding ensures data
+          durability and availability. Attestation data, credit metadata, and
+          audit logs are immutable and verifiable by hash.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PoVC Protocol -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">PoVC Protocol</h2>
+      <p class="section-subtitle reveal delay-1">
+        Proof-of-Verified-Carbon is a four-phase attestation protocol
+        linking physical energy measurements to verified carbon credits.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-card reveal delay-1">
+          <h3>Attestation Format</h3>
+          <p>
+            Each attestation contains: node ID, GPS coordinates, timestamp, sensor
+            readings (kWh, flow rate, temperature), ML-DSA-87 signature, and
+            methodology reference. Batched into epoch-aligned bundles.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-2">
+          <h3>Quorum Verification</h3>
+          <p>
+            3-of-5 threshold with configurable tolerance bands per source type.
+            Variance analysis flags outliers. Byzantine fault tolerance ensures
+            correctness even with compromised nodes.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-3">
+          <h3>Credit Lifecycle States</h3>
+          <p>
+            Credits move through: <strong>pending</strong> &rarr;
+            <strong>verified</strong> &rarr; <strong>minted</strong> &rarr;
+            <strong>listed</strong> &rarr; <strong>sold</strong> &rarr;
+            <strong>retired</strong>. Each transition is hash-chained and auditable.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Multi-Registry -->
+  <section class="section">
+    <h2 class="section-title reveal">Multi-Registry Compatibility</h2>
+    <p class="section-subtitle reveal delay-1">
+      Four registry bridges prevent double-counting and enable cross-platform retirement.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>Verra VCS</h3>
+        <p>
+          Full integration with Verra&rsquo;s Verified Carbon Standard. Serial
+          number format compliance, retirement sync, and project-level reporting.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>Gold Standard</h3>
+        <p>
+          Gold Standard for the Global Goals with SDG co-benefit tracking.
+          Automatic retirement notification and public registry updates.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>CDM</h3>
+        <p>
+          Clean Development Mechanism bridge for UNFCCC-registered projects.
+          CER issuance tracking and cross-registry deduplication.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-4">
+        <h3>ISCC</h3>
+        <p>
+          International Sustainability and Carbon Certification for biomass
+          and bioenergy supply chain traceability and compliance.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Analytics -->
+  <section class="section-dark">
+    <div style="max-width: 1100px; margin: 0 auto;">
+      <h2 class="section-title reveal">AI Analytics</h2>
+      <p class="section-subtitle reveal delay-1">
+        Machine learning powers yield forecasting, anomaly detection,
+        and forward pricing across the platform.
+      </p>
+
+      <div class="advantages-grid">
+        <div class="advantage-card reveal delay-1">
+          <h3>Mamba/S4 Yield Forecasting</h3>
+          <p>
+            State-space sequence models predict energy yield across 7, 30, 90,
+            and 365-day horizons. Per-source confidence intervals with RLHF
+            operator feedback corrections.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-2">
+          <h3>Forward Pricing Oracle</h3>
+          <p>
+            Supply elasticity modeling, seasonal patterns, and market sentiment
+            analysis produce fair-value estimates for forward contracts with
+            uncertainty quantification.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-3">
+          <h3>Anomaly Detection</h3>
+          <p>
+            Real-time monitoring flags sensor drift, calibration issues, and
+            suspicious attestation patterns. Automatic quorum challenge triggers
+            when anomaly scores exceed thresholds.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security -->
+  <section class="section">
+    <h2 class="section-title reveal">Post-Quantum Security</h2>
+    <p class="section-subtitle reveal delay-1">
+      Every layer of the platform is protected by NIST-approved
+      post-quantum cryptographic primitives.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>ML-DSA-87 (Dilithium)</h3>
+        <p>
+          NIST FIPS 204 digital signatures for attestations, credit minting,
+          retirement proofs, and all governance actions. 4,627-byte signatures
+          with 128-bit post-quantum security level.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>ML-KEM-1024 (Kyber)</h3>
+        <p>
+          NIST FIPS 203 key encapsulation for encrypted communication between
+          witness nodes, verifiers, and the console. Forward secrecy with
+          ephemeral key exchange.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>SPARK Authentication</h3>
+        <p>
+          Visual challenge-response authentication eliminates password-based
+          attacks. Biometric binding with device attestation. Anti-phishing
+          by design &mdash; no credentials to steal.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Console Kit -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Console Kit</h2>
+      <p class="section-subtitle reveal delay-1">
+        14 real-time widgets, RBAC access control, and a full demo mode
+        for evaluation and training.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-card reveal delay-1">
+          <h3>14 Widgets</h3>
+          <p>
+            Dashboard overview, attestation feed, credit registry, marketplace
+            orderbook, forward contracts, impact dashboard, retirement manager,
+            yield forecast, anomaly alerts, governance panel, audit log,
+            node status, analytics, and settings.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-2">
+          <h3>RBAC Access Control</h3>
+          <p>
+            Role-based access with 4 tiers: admin, operator, auditor, and viewer.
+            Fine-grained permissions per widget and data scope. Integrates with
+            SPARK identity and ML-DSA-87 session tokens.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-3">
+          <h3>Demo Mode</h3>
+          <p>
+            Full-featured demo with simulated attestation data, synthetic credits,
+            and mock marketplace activity. No signup required &mdash; explore every
+            widget before committing.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section" style="text-align: center;">
+    <h2 class="section-title reveal">See It in Action</h2>
+    <p class="section-subtitle reveal delay-1">
+      Explore the full platform with our interactive demo console.
+    </p>
+    <div class="reveal delay-2">
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-primary" style="margin-right: 0.75rem;">Try Demo Console</a>
+      <a href="/api" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">API Reference</a>
+    </div>
+  </section>
+
+</Base>

@@ -1,0 +1,193 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Marketplace" description="Browse and trade hardware-verified carbon credits. Spot trading, forward contracts, and impact visualization.">
+
+  <header class="page-hero">
+    <h1>Carbon Credit Marketplace</h1>
+    <p>
+      Browse, trade, and retire hardware-verified carbon credits with full
+      provenance transparency.
+    </p>
+  </header>
+
+  <!-- Spot Trading -->
+  <section class="section">
+    <h2 class="section-title reveal">Spot Trading</h2>
+    <p class="section-subtitle reveal delay-1">
+      Order-book matching with escrow-protected settlement and real-time price discovery.
+    </p>
+
+    <div style="max-width: 900px; margin: 0 auto;">
+      <table class="info-table reveal">
+        <thead>
+          <tr>
+            <th>Credit Type</th>
+            <th>Vintage</th>
+            <th>Methodology</th>
+            <th>Registry</th>
+            <th>Price/tCO&#8322;e</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Solar PV</td><td>2026 Q1</td><td>CDM ACM0001</td><td>Verra VCS</td><td>$14.50</td></tr>
+          <tr><td>Wind (Onshore)</td><td>2026 Q1</td><td>CDM ACM0001</td><td>CDM</td><td>$12.80</td></tr>
+          <tr><td>Biogas (Landfill)</td><td>2025 Q4</td><td>VCS AMS-III-H</td><td>Verra VCS</td><td>$18.20</td></tr>
+          <tr><td>Thermoelectric</td><td>2026 Q1</td><td>EPA AP-42</td><td>ISCC</td><td>$22.40</td></tr>
+          <tr><td>CCS (DAC)</td><td>2025 Q4</td><td>IPCC AR5</td><td>Verra VCS</td><td>$95.00</td></tr>
+        </tbody>
+      </table>
+      <p style="text-align: center; color: var(--sc-text-muted); font-size: 0.85rem; margin-top: 0.75rem;">
+        Example listings &mdash; actual prices determined by market activity.
+      </p>
+    </div>
+
+    <div class="detail-grid" style="margin-top: 3rem;">
+      <div class="detail-card reveal delay-1">
+        <h3>Smart Matching</h3>
+        <p>
+          Specify your preferences &mdash; source type, vintage, registry, price
+          range &mdash; and the matching engine finds optimal counterparties.
+          Partial fills supported for large orders.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>Escrow Settlement</h3>
+        <p>
+          Funds are held in escrow during settlement. Credits transfer only after
+          multi-registry confirmation. Dispute resolution via governance circuit
+          arbitration with time-locked release.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>Real-Time Orderbook</h3>
+        <p>
+          Live bid/ask spread via WebTransport. Price history charts, volume
+          analytics, and depth visualization. Filter by any credit attribute.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Forward Contracts -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Forward Contracts</h2>
+      <p class="section-subtitle reveal delay-1">
+        Lock in future supply with structured delivery agreements.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-card reveal delay-1">
+          <h3>9-State Lifecycle</h3>
+          <p>
+            Every forward contract follows a deterministic state machine:
+            Draft &rarr; Proposed &rarr; Accepted &rarr; Active &rarr;
+            Delivering &rarr; Fulfilled. Three terminal states handle
+            disputes, cancellations, and expiry.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-2">
+          <h3>Customizable Terms</h3>
+          <p>
+            Define volume, delivery schedule, source type, methodology
+            preference, price per tCO&#8322;e, and penalty clauses. Templates
+            available for common contract structures.
+          </p>
+        </div>
+        <div class="detail-card reveal delay-3">
+          <h3>Automated Delivery</h3>
+          <p>
+            As credits mint and match contract specifications, they&rsquo;re
+            automatically allocated to active forward contracts. Partial
+            deliveries tracked with real-time progress reporting.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Impact Visualization -->
+  <section class="section">
+    <h2 class="section-title reveal">Impact Visualization</h2>
+    <p class="section-subtitle reveal delay-1">
+      Embeddable widgets showcase your carbon offset achievements to stakeholders.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>Live Power Meter</h3>
+        <p>
+          Animated gauge showing real-time CO&#8322;e offset rate. Configurable
+          units, color themes, and branding. Responsive design for any viewport.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>Retirement Counter</h3>
+        <p>
+          Running total of retired credits with animated counting transitions.
+          Breakdowns by source type, vintage, and methodology. Public
+          verification link embedded.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>Leaderboard</h3>
+        <p>
+          Opt-in public leaderboard ranking organizations by verified offsets.
+          Categories by industry sector, geography, and total volume.
+          Badges for milestones.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-4">
+        <h3>Embed Code</h3>
+        <p>
+          One-line script tag to embed any widget on your corporate site.
+          Customizable via CSS variables matching your brand colors. Zero
+          dependencies, under 15KB gzipped.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Pricing &amp; Fees</h2>
+      <p class="section-subtitle reveal delay-1">
+        Transparent fees aligned with transaction value.
+      </p>
+
+      <div style="max-width: 700px; margin: 0 auto;">
+        <table class="info-table reveal">
+          <thead>
+            <tr>
+              <th>Fee</th>
+              <th>Amount</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Listing / Trade Fee</td><td><strong>0.5%</strong></td><td>Charged to seller on each completed trade</td></tr>
+            <tr><td>Retirement Fee</td><td><strong>$0.10</strong></td><td>Per credit retired; covers certificate generation + registry sync</td></tr>
+            <tr><td>Forward Contracts</td><td><strong>Included</strong></td><td>No surcharge; standard trade fee applies at delivery</td></tr>
+            <tr><td>API / Widgets</td><td><strong>Free</strong></td><td>Included with marketplace account</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Get Started -->
+  <section class="section" style="text-align: center;">
+    <h2 class="section-title reveal">Get Started</h2>
+    <p class="section-subtitle reveal delay-1">
+      Create an account to start buying, or explore with the demo console.
+    </p>
+    <div class="reveal delay-2">
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-primary" style="margin-right: 0.75rem;">Try Demo Console</a>
+      <a href="/for-buyers" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">Buyer Guide</a>
+    </div>
+  </section>
+
+</Base>

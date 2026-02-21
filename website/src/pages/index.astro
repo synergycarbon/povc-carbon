@@ -4,21 +4,6 @@ import Base from '../layouts/Base.astro';
 
 <Base title="Home">
 
-  <!-- ===== Sticky Navigation ===== -->
-  <nav class="nav">
-    <a href="#" class="nav-brand">
-      <img src="/brand/synergy-carbon-logo.svg" alt="" />
-      SynergyCarbon
-    </a>
-    <ul class="nav-links">
-      <li><a href="#how-it-works">How It Works</a></li>
-      <li><a href="#features">Features</a></li>
-      <li><a href="#why">Why Us</a></li>
-      <li><a href="#get-started">Get Started</a></li>
-      <li><a href="https://console.synergycarbon.io?demo=true" class="nav-cta">Try Demo</a></li>
-    </ul>
-  </nav>
-
   <!-- ===== Hero ===== -->
   <header class="hero">
     <h1>Proof-of-Verified-Carbon</h1>
@@ -27,7 +12,7 @@ import Base from '../layouts/Base.astro';
       Every tonne CO2e is witnessed, verified, and traceable &mdash; from source to retirement.
     </p>
     <div class="hero-buttons">
-      <a href="#how-it-works" class="btn-primary">How It Works</a>
+      <a href="/how-it-works" class="btn-primary">How It Works</a>
       <a href="https://console.synergycarbon.io?demo=true" class="btn-outline">Try Demo Console</a>
     </div>
   </header>
@@ -114,7 +99,6 @@ import Base from '../layouts/Base.astro';
       </p>
 
       <div class="features-grid">
-        <!-- Dashboard -->
         <div class="feature-row">
           <div class="feature-text reveal-left">
             <h3>Real-Time Dashboard</h3>
@@ -134,7 +118,6 @@ import Base from '../layouts/Base.astro';
           </div>
         </div>
 
-        <!-- Marketplace -->
         <div class="feature-row reverse">
           <div class="feature-text reveal-right">
             <h3>Carbon Credit Marketplace</h3>
@@ -154,7 +137,6 @@ import Base from '../layouts/Base.astro';
           </div>
         </div>
 
-        <!-- Impact Dashboard -->
         <div class="feature-row">
           <div class="feature-text reveal-left">
             <h3>Impact Dashboard &amp; Certificates</h3>
@@ -174,7 +156,6 @@ import Base from '../layouts/Base.astro';
           </div>
         </div>
 
-        <!-- Credit Registry -->
         <div class="feature-row reverse">
           <div class="feature-text reveal-right">
             <h3>Transparent Credit Registry</h3>
@@ -360,55 +341,10 @@ import Base from '../layouts/Base.astro';
       <a href="https://console.synergycarbon.io?demo=true" class="btn-primary" style="margin-right: 0.75rem;">
         Try Demo Console
       </a>
-      <a href="https://github.com/synergycarbon/povc-carbon/blob/main/api/README.md" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">
-        View B2B API Docs
+      <a href="/api" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">
+        View API Docs
       </a>
     </div>
   </section>
-
-  <!-- ===== Footer ===== -->
-  <footer class="footer">
-    <div class="footer-inner">
-      <div class="footer-brand">
-        <a href="#" class="nav-brand" style="color: white;">
-          <img src="/brand/synergy-carbon-logo.svg" alt="" style="height: 24px; filter: brightness(10);" />
-          SynergyCarbon
-        </a>
-        <p>
-          Transparent, verifiable carbon credits. Every tonne witnessed, verified, and
-          traceable from source to retirement.
-        </p>
-      </div>
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <ul>
-          <li><a href="#how-it-works">How It Works</a></li>
-          <li><a href="#features">Features</a></li>
-          <li><a href="https://console.synergycarbon.io?demo=true">Demo Console</a></li>
-          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/api/openapi.yaml">API Spec</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Resources</h4>
-        <ul>
-          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/api/README.md">B2B API Docs</a></li>
-          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/docs/DESIGN.md">Design Document</a></li>
-          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/hardware/WITNESS_NODE_SPEC.md">Hardware Spec</a></li>
-          <li><a href="#get-started">Integration Guide</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Community</h4>
-        <ul>
-          <li><a href="https://github.com/synergycarbon">GitHub</a></li>
-          <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/docs/specs/governance/SPEC.md">Governance</a></li>
-          <li><a href="https://estream.dev">eStream Network</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      &copy; 2026 SynergyCarbon Inc. All rights reserved. Built on the eStream network.
-    </div>
-  </footer>
 
 </Base>

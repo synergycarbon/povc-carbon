@@ -1,0 +1,198 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="For Developers" description="Integrate your energy generation assets with the SynergyCarbon PoVC platform. Deploy witness nodes and start minting verified credits.">
+
+  <header class="page-hero">
+    <h1>For Project Developers</h1>
+    <p>
+      Deploy witness hardware, select methodologies, and start minting
+      verified carbon credits from your energy assets.
+    </p>
+  </header>
+
+  <!-- Onboarding Timeline -->
+  <section class="section">
+    <h2 class="section-title reveal">Onboarding Timeline</h2>
+    <p class="section-subtitle reveal delay-1">
+      From registration to live minting in under 30 days.
+    </p>
+
+    <div class="timeline">
+      <div class="timeline-item reveal delay-1">
+        <div class="timeline-dot">1</div>
+        <h3>Register &amp; Authenticate</h3>
+        <p>
+          Complete SPARK visual challenge authentication. Receive your ML-DSA-87
+          key pair, tenant ID, and console credentials. Configure branding.yaml.
+        </p>
+        <span class="timeline-duration">Day 1</span>
+      </div>
+      <div class="timeline-item reveal delay-2">
+        <div class="timeline-dot">2</div>
+        <h3>Site Assessment</h3>
+        <p>
+          We evaluate your generation assets, sensor infrastructure, and connectivity.
+          Optimal witness node placement and sampling configuration recommended.
+        </p>
+        <span class="timeline-duration">Day 2&ndash;5</span>
+      </div>
+      <div class="timeline-item reveal delay-3">
+        <div class="timeline-dot">3</div>
+        <h3>Deploy Witness Nodes</h3>
+        <p>
+          Install Universal Witness Node adapters at each generation site. Configure
+          sensor endpoints (Modbus RTU/TCP, OPC-UA, or analog 4-20mA) and register
+          nodes through governance.
+        </p>
+        <span class="timeline-duration">Week 1&ndash;2</span>
+      </div>
+      <div class="timeline-item reveal delay-4">
+        <div class="timeline-dot">4</div>
+        <h3>Select Methodology &amp; Validate</h3>
+        <p>
+          Choose from 7 pre-approved methodologies. Run validation attestations to
+          confirm data quality. Establish quorum consensus across your witness network.
+        </p>
+        <span class="timeline-duration">Week 2&ndash;3</span>
+      </div>
+      <div class="timeline-item reveal delay-5">
+        <div class="timeline-dot">5</div>
+        <h3>Go Live</h3>
+        <p>
+          Credits mint automatically as attestations verify. Configure marketplace
+          listings, forward contract terms, and automated retirement triggers.
+        </p>
+        <span class="timeline-duration">Week 4+</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Supported Energy Sources -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Supported Energy Sources</h2>
+      <p class="section-subtitle reveal delay-1">
+        Five source types with optimized witness configurations and yield models.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-card reveal delay-1">
+          <h3>Solar PV</h3>
+          <p>
+            Irradiance sensors + inverter output. Typical yield: 0.4&ndash;0.8 tCO&#8322;e/MWh
+            depending on grid displacement factor. Supports fixed, tracking, and bifacial.
+          </p>
+          <span class="badge" style="margin-top: 0.75rem;">Est. $8&ndash;16/MWh revenue</span>
+        </div>
+        <div class="detail-card reveal delay-2">
+          <h3>Wind</h3>
+          <p>
+            Turbine SCADA integration via OPC-UA. Yield: 0.3&ndash;0.7 tCO&#8322;e/MWh.
+            Supports onshore and offshore, individual turbine or farm-level monitoring.
+          </p>
+          <span class="badge" style="margin-top: 0.75rem;">Est. $6&ndash;14/MWh revenue</span>
+        </div>
+        <div class="detail-card reveal delay-3">
+          <h3>Biogas</h3>
+          <p>
+            Flow meters on digesters and generators. Yield: 0.5&ndash;1.2 tCO&#8322;e/MWh
+            including methane capture credit. Landfill, agricultural, and wastewater.
+          </p>
+          <span class="badge" style="margin-top: 0.75rem;">Est. $10&ndash;24/MWh revenue</span>
+        </div>
+        <div class="detail-card reveal delay-4">
+          <h3>Thermoelectric (ThermogenZero)</h3>
+          <p>
+            TEG output monitoring via Modbus. Waste heat recovery from industrial
+            processes. First customer integration with full deployment support.
+          </p>
+          <span class="badge" style="margin-top: 0.75rem;">Est. $12&ndash;28/MWh revenue</span>
+        </div>
+        <div class="detail-card reveal delay-5">
+          <h3>Carbon Capture &amp; Storage</h3>
+          <p>
+            CO&#8322; mass flow meters on capture trains. Direct measurement of captured
+            tonnes. Supports post-combustion, pre-combustion, and direct air capture.
+          </p>
+          <span class="badge" style="margin-top: 0.75rem;">Est. $50&ndash;120/tCO&#8322;e revenue</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Witness Node Deployment -->
+  <section class="section">
+    <h2 class="section-title reveal">Witness Node Deployment</h2>
+    <p class="section-subtitle reveal delay-1">
+      Universal hardware adapter for any energy generation site.
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-card reveal delay-1">
+        <h3>Hardware Requirements</h3>
+        <p>
+          ARM Cortex-M33 with secure enclave, tamper-evident housing, Ethernet
+          or LTE-M connectivity. Power: 5W typical. Operating range: -40&deg;C to 85&deg;C.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-2">
+        <h3>Sensor Protocols</h3>
+        <p>
+          Modbus RTU (RS-485), Modbus TCP, OPC-UA, analog 4-20mA. Custom protocol
+          adapters available through the SDK. Sampling rate: 1s to 60s configurable.
+        </p>
+      </div>
+      <div class="detail-card reveal delay-3">
+        <h3>Security Model</h3>
+        <p>
+          ML-DSA-87 key generation on first boot. Keys stored in secure enclave,
+          never exported. Firmware updates require signed packages. Anti-rollback protection.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Methodology Selection Guide -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <h2 class="section-title reveal">Methodology Selection Guide</h2>
+      <p class="section-subtitle reveal delay-1">
+        Match your source type to the optimal carbon accounting methodology.
+      </p>
+
+      <div style="max-width: 800px; margin: 0 auto;">
+        <table class="info-table reveal">
+          <thead>
+            <tr>
+              <th>Source Type</th>
+              <th>Recommended Methodology</th>
+              <th>Registry</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Solar / Wind</td><td>CDM ACM0001</td><td>CDM, Verra VCS</td></tr>
+            <tr><td>Biogas (landfill)</td><td>VCS AMS-III-H</td><td>Verra VCS</td></tr>
+            <tr><td>Biogas (agricultural)</td><td>Gold Standard</td><td>Gold Standard</td></tr>
+            <tr><td>Thermoelectric</td><td>EPA AP-42 + IPCC AR5</td><td>Verra VCS, ISCC</td></tr>
+            <tr><td>CCS</td><td>CDM ACM0001 + IPCC AR5</td><td>CDM, Verra VCS</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section" style="text-align: center;">
+    <h2 class="section-title reveal">Start Building</h2>
+    <p class="section-subtitle reveal delay-1">
+      Explore the API, deploy your first witness node, or try the demo console.
+    </p>
+    <div class="reveal delay-2">
+      <a href="/api" class="btn-primary" style="margin-right: 0.75rem;">API Reference</a>
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">Try Demo</a>
+    </div>
+  </section>
+
+</Base>

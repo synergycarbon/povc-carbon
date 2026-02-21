@@ -23,9 +23,68 @@ const { title, description = 'Proof-of-Verified-Carbon — transparent, verifiab
     </style>
   </head>
   <body>
+    <nav class="nav">
+      <a href="/" class="nav-brand">
+        <img src="/brand/synergy-carbon-logo.svg" alt="" />
+        SynergyCarbon
+      </a>
+      <ul class="nav-links">
+        <li><a href="/how-it-works">How It Works</a></li>
+        <li><a href="/technology">Technology</a></li>
+        <li><a href="/marketplace">Marketplace</a></li>
+        <li><a href="/for-developers">Developers</a></li>
+        <li><a href="/about">About</a></li>
+        <li><a href="https://console.synergycarbon.io?demo=true" class="nav-cta">Try Demo</a></li>
+      </ul>
+    </nav>
+
     <slot />
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <a href="/" class="nav-brand" style="color: white;">
+            <img src="/brand/synergy-carbon-logo.svg" alt="" style="height: 24px; filter: brightness(10);" />
+            SynergyCarbon
+          </a>
+          <p>
+            Transparent, verifiable carbon credits. Every tonne witnessed, verified,
+            and traceable from source to retirement.
+          </p>
+        </div>
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <ul>
+            <li><a href="/how-it-works">How It Works</a></li>
+            <li><a href="/technology">Technology</a></li>
+            <li><a href="/marketplace">Marketplace</a></li>
+            <li><a href="https://console.synergycarbon.io?demo=true">Demo Console</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="/for-developers">For Developers</a></li>
+            <li><a href="/for-buyers">For Buyers</a></li>
+            <li><a href="/api">API Reference</a></li>
+            <li><a href="https://github.com/synergycarbon/povc-carbon">GitHub</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="/about">About</a></li>
+            <li><a href="https://estream.dev">eStream Network</a></li>
+            <li><a href="https://github.com/synergycarbon/povc-carbon/blob/main/docs/specs/governance/SPEC.md">Governance</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        &copy; 2026 SynergyCarbon Inc. All rights reserved. Built on the eStream network.
+      </div>
+    </footer>
+
     <script>
-      // Scroll-triggered reveal animations
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
@@ -41,7 +100,6 @@ const { title, description = 'Proof-of-Verified-Carbon — transparent, verifiab
         observer.observe(el);
       });
 
-      // Sticky nav scroll effect
       const nav = document.querySelector('.nav');
       if (nav) {
         window.addEventListener('scroll', () => {
@@ -49,7 +107,6 @@ const { title, description = 'Proof-of-Verified-Carbon — transparent, verifiab
         });
       }
 
-      // Animated counter for stats
       function animateCounter(el) {
         const target = parseInt(el.dataset.target, 10);
         if (isNaN(target)) return;

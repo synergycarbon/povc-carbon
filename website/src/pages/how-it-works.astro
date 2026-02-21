@@ -1,0 +1,242 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="How It Works" description="Learn how Proof-of-Verified-Carbon transforms raw energy data into verified, tradeable carbon credits in four cryptographic steps.">
+
+  <header class="page-hero">
+    <h1>How PoVC Works</h1>
+    <p>
+      Four cryptographically-linked steps transform raw energy measurements
+      into verified, tradeable carbon credits.
+    </p>
+  </header>
+
+  <!-- Step 1: Witness -->
+  <section class="section">
+    <div class="step-detail reveal">
+      <div class="step-number-lg">1</div>
+      <h2>Witness</h2>
+      <p class="section-subtitle" style="text-align: left; margin: 0 0 2rem;">
+        Edge hardware nodes sample energy generation with cryptographic attestation
+        every epoch. Data integrity is guaranteed at the physical layer.
+      </p>
+      <div class="detail-grid">
+        <div class="detail-card">
+          <h3>Hardware Node Specs</h3>
+          <p>
+            ARM Cortex-M33 secure enclave with tamper-evident seals. Supports
+            Modbus RTU/TCP, OPC-UA, and analog 4-20mA inputs. Sampling rate
+            configurable from 1s to 60s intervals. Power: 5W typical.
+            Operating range: -40&deg;C to 85&deg;C.
+          </p>
+        </div>
+        <div class="detail-card">
+          <h3>ML-DSA-87 Attestation</h3>
+          <p>
+            Every measurement batch is signed with NIST post-quantum ML-DSA-87
+            (Dilithium) signatures. Key material never leaves the secure enclave.
+            Attestations include timestamp, node ID, GPS coordinates, and raw
+            sensor readings.
+          </p>
+        </div>
+        <div class="detail-card">
+          <h3>Source Types</h3>
+          <p>
+            Solar PV (irradiance + inverter output), wind (turbine SCADA),
+            biogas (flow meters), thermoelectric (ThermogenZero TEG output),
+            and CCS (CO&#8322; capture mass flow).
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 2: Verify -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <div class="step-detail reveal">
+        <div class="step-number-lg">2</div>
+        <h2>Verify</h2>
+        <p class="section-subtitle" style="text-align: left; margin: 0 0 2rem;">
+          The PoVCR Verifier validates quorum consensus, checks post-quantum
+          signatures, and calculates carbon yield.
+        </p>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <h3>Quorum Consensus (3-of-5)</h3>
+            <p>
+              Independent witness nodes must agree on energy measurements within
+              configurable tolerance bands. A 3-of-5 threshold ensures no single
+              point of failure or collusion. Dissenting nodes trigger anomaly
+              investigation.
+            </p>
+          </div>
+          <div class="detail-card">
+            <h3>Signature Verification</h3>
+            <p>
+              Post-quantum ML-DSA-87 signatures from each witness node are verified
+              independently. Cross-referenced against the governance-maintained node
+              registry to prevent spoofing. Invalid signatures trigger immediate alerts.
+            </p>
+          </div>
+          <div class="detail-card">
+            <h3>Carbon Yield Calculation</h3>
+            <p>
+              Verified energy data is converted to tCO&#8322;e using the selected
+              methodology&rsquo;s emission factors. Uncertainty bands are calculated
+              and propagated through the verification chain. Conservative estimates
+              apply at each stage.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 3: Mint -->
+  <section class="section">
+    <div class="step-detail reveal">
+      <div class="step-number-lg">3</div>
+      <h2>Mint</h2>
+      <p class="section-subtitle" style="text-align: left; margin: 0 0 2rem;">
+        Verified attestations become carbon credit NFTs with full provenance
+        chain, serial numbers, and visibility-tiered metadata.
+      </p>
+      <div class="detail-grid">
+        <div class="detail-card">
+          <h3>NFT Credit Structure</h3>
+          <p>
+            Each credit is a unique NFT containing: source type, generation period,
+            methodology ID, tCO&#8322;e quantity, witness quorum attestation hashes,
+            and verification proof. Immutable once minted.
+          </p>
+        </div>
+        <div class="detail-card">
+          <h3>Serial Numbers</h3>
+          <p>
+            Credits receive globally unique serial numbers compatible with Verra VCS,
+            Gold Standard, CDM, and ISCC registries. Cross-registry deduplication
+            prevents double-counting at the protocol level.
+          </p>
+        </div>
+        <div class="detail-card">
+          <h3>Visibility Tiers</h3>
+          <p>
+            Four metadata tiers: <strong>public</strong> (serial, vintage, type),
+            <strong>buyer</strong> (provenance chain), <strong>auditor</strong> (raw
+            attestation data), and <strong>admin</strong> (node telemetry). RBAC-enforced.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 4: Trade & Retire -->
+  <section class="section-surface">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <div class="step-detail reveal">
+        <div class="step-number-lg">4</div>
+        <h2>Trade &amp; Retire</h2>
+        <p class="section-subtitle" style="text-align: left; margin: 0 0 2rem;">
+          Credits trade on the marketplace or via forward contracts.
+          Retirement is permanent and cross-registry synchronized.
+        </p>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <h3>Marketplace Trading</h3>
+            <p>
+              Spot trading with order-book matching. Filter by source type, vintage,
+              methodology, and registry. Escrow-protected settlement with 0.5%
+              trade fee. Smart matching suggests optimal counterparties.
+            </p>
+          </div>
+          <div class="detail-card">
+            <h3>Forward Contracts</h3>
+            <p>
+              Lock in future supply with 9-state FSM contracts: draft, proposed,
+              accepted, active, delivering, fulfilled, disputed, cancelled, expired.
+              AI-powered pricing oracle for fair valuation.
+            </p>
+          </div>
+          <div class="detail-card">
+            <h3>Retirement &amp; Certificates</h3>
+            <p>
+              Permanent retirement with verifiable certificates and QR-code
+              verification. Cross-registry retirement sync to Verra, Gold Standard,
+              and CDM. $0.10 retirement fee per credit.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Methodologies -->
+  <section class="section-dark">
+    <div style="max-width: 1100px; margin: 0 auto;">
+      <h2 class="section-title reveal">Approved Methodologies</h2>
+      <p class="section-subtitle reveal delay-1">
+        Seven pre-approved calculation methodologies ensure carbon yields
+        meet international standards.
+      </p>
+      <div class="advantages-grid">
+        <div class="advantage-card reveal delay-1">
+          <h3>EPA AP-42</h3>
+          <p>
+            US EPA emission factors for stationary combustion sources.
+            Industry-standard baseline calculations for domestic projects.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-2">
+          <h3>IPCC AR5</h3>
+          <p>
+            Intergovernmental Panel on Climate Change Fifth Assessment global
+            warming potentials and emission factors for international comparability.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-3">
+          <h3>VCS AMS-III-H</h3>
+          <p>
+            Verra Verified Carbon Standard methodology for methane recovery
+            in wastewater treatment. Approved for biogas projects.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-4">
+          <h3>Gold Standard</h3>
+          <p>
+            Gold Standard for the Global Goals certification with sustainable
+            development co-benefit tracking and verification.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-5">
+          <h3>CDM ACM0001</h3>
+          <p>
+            Clean Development Mechanism consolidated methodology for
+            grid-connected electricity generation from renewable sources.
+          </p>
+        </div>
+        <div class="advantage-card reveal delay-1">
+          <h3>Custom Methodologies</h3>
+          <p>
+            Propose new methodologies through the governance circuit.
+            Peer review, voting, and approval via SmartCircuit execution.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section" style="text-align: center;">
+    <h2 class="section-title reveal">Ready to Get Started?</h2>
+    <p class="section-subtitle reveal delay-1">
+      Deploy witness nodes and start minting verified carbon credits in weeks.
+    </p>
+    <div class="reveal delay-2">
+      <a href="/for-developers" class="btn-primary" style="margin-right: 0.75rem;">Developer Guide</a>
+      <a href="https://console.synergycarbon.io?demo=true" class="btn-outline" style="color: var(--sc-primary-dark); border-color: var(--sc-primary-dark);">Try Demo</a>
+    </div>
+  </section>
+
+</Base>
