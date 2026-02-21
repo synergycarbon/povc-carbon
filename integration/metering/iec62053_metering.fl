@@ -1,0 +1,354 @@
+// IEC 62053 Energy Metering Validation Circuit
+// Validates IEC 62053-21 (active energy) and IEC 62053-22 (static meters)
+// compliant telemetry for PoVC attestation in the SC verification pipeline.
+//
+// Lex: esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+//   └── sub_lex project fan_in → verification/
+//       Only VALIDATED_METERING, COMPLIANCE flow up; RAW_METER stays local
+//
+// Accuracy classes per IEC 62053:
+//   0.2S — Revenue-grade (custody transfer, PPA settlement)
+//   0.5S — Billing-grade (commercial sub-metering)
+//   1.0  — Monitoring-grade (operational telemetry)
+//   2.0  — Indicative (non-revenue informational)
+//
+// Depends on: eStream IEC 62053 circuits (polyquantum/estream-io #145)
+// Closes: synergycarbon/povc-carbon #79, #70
+
+type MeterId = bytes(32)
+type CalibrationCertId = bytes(32)
+
+type AccuracyClass = u8
+// 0 = CLASS_02S (0.2S revenue)
+// 1 = CLASS_05S (0.5S billing)
+// 2 = CLASS_10  (1.0 monitoring)
+// 3 = CLASS_20  (2.0 indicative)
+
+type MeterType = u8
+// 0 = IEC_62053_21 (active energy, electromechanical)
+// 1 = IEC_62053_22 (active energy, static)
+
+type MeterReading = struct {
+    meter_id: MeterId,
+    meter_type: MeterType,
+    accuracy_class: AccuracyClass,
+    voltage_v: u64,           // millivolts (e.g. 240000 = 240V)
+    current_ma: u64,          // milliamps
+    active_power_mw: u64,     // milliwatts
+    reactive_power_mvar: u64, // milli-VAR
+    apparent_power_mva: u64,  // milli-VA
+    power_factor_pct: u16,    // 0-10000 (0.00-100.00%)
+    frequency_mhz: u32,      // milli-Hz (e.g. 60000 = 60Hz)
+    energy_wh: u64,           // cumulative watt-hours
+    timestamp: u64,
+    site_id: bytes(32),
+    hardware_attestation: bytes(64),
+}
+
+type CalibrationCertificate = struct {
+    cert_id: CalibrationCertId,
+    meter_id: MeterId,
+    accuracy_class: AccuracyClass,
+    calibration_lab_id: bytes(32),
+    calibrated_at: u64,
+    expires_at: u64,
+    se050_attestation: bytes(64),   // SE050 secure element signature
+    error_pct_at_5: u16,           // error % at 5% load (basis points)
+    error_pct_at_20: u16,          // error % at 20% load
+    error_pct_at_100: u16,         // error % at 100% load
+    error_pct_at_120: u16,         // error % at 120% load
+    temperature_range_min_c: i16,
+    temperature_range_max_c: i16,
+}
+
+type MeteringValidationResult = struct {
+    validation_id: bytes(32),
+    meter_id: MeterId,
+    accuracy_class: AccuracyClass,
+    accuracy_valid: bool,
+    calibration_valid: bool,
+    power_factor_valid: bool,
+    tamper_detected: bool,
+    energy_wh_validated: u64,
+    compliance_flags: u32,       // bit 0: accuracy, bit 1: calibration, bit 2: pf, bit 3: tamper-free
+    validated_at: u64,
+}
+
+type TamperEvent = struct {
+    event_id: bytes(32),
+    meter_id: MeterId,
+    tamper_type: u8,            // 0=magnetic, 1=cover_open, 2=bypass, 3=reverse_flow, 4=clock_drift
+    severity: u8,               // 0=info, 1=warning, 2=critical
+    detected_at: u64,
+    evidence_hash: bytes(32),
+}
+
+type MeteringEdge = struct {
+    edge_id: bytes(16),
+    edge_type: u8,              // 0=reads, 1=validates, 2=calibrates, 3=tamper_flags
+    source_id: bytes(32),
+    target_id: bytes(32),
+    created_at: u64,
+}
+
+state_machine metering_validation_lifecycle {
+    initial RECEIVED
+    persistence wal
+    terminal [VALIDATED, REJECTED, QUARANTINED]
+    li_anomaly_detection true
+
+    RECEIVED -> ACCURACY_CHECKED when accuracy_class_verified
+    RECEIVED -> REJECTED when accuracy_class_invalid
+    ACCURACY_CHECKED -> CALIBRATION_CHECKED when calibration_verified
+    ACCURACY_CHECKED -> REJECTED when calibration_expired
+    CALIBRATION_CHECKED -> PF_CHECKED when power_factor_validated
+    CALIBRATION_CHECKED -> REJECTED when power_factor_out_of_range
+    PF_CHECKED -> VALIDATED when tamper_check_passed guard compliance_flags == 0x0F
+    PF_CHECKED -> QUARANTINED when tamper_detected
+}
+
+dag iec62053_metering {
+    node MeterReading
+    node CalibrationCertificate
+    node MeteringValidationResult
+    node TamperEvent
+    edge MeteringEdge
+    overlay metering_status: u8 curate delta_curate
+    overlay accuracy_deviation: u64 bitmask delta_curate
+    overlay calibration_health: u8 curate delta_curate
+    overlay tamper_score: u64 bitmask delta_curate
+    overlay power_factor_band: u8 curate delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed metering_anomaly
+    ai_feed calibration_drift
+    observe iec62053_metering: [metering_status, accuracy_deviation, calibration_health, tamper_score] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series metering_chain: iec62053_metering
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// ---------------------------------------------------------------------------
+// Accuracy Class Validation
+// ---------------------------------------------------------------------------
+// IEC 62053-21/22 defines maximum permissible percentage errors at
+// various load points. This circuit validates that the meter's reported
+// calibration errors fall within the allowed bounds for its accuracy class.
+
+circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: CalibrationCertificate, pk: bytes(1568)) -> MeteringValidationResult
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053 {
+        governance hierarchical
+        approval_required true
+        audit_trail true
+        sovereignty us
+        compliance [iec_62053_21, iec_62053_22, epa_ghg, iso_14064]
+    }
+    precision A
+    constant_time true
+    witness threshold(3, 5)
+    rbac [metering_operator, verifier, registry_admin]
+    observe metrics: [meter_id, accuracy_class, accuracy_valid, power_factor_pct, tamper_detected]
+    invariant "reading_positive" { reading.active_power_mw > 0 }
+    invariant "meter_match" { reading.meter_id == cert.meter_id }
+    invariant "class_match" { reading.accuracy_class == cert.accuracy_class }
+    monitor "accuracy_rejection_rate" { accuracy_reject_rate < 0.05 }
+    fuzz_target
+    esz_emit "verify/iec62053_metering.esz"
+    li_feed full_escir true, optimized_ir true
+{
+    let reading_hash = sha3_256(reading.meter_id ++ reading.energy_wh ++ reading.timestamp)
+    let hw_valid = mldsa_verify(reading_hash, reading.hardware_attestation, reading.meter_id)
+    let kem = mlkem_encaps(pk)
+
+    // Accuracy class error limits (basis points): [5% load, 20% load, 100% load, 120% load]
+    // Class 0.2S: ±0.4%, ±0.2%, ±0.2%, ±0.2%  → [40, 20, 20, 20]
+    // Class 0.5S: ±1.0%, ±0.5%, ±0.5%, ±0.5%  → [100, 50, 50, 50]
+    // Class 1.0:  ±2.0%, ±1.0%, ±1.0%, ±1.5%  → [200, 100, 100, 150]
+    // Class 2.0:  ±4.0%, ±2.0%, ±2.0%, ±3.0%  → [400, 200, 200, 300]
+    let max_error_5 = accuracy_limit(reading.accuracy_class, 0)
+    let max_error_20 = accuracy_limit(reading.accuracy_class, 1)
+    let max_error_100 = accuracy_limit(reading.accuracy_class, 2)
+    let max_error_120 = accuracy_limit(reading.accuracy_class, 3)
+
+    let accuracy_valid = cert.error_pct_at_5 <= max_error_5
+        && cert.error_pct_at_20 <= max_error_20
+        && cert.error_pct_at_100 <= max_error_100
+        && cert.error_pct_at_120 <= max_error_120
+
+    // Calibration certificate validity: SE050 attestation + expiry
+    let cert_hash = sha3_256(cert.cert_id ++ cert.meter_id ++ cert.calibrated_at)
+    let cert_sig_valid = mldsa_verify(cert_hash, cert.se050_attestation, cert.calibration_lab_id)
+    let calibration_valid = cert_sig_valid && cert.expires_at > now()
+
+    // Power factor validation: cos(φ) must be ≥ 0.50 (50.00%) for valid metering
+    // Revenue metering (0.2S) requires ≥ 0.80 (80.00%)
+    let pf_threshold = power_factor_threshold(reading.accuracy_class)
+    let power_factor_valid = reading.power_factor_pct >= pf_threshold
+
+    // Apparent power consistency check: S² ≈ P² + Q²
+    // Detects tamper via inconsistent power triangle
+    let p_sq = reading.active_power_mw * reading.active_power_mw
+    let q_sq = reading.reactive_power_mvar * reading.reactive_power_mvar
+    let s_sq = reading.apparent_power_mva * reading.apparent_power_mva
+    let pq_sum = p_sq + q_sq
+    let triangle_error = abs_diff(s_sq, pq_sum)
+    let triangle_tolerance = s_sq / 100  // 1% tolerance
+    let tamper_detected = triangle_error > triangle_tolerance
+
+    let anomaly = streamsight_anomaly(reading_hash)
+
+    // Compliance flags: bit 0 = accuracy, bit 1 = calibration, bit 2 = power_factor, bit 3 = tamper-free
+    let flags = 0
+    if accuracy_valid { flags = flags | 0x01 }
+    if calibration_valid { flags = flags | 0x02 }
+    if power_factor_valid { flags = flags | 0x04 }
+    if !tamper_detected { flags = flags | 0x08 }
+
+    let validation_id = sha3_256(reading.meter_id ++ reading.timestamp ++ flags)
+
+    store("metering_validations", validation_id, validation_id)
+
+    MeteringValidationResult {
+        validation_id: validation_id,
+        meter_id: reading.meter_id,
+        accuracy_class: reading.accuracy_class,
+        accuracy_valid: accuracy_valid,
+        calibration_valid: calibration_valid,
+        power_factor_valid: power_factor_valid,
+        tamper_detected: tamper_detected,
+        energy_wh_validated: reading.energy_wh,
+        compliance_flags: flags,
+        validated_at: now(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Calibration Certificate Registration
+// ---------------------------------------------------------------------------
+
+circuit register_calibration_cert(dag_id: bytes(32), cert: CalibrationCertificate) -> CalibrationCertId
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision C
+    povc true
+    rbac [registry_admin, calibration_authority]
+    observe metrics: [cert_id, meter_id, accuracy_class, calibrated_at, expires_at]
+    invariant "cert_not_expired" { cert.expires_at > now() }
+    invariant "se050_signed" { cert.se050_attestation != 0x00 }
+{
+    let cert_valid = mldsa_verify(
+        sha3_256(cert.cert_id ++ cert.meter_id ++ cert.calibrated_at),
+        cert.se050_attestation,
+        cert.calibration_lab_id
+    )
+    store("calibration_certs", cert.meter_id, cert)
+    cert.cert_id
+}
+
+// ---------------------------------------------------------------------------
+// Tamper Detection
+// ---------------------------------------------------------------------------
+
+circuit record_tamper_event(dag_id: bytes(32), event: TamperEvent) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    povc true
+    rbac [metering_operator, verifier, registry_admin]
+    observe metrics: [event_id, meter_id, tamper_type, severity]
+{
+    store("tamper_events", event.event_id, event)
+    // Quarantine the meter: all subsequent readings rejected until re-calibration
+    store("quarantined_meters", event.meter_id, event.detected_at)
+    event.event_id
+}
+
+// ---------------------------------------------------------------------------
+// Forward Validated Metering to Verification Pipeline
+// ---------------------------------------------------------------------------
+
+circuit forward_metering_to_pipeline(dag_id: bytes(32), validation: MeteringValidationResult, reading: MeterReading, pipeline_dag_id: bytes(32)) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+    precision A
+    witness threshold(2, 3)
+    rbac [metering_operator, verifier]
+    observe metrics: [validation_id, meter_id, energy_wh_validated, compliance_flags]
+    invariant "fully_compliant" { validation.compliance_flags == 0x0F }
+    critical_path
+{
+    publish("sc.metering.iec62053.validated", validation)
+    validation.validation_id
+}
+
+// ---------------------------------------------------------------------------
+// Helper Lookups
+// ---------------------------------------------------------------------------
+// Accuracy error limits in basis points per IEC 62053-21/22
+// Returns the maximum permissible error for a given class and load point.
+
+circuit accuracy_limit(class: AccuracyClass, load_point: u8) -> u16
+    precision C
+    constant_time true
+{
+    // load_point: 0=5%, 1=20%, 2=100%, 3=120%
+    if class == 0 {  // 0.2S
+        if load_point == 0 { 40 }
+        else { 20 }
+    } else if class == 1 {  // 0.5S
+        if load_point == 0 { 100 }
+        else { 50 }
+    } else if class == 2 {  // 1.0
+        if load_point == 0 { 200 }
+        else if load_point == 3 { 150 }
+        else { 100 }
+    } else {  // 2.0
+        if load_point == 0 { 400 }
+        else if load_point == 3 { 300 }
+        else { 200 }
+    }
+}
+
+// Power factor threshold per accuracy class (basis points of cos φ)
+
+circuit power_factor_threshold(class: AccuracyClass) -> u16
+    precision C
+    constant_time true
+{
+    if class == 0 { 8000 }      // 0.2S: cos φ ≥ 0.80
+    else if class == 1 { 5000 } // 0.5S: cos φ ≥ 0.50
+    else if class == 2 { 5000 } // 1.0:  cos φ ≥ 0.50
+    else { 2000 }               // 2.0:  cos φ ≥ 0.20
+}
+
+circuit abs_diff(a: u64, b: u64) -> u64
+    precision C
+    constant_time true
+{
+    if a > b { a - b }
+    else { b - a }
+}
+
+// ---------------------------------------------------------------------------
+// Streams
+// ---------------------------------------------------------------------------
+
+stream metering_validation_events: event<MeteringValidationResult>
+    retention 99y
+    consumers [verification_pipeline, registry, audit, compliance, streamsight]
+    classify energy_wh_validated: VERIFIED_DATA, accuracy_class: METADATA, compliance_flags: COMPLIANCE
+
+stream calibration_events: event<CalibrationCertificate>
+    retention 99y
+    consumers [registry, audit, streamsight]
+    classify cert_id: METADATA, accuracy_class: METADATA, meter_id: METADATA
+
+stream tamper_events: event<TamperEvent>
+    retention 99y
+    consumers [compliance, audit, governance, streamsight]
+    classify meter_id: METADATA, tamper_type: COMPLIANCE, severity: COMPLIANCE

@@ -221,3 +221,63 @@ stream audit_trail: event<AuditEvent>
     retention 99y
     consumers [compliance, epa_reporting, governance, streamsight]
     classify auditor_id: METADATA, finding: COMPLIANCE, action: METADATA
+
+// ---------------------------------------------------------------------------
+// IEC 62053 Metering Integration
+// ---------------------------------------------------------------------------
+// Accepts IEC 62053-validated telemetry from the metering circuit
+// (integration/metering/iec62053_metering.fl) and feeds it into the
+// existing verification pipeline flow.
+//
+// Closes: synergycarbon/povc-carbon #79, #70
+
+type MeteringValidationResult = struct {
+    validation_id: bytes(32),
+    meter_id: bytes(32),
+    accuracy_class: u8,
+    accuracy_valid: bool,
+    calibration_valid: bool,
+    power_factor_valid: bool,
+    tamper_detected: bool,
+    energy_wh_validated: u64,
+    compliance_flags: u32,
+    validated_at: u64,
+}
+
+circuit ingest_metered_measurement(dag_id: bytes(32), metering_result: MeteringValidationResult, sensor_id: bytes(32), methodology_id: bytes(16), location_hash: bytes(32), pk: bytes(1568)) -> MeasurementId
+    lex esn/sustainability/carbon/org/synergycarbon/project/verification {
+        governance hierarchical
+        approval_required true
+        audit_trail true
+        sovereignty us
+        compliance [iec_62053_21, iec_62053_22, epa_ghg, iso_14064, verra_vcs]
+    }
+    precision A
+    witness threshold(3, 5)
+    rbac [metering_operator, verifier, registry_admin]
+    observe metrics: [validation_id, meter_id, accuracy_class, energy_wh_validated, compliance_flags]
+    invariant "metering_compliant" { metering_result.compliance_flags == 0x0F }
+    invariant "no_tamper" { metering_result.tamper_detected == false }
+    invariant "energy_positive" { metering_result.energy_wh_validated > 0 }
+    monitor "metered_ingestion_rate" { metered_ingest_pct > 0.95 }
+    fuzz_target
+{
+    let measurement_id = sha3_256(metering_result.validation_id ++ metering_result.meter_id ++ metering_result.validated_at)
+    let hw_attestation = sha3_256(metering_result.validation_id ++ metering_result.compliance_flags)
+    let kem = mlkem_encaps(pk)
+    let anomaly = streamsight_anomaly(measurement_id)
+
+    let measurement = Measurement {
+        measurement_id: measurement_id,
+        sensor_id: sensor_id,
+        value: metering_result.energy_wh_validated,
+        unit: 1,  // kWh
+        timestamp: metering_result.validated_at,
+        location_hash: location_hash,
+        hardware_attestation: hw_attestation,
+        methodology_id: methodology_id,
+    }
+
+    store("measurements", measurement_id, measurement)
+    measurement_id
+}

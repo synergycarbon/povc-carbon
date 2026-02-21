@@ -1,0 +1,149 @@
+{
+  "circuit": "sc_iec62053_metering",
+  "escir_version": "0.8.1",
+  "description": "IEC 62053 tamper detection scenarios via power triangle inconsistency",
+  "vectors": [
+    {
+      "id": "tamper-power-triangle-consistent",
+      "description": "Consistent power triangle (S²≈P²+Q²) — no tamper",
+      "tags": ["iec-62053", "tamper", "happy-path", "power-triangle"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TAMPER_OK_01_0000000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1000000,
+          "reactive_power_mvar": 500000,
+          "apparent_power_mva": 1118034,
+          "power_factor_pct": 8944,
+          "frequency_mhz": 60000,
+          "energy_wh": 200000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_TAMPER_OK_01"
+        },
+        "power_triangle_check": {
+          "p_squared": 1000000000000,
+          "q_squared": 250000000000,
+          "pq_sum": 1250000000000,
+          "s_squared": 1250000019556,
+          "error_pct": 0.0000016,
+          "tolerance_pct": 1.0
+        }
+      },
+      "expected_outputs": {
+        "tamper_detected": false,
+        "power_triangle_consistent": true,
+        "compliance_flags_bit_3": true
+      }
+    },
+    {
+      "id": "tamper-power-triangle-bypass-detected",
+      "description": "Power triangle inconsistency detected — suspected meter bypass",
+      "tags": ["iec-62053", "tamper", "bypass", "rejection", "power-triangle"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TAMPER_BYPASS_01_000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 500000,
+          "reactive_power_mvar": 200000,
+          "apparent_power_mva": 1118034,
+          "power_factor_pct": 4472,
+          "frequency_mhz": 60000,
+          "energy_wh": 100000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_TAMPER_BYPASS_01"
+        },
+        "power_triangle_check": {
+          "p_squared": 250000000000,
+          "q_squared": 40000000000,
+          "pq_sum": 290000000000,
+          "s_squared": 1249999993956,
+          "error_pct": 76.8,
+          "tolerance_pct": 1.0,
+          "note": "Active power reports 500W but apparent power reports 1118W — bypassed load"
+        }
+      },
+      "expected_outputs": {
+        "tamper_detected": true,
+        "tamper_type": "bypass",
+        "power_triangle_consistent": false,
+        "compliance_flags_bit_3": false,
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> CALIBRATION_CHECKED -> PF_CHECKED -> QUARANTINED",
+        "anomaly_flagged": true
+      }
+    },
+    {
+      "id": "tamper-reverse-flow",
+      "description": "Reverse energy flow detected (negative energy delta between readings)",
+      "tags": ["iec-62053", "tamper", "reverse-flow"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TAMPER_REVERSE_01_0000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 195000,
+          "timestamp": 1708003600000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_TAMPER_REVERSE_01"
+        },
+        "previous_reading": {
+          "energy_wh": 200000,
+          "timestamp": 1708000000000000,
+          "note": "Current reading (195000 Wh) < previous (200000 Wh) — reverse flow"
+        }
+      },
+      "expected_outputs": {
+        "tamper_detected": true,
+        "tamper_type": "reverse_flow",
+        "severity": "critical",
+        "note": "Cumulative energy should never decrease — indicates tampering or meter reversal"
+      }
+    },
+    {
+      "id": "tamper-magnetic-field",
+      "description": "Strong magnetic field affecting meter accuracy (CT saturation)",
+      "tags": ["iec-62053", "tamper", "magnetic"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TAMPER_MAGNETIC_01_000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-21",
+          "accuracy_class": 2,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 100000,
+          "reactive_power_mvar": 50000,
+          "apparent_power_mva": 1200000,
+          "power_factor_pct": 833,
+          "frequency_mhz": 60000,
+          "energy_wh": 20000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-bravo",
+          "hardware_attestation": "VALID_HW_ATTESTATION_TAMPER_MAGNETIC_01"
+        },
+        "power_triangle_check": {
+          "note": "Active+Reactive power extremely low compared to apparent — magnetic tamper suppressing CT readings"
+        }
+      },
+      "expected_outputs": {
+        "tamper_detected": true,
+        "tamper_type": "magnetic",
+        "power_triangle_consistent": false,
+        "severity": "critical"
+      }
+    }
+  ]
+}

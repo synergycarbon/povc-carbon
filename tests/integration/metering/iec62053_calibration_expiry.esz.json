@@ -1,0 +1,168 @@
+{
+  "circuit": "sc_iec62053_metering",
+  "escir_version": "0.8.1",
+  "description": "IEC 62053 calibration certificate expiry and validity scenarios",
+  "vectors": [
+    {
+      "id": "calibration-valid-fresh",
+      "description": "Freshly calibrated meter with 11 months remaining",
+      "tags": ["iec-62053", "calibration", "happy-path"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_CAL_FRESH_01_0000000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_CAL_FRESH_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_FRESH_01_00000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_CAL_FRESH_01_0000000000000000000000000000000000000000000",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1706140800000,
+          "expires_at": 1737763200000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_FRESH_01",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 18,
+          "error_pct_at_120": 19,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "current_time_ms": 1708000000000
+      },
+      "expected_outputs": {
+        "calibration_valid": true,
+        "compliance_flags_bit_1": true
+      }
+    },
+    {
+      "id": "calibration-expired",
+      "description": "Meter with expired calibration certificate rejected",
+      "tags": ["iec-62053", "calibration", "expired", "rejection"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_CAL_EXPIRED_01_00000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_CAL_EXPIRED_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_EXPIRED_01_000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_CAL_EXPIRED_01_00000000000000000000000000000000000000000",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1672531200000,
+          "expires_at": 1704067200000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_EXPIRED_01",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 18,
+          "error_pct_at_120": 19,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "current_time_ms": 1708000000000
+      },
+      "expected_outputs": {
+        "calibration_valid": false,
+        "rejection_reason": "Calibration expired at 2024-01-01T00:00:00.000Z",
+        "compliance_flags_bit_1": false,
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> REJECTED"
+      }
+    },
+    {
+      "id": "calibration-no-certificate",
+      "description": "Meter reading with no calibration certificate on file",
+      "tags": ["iec-62053", "calibration", "missing", "rejection"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_NO_CERT_01_000000000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_NO_CERT_01"
+        },
+        "calibration_certificate": null
+      },
+      "expected_outputs": {
+        "calibration_valid": false,
+        "accuracy_valid": false,
+        "rejection_reason": "No calibration certificate provided",
+        "compliance_flags": "0x00"
+      }
+    },
+    {
+      "id": "calibration-expiring-soon-still-valid",
+      "description": "Calibration certificate expiring in 24 hours — still valid but flagged",
+      "tags": ["iec-62053", "calibration", "expiring-soon", "warning"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_CAL_SOON_01_0000000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 1,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-bravo",
+          "hardware_attestation": "VALID_HW_ATTESTATION_CAL_SOON_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_SOON_01_00000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_CAL_SOON_01_0000000000000000000000000000000000000000000",
+          "accuracy_class": 1,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1676419200000,
+          "expires_at": 1708086400000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_SOON_01",
+          "error_pct_at_5": 80,
+          "error_pct_at_20": 40,
+          "error_pct_at_100": 45,
+          "error_pct_at_120": 48,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "current_time_ms": 1708000000000
+      },
+      "expected_outputs": {
+        "calibration_valid": true,
+        "note": "Still valid — expires_at > current_time_ms"
+      }
+    }
+  ]
+}

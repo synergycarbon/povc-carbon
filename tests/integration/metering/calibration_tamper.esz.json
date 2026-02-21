@@ -1,0 +1,301 @@
+{
+  "circuit": "iec62053_calibration_tamper",
+  "escir_version": "0.8.1",
+  "description": "IEC 62053 calibration certificate verification and tamper detection scenarios",
+  "vectors": [
+    {
+      "id": "calibration-valid-fresh",
+      "description": "Freshly calibrated meter with valid SE050 attestation",
+      "tags": ["iec-62053", "calibration", "happy-path", "SE050"],
+      "inputs": {
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_FRESH_001",
+          "meter_id": "0xMETER_ALPHA_CAL_01",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_001",
+          "calibrated_at": 1706000000000,
+          "expires_at": 1740000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 12,
+          "error_pct_at_120": 18,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "current_timestamp": 1708000000000
+      },
+      "expected_outputs": {
+        "calibration_valid": true,
+        "se050_verified": true,
+        "days_until_expiry_gte": 365
+      }
+    },
+    {
+      "id": "calibration-expired",
+      "description": "Expired calibration certificate — meter readings must be rejected",
+      "tags": ["iec-62053", "calibration", "expiry", "rejection"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_EXPIRED_CAL",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_ML_DSA_87_HW_ATTESTATION"
+        },
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_EXPIRED",
+          "meter_id": "0xMETER_EXPIRED_CAL",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_001",
+          "calibrated_at": 1672000000000,
+          "expires_at": 1704000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 12,
+          "error_pct_at_120": 18,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "current_timestamp": 1708000000000
+      },
+      "expected_outputs": {
+        "calibration_valid": false,
+        "rejection_reason": "Calibration expired",
+        "compliance_flags": "0x0D",
+        "metering_valid": false,
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> REJECTED"
+      }
+    },
+    {
+      "id": "calibration-expiring-soon",
+      "description": "Calibration valid but expiring within 30 days — should pass but flag warning",
+      "tags": ["iec-62053", "calibration", "expiry", "warning", "edge-case"],
+      "inputs": {
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_EXPIRING_SOON",
+          "meter_id": "0xMETER_EXPIRING_CAL",
+          "accuracy_class": 1,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_002",
+          "calibrated_at": 1672000000000,
+          "expires_at": 1710000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 80,
+          "error_pct_at_20": 40,
+          "error_pct_at_100": 35,
+          "error_pct_at_120": 45,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "current_timestamp": 1708000000000
+      },
+      "expected_outputs": {
+        "calibration_valid": true,
+        "days_until_expiry": 23,
+        "note": "Valid but operators should schedule re-calibration"
+      }
+    },
+    {
+      "id": "calibration-no-cert-provided",
+      "description": "No calibration certificate on file — accuracy cannot be verified",
+      "tags": ["iec-62053", "calibration", "missing", "rejection"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_NO_CERT",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_ML_DSA_87_HW_ATTESTATION"
+        },
+        "calibration_cert": null
+      },
+      "expected_outputs": {
+        "accuracy_valid": false,
+        "calibration_valid": false,
+        "rejection_reason": "No calibration certificate provided",
+        "compliance_flags": "0x0C",
+        "metering_valid": false
+      }
+    },
+    {
+      "id": "tamper-magnetic-interference",
+      "description": "Magnetic field tamper detected via power triangle inconsistency",
+      "tags": ["iec-62053", "tamper", "magnetic", "critical"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TAMPER_MAG",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 800000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 50000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_ML_DSA_87_HW_ATTESTATION"
+        },
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_TAMPER_MAG",
+          "meter_id": "0xMETER_TAMPER_MAG",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_001",
+          "calibrated_at": 1700000000000,
+          "expires_at": 1740000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 12,
+          "error_pct_at_120": 18,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        },
+        "power_triangle_check": {
+          "P_squared": 1210000000000,
+          "Q_squared": 234256000000,
+          "S_squared": 640000000000,
+          "PQ_sum": 1444256000000,
+          "error_pct": 125.7,
+          "tolerance_pct": 1.0
+        }
+      },
+      "expected_outputs": {
+        "accuracy_valid": true,
+        "calibration_valid": true,
+        "power_factor_valid": true,
+        "tamper_detected": true,
+        "power_triangle_consistent": false,
+        "tamper_type": "magnetic",
+        "compliance_flags": "0x07",
+        "metering_valid": false,
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> CALIBRATION_CHECKED -> PF_CHECKED -> QUARANTINED",
+        "action": "Quarantine meter, reject all subsequent readings until re-calibration"
+      }
+    },
+    {
+      "id": "tamper-bypass-detection",
+      "description": "Energy reading abnormally low relative to measured power — possible CT bypass",
+      "tags": ["iec-62053", "tamper", "bypass", "critical"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TAMPER_BYPASS",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 200000,
+          "apparent_power_mva": 400000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 5000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-bravo",
+          "hardware_attestation": "VALID_ML_DSA_87_HW_ATTESTATION"
+        },
+        "calibration_cert": {
+          "cert_id": "0xCAL_CERT_TAMPER_BYPASS",
+          "meter_id": "0xMETER_TAMPER_BYPASS",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_ACCREDITED_LAB_001",
+          "calibrated_at": 1700000000000,
+          "expires_at": 1740000000000,
+          "se050_attestation": "VALID_SE050_CERT_SIG",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 12,
+          "error_pct_at_120": 18,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "tamper_detected": true,
+        "power_triangle_consistent": false,
+        "compliance_flags": "0x07",
+        "metering_valid": false,
+        "action": "Quarantine meter, dispatch field inspection"
+      }
+    },
+    {
+      "id": "tamper-power-triangle-within-tolerance",
+      "description": "Small power triangle deviation within 1% tolerance — no tamper",
+      "tags": ["iec-62053", "tamper", "power-triangle", "happy-path"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_TRIANGLE_OK",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 1,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_ML_DSA_87_HW_ATTESTATION"
+        },
+        "power_triangle_check": {
+          "P_squared": 1210000000000,
+          "Q_squared": 234256000000,
+          "S_squared": 1444804000000,
+          "PQ_sum": 1444256000000,
+          "error_pct": 0.038,
+          "tolerance_pct": 1.0
+        }
+      },
+      "expected_outputs": {
+        "tamper_detected": false,
+        "power_triangle_consistent": true,
+        "power_triangle_error_pct_lt": 1.0
+      }
+    },
+    {
+      "id": "tamper-clock-drift",
+      "description": "Tamper event recorded for clock drift exceeding tolerance",
+      "tags": ["iec-62053", "tamper", "clock-drift", "warning"],
+      "inputs": {
+        "tamper_event": {
+          "event_id": "0xTAMPER_CLOCK_001",
+          "meter_id": "0xMETER_CLOCK_DRIFT",
+          "tamper_type": 4,
+          "severity": 1,
+          "detected_at": 1708000000000000,
+          "evidence_hash": "0xEVIDENCE_CLOCK_DRIFT_HASH"
+        }
+      },
+      "expected_outputs": {
+        "tamper_recorded": true,
+        "tamper_type_label": "clock_drift",
+        "severity_label": "warning",
+        "meter_quarantined": true,
+        "note": "Clock drift may indicate firmware tampering or battery failure"
+      }
+    }
+  ]
+}

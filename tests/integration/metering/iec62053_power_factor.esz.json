@@ -1,0 +1,105 @@
+{
+  "circuit": "sc_iec62053_metering",
+  "escir_version": "0.8.1",
+  "description": "IEC 62053 power factor validation per accuracy class",
+  "vectors": [
+    {
+      "id": "pf-02s-high-pf-pass",
+      "description": "0.2S revenue meter with high power factor (0.95) passes",
+      "tags": ["iec-62053", "power-factor", "0.2S", "happy-path"],
+      "inputs": {
+        "accuracy_class": 0,
+        "power_factor_pct": 9500,
+        "threshold_pct": 8000,
+        "note": "Class 0.2S requires cos φ ≥ 0.80"
+      },
+      "expected_outputs": {
+        "power_factor_valid": true,
+        "compliance_flags_bit_2": true
+      }
+    },
+    {
+      "id": "pf-02s-at-threshold-pass",
+      "description": "0.2S meter at exact power factor threshold (0.80) passes",
+      "tags": ["iec-62053", "power-factor", "0.2S", "boundary"],
+      "inputs": {
+        "accuracy_class": 0,
+        "power_factor_pct": 8000,
+        "threshold_pct": 8000
+      },
+      "expected_outputs": {
+        "power_factor_valid": true,
+        "note": "Exactly at threshold — ≥ comparison passes"
+      }
+    },
+    {
+      "id": "pf-02s-below-threshold-fail",
+      "description": "0.2S meter with power factor 0.79 below 0.80 threshold — rejected",
+      "tags": ["iec-62053", "power-factor", "0.2S", "rejection"],
+      "inputs": {
+        "accuracy_class": 0,
+        "power_factor_pct": 7900,
+        "threshold_pct": 8000
+      },
+      "expected_outputs": {
+        "power_factor_valid": false,
+        "rejection_reason": "Power factor 79.00% below threshold for class 0.2S",
+        "compliance_flags_bit_2": false,
+        "state_transition": "CALIBRATION_CHECKED -> REJECTED"
+      }
+    },
+    {
+      "id": "pf-05s-moderate-pf-pass",
+      "description": "0.5S billing meter with power factor 0.65 passes (threshold 0.50)",
+      "tags": ["iec-62053", "power-factor", "0.5S", "happy-path"],
+      "inputs": {
+        "accuracy_class": 1,
+        "power_factor_pct": 6500,
+        "threshold_pct": 5000
+      },
+      "expected_outputs": {
+        "power_factor_valid": true
+      }
+    },
+    {
+      "id": "pf-10-low-pf-pass",
+      "description": "1.0 monitoring meter with low power factor 0.55 passes (threshold 0.50)",
+      "tags": ["iec-62053", "power-factor", "1.0", "happy-path"],
+      "inputs": {
+        "accuracy_class": 2,
+        "power_factor_pct": 5500,
+        "threshold_pct": 5000
+      },
+      "expected_outputs": {
+        "power_factor_valid": true
+      }
+    },
+    {
+      "id": "pf-20-very-low-pf-pass",
+      "description": "2.0 indicative meter with very low power factor 0.25 passes (threshold 0.20)",
+      "tags": ["iec-62053", "power-factor", "2.0", "happy-path"],
+      "inputs": {
+        "accuracy_class": 3,
+        "power_factor_pct": 2500,
+        "threshold_pct": 2000
+      },
+      "expected_outputs": {
+        "power_factor_valid": true
+      }
+    },
+    {
+      "id": "pf-20-below-threshold-fail",
+      "description": "2.0 indicative meter with power factor 0.15 below threshold — rejected",
+      "tags": ["iec-62053", "power-factor", "2.0", "rejection"],
+      "inputs": {
+        "accuracy_class": 3,
+        "power_factor_pct": 1500,
+        "threshold_pct": 2000
+      },
+      "expected_outputs": {
+        "power_factor_valid": false,
+        "rejection_reason": "Power factor 15.00% below threshold for class 2.0"
+      }
+    }
+  ]
+}

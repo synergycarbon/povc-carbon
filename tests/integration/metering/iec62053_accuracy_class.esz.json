@@ -1,0 +1,280 @@
+{
+  "circuit": "sc_iec62053_metering",
+  "escir_version": "0.8.1",
+  "description": "IEC 62053 accuracy class validation for energy metering",
+  "vectors": [
+    {
+      "id": "accuracy-class-02s-happy-path",
+      "description": "Valid 0.2S revenue-grade meter passes all accuracy checks",
+      "tags": ["iec-62053", "accuracy-class", "0.2S", "revenue", "happy-path"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_REVENUE_ALPHA_01_0000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_REVENUE_METER_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_REV_ALPHA_01_000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_REVENUE_ALPHA_01_0000000000000000000000000000000000000000",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1704067200000,
+          "expires_at": 1735689600000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_CERT_01",
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 18,
+          "error_pct_at_120": 19,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "validation_passed": true,
+        "accuracy_valid": true,
+        "calibration_valid": true,
+        "power_factor_valid": true,
+        "tamper_detected": false,
+        "compliance_flags": "0x0F",
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> CALIBRATION_CHECKED -> PF_CHECKED -> VALIDATED"
+      }
+    },
+    {
+      "id": "accuracy-class-02s-error-exceeds-limit",
+      "description": "0.2S meter rejected: error at 5% load exceeds 0.4% limit",
+      "tags": ["iec-62053", "accuracy-class", "0.2S", "rejection", "error-limit"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_REVENUE_ALPHA_02_0000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708003600000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_REVENUE_METER_02"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_REV_ALPHA_02_000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_REVENUE_ALPHA_02_0000000000000000000000000000000000000000",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1704067200000,
+          "expires_at": 1735689600000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_CERT_02",
+          "error_pct_at_5": 55,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 18,
+          "error_pct_at_120": 19,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "validation_passed": false,
+        "accuracy_valid": false,
+        "rejection_reason": "Error at 5% load: 55 bp exceeds limit 40 bp",
+        "compliance_flags": "0x0E",
+        "state_transition": "RECEIVED -> REJECTED"
+      }
+    },
+    {
+      "id": "accuracy-class-05s-billing-pass",
+      "description": "Valid 0.5S billing-grade meter within all error limits",
+      "tags": ["iec-62053", "accuracy-class", "0.5S", "billing", "happy-path"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_BILLING_BRAVO_01_0000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 1,
+          "voltage_v": 240000,
+          "current_ma": 10000,
+          "active_power_mw": 2200000,
+          "reactive_power_mvar": 968000,
+          "apparent_power_mva": 2404000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 450000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-bravo",
+          "hardware_attestation": "VALID_HW_ATTESTATION_BILLING_METER_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_BIL_BRAVO_01_000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_BILLING_BRAVO_01_0000000000000000000000000000000000000000",
+          "accuracy_class": 1,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1704067200000,
+          "expires_at": 1735689600000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_CERT_03",
+          "error_pct_at_5": 80,
+          "error_pct_at_20": 40,
+          "error_pct_at_100": 45,
+          "error_pct_at_120": 48,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "validation_passed": true,
+        "accuracy_valid": true,
+        "calibration_valid": true,
+        "power_factor_valid": true,
+        "tamper_detected": false,
+        "compliance_flags": "0x0F",
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> CALIBRATION_CHECKED -> PF_CHECKED -> VALIDATED"
+      }
+    },
+    {
+      "id": "accuracy-class-10-monitoring-pass",
+      "description": "Valid 1.0 monitoring-grade meter for operational telemetry",
+      "tags": ["iec-62053", "accuracy-class", "1.0", "monitoring", "happy-path"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_MONITOR_ALPHA_01_0000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-21",
+          "accuracy_class": 2,
+          "voltage_v": 240000,
+          "current_ma": 2000,
+          "active_power_mw": 400000,
+          "reactive_power_mvar": 200000,
+          "apparent_power_mva": 447000,
+          "power_factor_pct": 8950,
+          "frequency_mhz": 60000,
+          "energy_wh": 100000,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_MONITOR_METER_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_MON_ALPHA_01_000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_MONITOR_ALPHA_01_0000000000000000000000000000000000000000",
+          "accuracy_class": 2,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1704067200000,
+          "expires_at": 1735689600000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_CERT_04",
+          "error_pct_at_5": 180,
+          "error_pct_at_20": 90,
+          "error_pct_at_100": 95,
+          "error_pct_at_120": 140,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "validation_passed": true,
+        "accuracy_valid": true,
+        "calibration_valid": true,
+        "power_factor_valid": true,
+        "tamper_detected": false,
+        "compliance_flags": "0x0F",
+        "state_transition": "RECEIVED -> ACCURACY_CHECKED -> CALIBRATION_CHECKED -> PF_CHECKED -> VALIDATED"
+      }
+    },
+    {
+      "id": "accuracy-class-boundary-02s-exact-limit",
+      "description": "0.2S meter at exact error boundary (40 bp at 5% load) — should pass",
+      "tags": ["iec-62053", "accuracy-class", "0.2S", "boundary"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_BOUNDARY_01_000000000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_BOUNDARY_01"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_BOUNDARY_01_0000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_BOUNDARY_01_000000000000000000000000000000000000000000000",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1704067200000,
+          "expires_at": 1735689600000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_CERT_BOUNDARY_01",
+          "error_pct_at_5": 40,
+          "error_pct_at_20": 20,
+          "error_pct_at_100": 20,
+          "error_pct_at_120": 20,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "validation_passed": true,
+        "accuracy_valid": true,
+        "note": "Exactly at the limit — should pass (≤ comparison)"
+      }
+    },
+    {
+      "id": "accuracy-class-boundary-02s-one-over",
+      "description": "0.2S meter 1 bp over limit at 20% load (21 bp vs 20 bp limit) — should fail",
+      "tags": ["iec-62053", "accuracy-class", "0.2S", "boundary", "rejection"],
+      "inputs": {
+        "meter_reading": {
+          "meter_id": "0xMETER_BOUNDARY_02_000000000000000000000000000000000000000000000",
+          "meter_type": "IEC-62053-22",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 5000,
+          "active_power_mw": 1100000,
+          "reactive_power_mvar": 484000,
+          "apparent_power_mva": 1202000,
+          "power_factor_pct": 9150,
+          "frequency_mhz": 60000,
+          "energy_wh": 212500,
+          "timestamp": 1708000000000000,
+          "site_id": "esz-wellpad-alpha",
+          "hardware_attestation": "VALID_HW_ATTESTATION_BOUNDARY_02"
+        },
+        "calibration_certificate": {
+          "cert_id": "0xCAL_CERT_BOUNDARY_02_0000000000000000000000000000000000000000000",
+          "meter_id": "0xMETER_BOUNDARY_02_000000000000000000000000000000000000000000000",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_TRACEABLE_LAB_001_00000000000000000000000000000000",
+          "calibrated_at": 1704067200000,
+          "expires_at": 1735689600000,
+          "se050_attestation": "VALID_SE050_SIG_CAL_CERT_BOUNDARY_02",
+          "error_pct_at_5": 40,
+          "error_pct_at_20": 21,
+          "error_pct_at_100": 20,
+          "error_pct_at_120": 20,
+          "temperature_range_min_c": -25,
+          "temperature_range_max_c": 55
+        }
+      },
+      "expected_outputs": {
+        "validation_passed": false,
+        "accuracy_valid": false,
+        "rejection_reason": "Error at 20% load: 21 bp exceeds limit 20 bp",
+        "note": "1 bp over limit — must fail"
+      }
+    }
+  ]
+}
