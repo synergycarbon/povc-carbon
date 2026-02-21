@@ -14,6 +14,7 @@ import { marketplace } from './routes/marketplace.js';
 import { contracts } from './routes/contracts.js';
 import { audit } from './routes/audit.js';
 import { governance } from './routes/governance.js';
+import { webhooks } from './routes/webhooks.js';
 
 const app = new Hono();
 
@@ -23,7 +24,7 @@ app.onError(errorHandler);
 // CORS for B2B integrations
 app.use('*', cors({
   origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key', 'X-Request-Id', 'X-Api-Key'],
   exposeHeaders: ['X-Request-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After'],
 }));
@@ -50,6 +51,7 @@ app.route('/api/v1/marketplace', marketplace);
 app.route('/api/v1/contracts', contracts);
 app.route('/api/v1/audit', audit);
 app.route('/api/v1/governance', governance);
+app.route('/api/v1/webhooks', webhooks);
 
 // 404 for unmatched routes
 app.notFound((c) => {

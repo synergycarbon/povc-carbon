@@ -34,4 +34,8 @@ export const ENDPOINT_SCOPES: Record<string, ApiScope> = {
   'GET /api/v1/audit/events': 'audit:read',
   'GET /api/v1/audit/export': 'audit:read',
   'GET /api/v1/governance/methodologies': 'governance:read',
+  'POST /api/v1/webhooks': 'webhooks:write',
+  'GET /api/v1/webhooks': 'webhooks:read',
+  'DELETE /api/v1/webhooks/:id': 'webhooks:write',
+  'GET /api/v1/webhooks/:id/deliveries': 'webhooks:read',
 };

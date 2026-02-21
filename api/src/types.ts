@@ -22,6 +22,8 @@ export const API_SCOPES = [
   'contracts:read',
   'contracts:write',
   'impact:read',
+  'webhooks:read',
+  'webhooks:write',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];

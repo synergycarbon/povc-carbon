@@ -1,3 +1,7 @@
+export const PAGE_SIZE_DEFAULT = 25;
+export const PAGE_SIZE_MIN = 1;
+export const PAGE_SIZE_MAX = 100;
+
 export interface PaginationParams {
   cursor: string | null;
   limit: number;
@@ -5,9 +9,12 @@ export interface PaginationParams {
 
 export function parsePaginationParams(query: Record<string, string | undefined>): PaginationParams {
   const cursor = query.cursor ?? null;
-  let limit = parseInt(query.limit ?? '25', 10);
-  if (isNaN(limit) || limit < 1) limit = 25;
-  if (limit > 100) limit = 100;
+
+  const rawLimit = query.limit ?? query.page_size;
+  let limit = parseInt(rawLimit ?? String(PAGE_SIZE_DEFAULT), 10);
+  if (isNaN(limit) || limit < PAGE_SIZE_MIN) limit = PAGE_SIZE_DEFAULT;
+  if (limit > PAGE_SIZE_MAX) limit = PAGE_SIZE_MAX;
+
   return { cursor, limit };
 }
 
@@ -46,6 +53,7 @@ export function buildPaginatedResponse<T>(
       next_cursor: nextCursor,
       prev_cursor: prevCursor,
       has_more: hasMore,
+      page_size: limit,
       ...(totalCount !== undefined ? { total_count: totalCount } : {}),
     },
   };
