@@ -1,0 +1,109 @@
+---
+/**
+ * Standalone Impact Widget embed component.
+ *
+ * Loads the SynergyCarbon impact-counter widget as a WASM/Wire bundle
+ * (eStream #146 embedding pattern). Renders without the full Console Kit —
+ * connects directly to the edge WebTransport endpoint for real-time data.
+ *
+ * Props:
+ *   projectId  — entity/project to display metrics for (optional, shows aggregate if omitted)
+ *   mode       — "counter" | "certificate" | "meter" (default: "counter")
+ *   theme      — "light" | "dark" | "auto" (default: "auto")
+ */
+
+interface Props {
+  projectId?: string;
+  mode?: 'counter' | 'certificate' | 'meter';
+  theme?: 'light' | 'dark' | 'auto';
+}
+
+const { projectId, mode = 'counter', theme = 'auto' } = Astro.props;
+
+const CONSOLE_ORIGIN = import.meta.env.PUBLIC_CONSOLE_ORIGIN ?? 'https://console.synergycarbon.io';
+
+const embedPaths: Record<string, string> = {
+  counter: '/embed/impact-counter',
+  certificate: '/embed/impact-certificate',
+  meter: '/embed/impact-live-meter',
+};
+
+const params = new URLSearchParams();
+if (projectId) params.set('entity_id', projectId);
+if (theme !== 'auto') params.set('theme', theme);
+
+const embedPath = embedPaths[mode] ?? embedPaths.counter;
+const queryStr = params.toString();
+const embedSrc = `${CONSOLE_ORIGIN}${embedPath}${queryStr ? `?${queryStr}` : ''}`;
+---
+
+<div class="impact-widget" data-mode={mode} data-theme={theme}>
+  <div class="impact-widget__frame">
+    <iframe
+      src={embedSrc}
+      title={`SynergyCarbon Impact ${mode.charAt(0).toUpperCase() + mode.slice(1)}`}
+      loading="lazy"
+      allow="clipboard-write"
+      sandbox="allow-scripts allow-same-origin"
+    ></iframe>
+  </div>
+  <noscript>
+    <p class="impact-widget__fallback">
+      Real-time carbon impact data requires JavaScript.
+      <a href={`${CONSOLE_ORIGIN}/impact`}>View on SynergyCarbon Console</a>.
+    </p>
+  </noscript>
+</div>
+
+<style>
+  .impact-widget {
+    --iw-radius: 12px;
+    --iw-bg-light: rgba(255, 255, 255, 0.06);
+    --iw-bg-dark: rgba(0, 0, 0, 0.15);
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .impact-widget__frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 5 / 3;
+    border-radius: var(--iw-radius);
+    overflow: hidden;
+    background: var(--iw-bg-light);
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(22, 163, 106, 0.15);
+  }
+
+  .impact-widget__frame iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+
+  .impact-widget__fallback {
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: #666;
+  }
+
+  .impact-widget__fallback a {
+    color: var(--sc-primary, #16a34a);
+  }
+
+  /* Dark-section placement */
+  :global(.section-dark) .impact-widget .impact-widget__frame {
+    background: var(--iw-bg-dark);
+    border-color: rgba(34, 197, 94, 0.2);
+  }
+
+  @media (max-width: 640px) {
+    .impact-widget {
+      max-width: 100%;
+    }
+  }
+</style>

@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import ImpactWidget from '../components/ImpactWidget.astro';
 ---
 
 <Base title="Home">
@@ -203,6 +204,18 @@ import Base from '../layouts/Base.astro';
           <div class="stat-label">Source Types</div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ===== Live Impact ===== -->
+  <section id="live-impact" class="section">
+    <h2 class="section-title reveal">Live Carbon Impact</h2>
+    <p class="section-subtitle reveal delay-1">
+      Real-time retirement data streamed from the SynergyCarbon registry
+      via the eStream network.
+    </p>
+    <div class="reveal delay-2">
+      <ImpactWidget mode="counter" />
     </div>
   </section>
 

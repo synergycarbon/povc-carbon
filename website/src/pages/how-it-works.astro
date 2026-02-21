@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import ImpactWidget from '../components/ImpactWidget.astro';
 ---
 
 <Base title="How It Works" description="Learn how Proof-of-Verified-Carbon transforms raw energy data into verified, tradeable carbon credits in four cryptographic steps.">
@@ -227,8 +228,20 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <!-- CTA -->
+  <!-- Live Impact -->
   <section class="section" style="text-align: center;">
+    <h2 class="section-title reveal">See It In Action</h2>
+    <p class="section-subtitle reveal delay-1">
+      Live retirement data from the SynergyCarbon registry &mdash; every tonne
+      verified through the four-step PoVC process above.
+    </p>
+    <div class="reveal delay-2">
+      <ImpactWidget mode="counter" />
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section-surface" style="text-align: center; padding-bottom: 5rem;">
     <h2 class="section-title reveal">Ready to Get Started?</h2>
     <p class="section-subtitle reveal delay-1">
       Deploy witness nodes and start minting verified carbon credits in weeks.
