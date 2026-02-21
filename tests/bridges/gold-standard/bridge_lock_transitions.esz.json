@@ -1,0 +1,81 @@
+{
+  "circuit": "gold_standard_bridge",
+  "escir_version": "0.8.3",
+  "description": "Bridge lock state transitions and double-count prevention",
+  "vectors": [
+    {
+      "id": "gs-lock-on-submit",
+      "description": "Credit enters BRIDGE_LOCKED when submitted to Gold Standard",
+      "tags": ["bridge-lock", "submit", "double-count-prevention"],
+      "inputs": {
+        "mirror_request": {
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000050",
+          "gsSerial": "",
+          "attestationHash": "0xATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT0",
+          "tonnesCo2e": 0.450,
+          "vintageYear": 2026,
+          "projectName": "ThermogenZero Alpha Wellpad - TEG Waste Heat Recovery",
+          "projectLocation": "Permian Basin, TX, USA",
+          "methodologyId": "EPA-AP42-CH4-FLARE"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000050",
+          "state": "PENDING",
+          "bridgeLocked": true
+        }
+      }
+    },
+    {
+      "id": "gs-full-lifecycle",
+      "description": "Full state transition: PENDING -> SUBMITTED -> MIRRORED -> SYNCED",
+      "tags": ["lifecycle", "state-machine", "happy-path"],
+      "inputs": {
+        "initial_state": { "state": "PENDING", "bridgeLocked": true },
+        "transitions": [
+          { "to": "SUBMITTED", "trigger": "api_submission_ack" },
+          { "to": "MIRRORED", "trigger": "webhook:credit.issued" },
+          { "to": "SYNCED", "trigger": "webhook:review.completed" }
+        ]
+      },
+      "expected_outputs": {
+        "final_state": { "state": "SYNCED", "bridgeLocked": false },
+        "lock_history": [
+          { "state": "PENDING", "locked": true },
+          { "state": "SUBMITTED", "locked": true },
+          { "state": "MIRRORED", "locked": true },
+          { "state": "SYNCED", "locked": false }
+        ]
+      }
+    },
+    {
+      "id": "gs-reject-unlocks",
+      "description": "Rejection at any locked state releases the bridge lock",
+      "tags": ["bridge-lock", "rejection", "unlock"],
+      "inputs": {
+        "initial_state": { "state": "SUBMITTED", "bridgeLocked": true },
+        "transitions": [
+          { "to": "REJECTED", "trigger": "webhook:review.rejected" }
+        ]
+      },
+      "expected_outputs": {
+        "final_state": { "state": "REJECTED", "bridgeLocked": false }
+      }
+    },
+    {
+      "id": "gs-invalid-transition-blocked",
+      "description": "Invalid state transitions are rejected (SYNCED -> SUBMITTED)",
+      "tags": ["state-machine", "invalid", "guard"],
+      "inputs": {
+        "initial_state": { "state": "SYNCED", "bridgeLocked": false },
+        "transitions": [
+          { "to": "SUBMITTED", "trigger": "invalid_manual_override" }
+        ]
+      },
+      "expected_outputs": {
+        "error": "Invalid state transition for credit: SYNCED -> SUBMITTED"
+      }
+    }
+  ]
+}

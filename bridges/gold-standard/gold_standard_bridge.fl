@@ -1,0 +1,192 @@
+// Gold Standard Registry Bridge — Webhook-based Credit Mirroring
+// Handles: webhook ingest, batch credit registration, bridge locking, status sync
+// registry_type: 1 = gold_standard (see source_network.fl)
+
+type GoldStandardConfig = struct {
+    bridge_id: bytes(16),
+    api_endpoint_hash: bytes(32),
+    credential_vault_ref: bytes(32),
+    webhook_secret_hash: bytes(32),
+    batch_max_size: u32,
+    webhook_timeout_ms: u32,
+    retry_max: u8,
+}
+
+type WebhookPayload = struct {
+    event_id: bytes(16),
+    event_type: u8,
+    timestamp: u64,
+    gs_project_id: bytes(16),
+    gs_serial: string,
+    credit_quantity: u64,
+    vintage_year: u16,
+    methodology_id: string,
+    signature: bytes(64),
+}
+
+type CreditMirrorRequest = struct {
+    credit_id: bytes(16),
+    gs_serial: string,
+    attestation_hash: bytes(32),
+    credit_metadata_hash: bytes(32),
+    tonnes_co2e: u64,
+    vintage_year: u16,
+    project_name: string,
+    project_location: string,
+    methodology_id: string,
+}
+
+type BatchRegistration = struct {
+    batch_id: bytes(16),
+    credits: list<CreditMirrorRequest>,
+    submitted_at: u64,
+    batch_size: u32,
+}
+
+type MirrorStatus = struct {
+    credit_id: bytes(16),
+    gs_serial: string,
+    state: u8,
+    bridge_locked: bool,
+    last_updated: u64,
+    retry_count: u8,
+    error_code: u16,
+}
+
+// event_type: 0=credit_issued, 1=credit_retired, 2=credit_transferred, 3=status_update
+// state: 0=pending, 1=submitted, 2=mirrored, 3=synced, 4=rejected
+
+graph gold_standard_bridge_graph {
+    node GoldStandardConfig
+    node WebhookPayload
+    node CreditMirrorRequest
+    node BatchRegistration
+    node MirrorStatus
+    edge mirrors: CreditMirrorRequest -> MirrorStatus { guard credit_valid }
+    edge batches: BatchRegistration -> CreditMirrorRequest { guard batch_open }
+    edge webhook_triggers: WebhookPayload -> MirrorStatus { guard signature_valid }
+    overlay mirror_state: u8 curate delta_curate
+    overlay bridge_lock: u8 curate delta_curate
+    overlay batch_progress: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed mirror_anomaly
+    ai_feed batch_throughput
+    observe gold_standard_bridge_graph: [mirror_state, bridge_lock, batch_progress] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series gs_mirror_events: gold_standard_bridge_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Verify and ingest a Gold Standard webhook payload
+circuit gs_webhook_ingest(graph_id: bytes(32), payload: WebhookPayload, raw_body: bytes(4096)) -> bytes(16)
+    subscribe sc.bridges.gold_standard.webhook
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/webhook
+    precision C
+    povc true
+    observe metrics: [event_id, event_type, gs_serial, credit_quantity]
+{
+    payload.event_id
+}
+
+// Mirror a single credit from SC to Gold Standard
+circuit gs_mirror_credit(graph_id: bytes(32), request: CreditMirrorRequest) -> MirrorStatus
+    subscribe sc.credits.issued
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/mirror
+    precision C
+    povc true
+    observe metrics: [credit_id, gs_serial, tonnes_co2e, methodology_id]
+{
+    MirrorStatus {
+        credit_id: request.credit_id,
+        gs_serial: request.gs_serial,
+        state: 0,
+        bridge_locked: true,
+        last_updated: 0,
+        retry_count: 0,
+        error_code: 0,
+    }
+}
+
+// Register a batch of credits with Gold Standard
+circuit gs_batch_register(graph_id: bytes(32), batch: BatchRegistration) -> bytes(16)
+    subscribe sc.credits.issued
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/batch
+    precision C
+    povc true
+    observe metrics: [batch_id, batch_size, submitted_at]
+{
+    batch.batch_id
+}
+
+// Transition mirror state: PENDING -> SUBMITTED -> MIRRORED -> SYNCED
+circuit gs_update_mirror_state(graph_id: bytes(32), credit_id: bytes(16), new_state: u8) -> MirrorStatus
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/state
+    precision C
+    povc true
+    observe metrics: [credit_id, new_state]
+{
+    MirrorStatus {
+        credit_id: credit_id,
+        gs_serial: "",
+        state: new_state,
+        bridge_locked: new_state < 4,
+        last_updated: 0,
+        retry_count: 0,
+        error_code: 0,
+    }
+}
+
+// Lock a credit during bridge submission (double-count prevention)
+circuit gs_bridge_lock(graph_id: bytes(32), credit_id: bytes(16)) -> bool
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/lock
+    precision C
+    povc true
+    observe metrics: [credit_id]
+{
+    true
+}
+
+// Unlock a credit after rejection from Gold Standard
+circuit gs_bridge_unlock(graph_id: bytes(32), credit_id: bytes(16), reason: string) -> bool
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/unlock
+    precision C
+    povc true
+    observe metrics: [credit_id, reason]
+{
+    true
+}
+
+// Sync retirement event between SC and Gold Standard
+circuit gs_sync_retirement(graph_id: bytes(32), credit_id: bytes(16), gs_serial: string, beneficiary: string, reason: string) -> bool
+    subscribe sc.credits.retired
+    publish sc.bridges.gold_standard.status
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/retirement
+    precision C
+    povc true
+    observe metrics: [credit_id, gs_serial, beneficiary]
+{
+    true
+}
+
+stream gs_webhook_events: event<WebhookPayload>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+stream gs_mirror_status_events: event<MirrorStatus>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]

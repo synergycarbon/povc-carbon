@@ -1,0 +1,88 @@
+{
+  "circuit": "gold_standard_bridge",
+  "escir_version": "0.8.3",
+  "description": "Webhook-based credit mirroring: credit issued on Gold Standard",
+  "vectors": [
+    {
+      "id": "gs-webhook-credit-issued",
+      "description": "Gold Standard notifies SC that a mirrored credit has been issued",
+      "tags": ["webhook", "credit-issued", "happy-path"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
+          "webhook_secret_hash": "0xSEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC0",
+          "batch_max_size": 100,
+          "webhook_timeout_ms": 5000,
+          "retry_max": 3
+        },
+        "webhook_event": {
+          "eventId": "evt-gs-001",
+          "eventType": "credit.issued",
+          "timestamp": 1740000000000,
+          "data": {
+            "gsSerial": "GS-VER-2026-000042",
+            "projectId": "GS-PROJ-TZ-ALPHA",
+            "vintageYear": 2026,
+            "tonnesCo2e": 0.260,
+            "methodologyId": "GS-METHANE-AVOID-V2",
+            "status": "active"
+          }
+        },
+        "existing_mapping": {
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000042",
+          "gsSerial": "GS-VER-2026-000042",
+          "attestationHash": "0xATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT0",
+          "state": "SUBMITTED",
+          "bridgeLocked": true
+        }
+      },
+      "expected_outputs": {
+        "handler_result": {
+          "eventId": "evt-gs-001",
+          "processed": true,
+          "newState": "MIRRORED",
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000042"
+        },
+        "updated_mapping": {
+          "state": "MIRRORED",
+          "bridgeLocked": true
+        }
+      }
+    },
+    {
+      "id": "gs-webhook-credit-issued-no-mapping",
+      "description": "Gold Standard webhook for a credit with no SC mapping — ignored",
+      "tags": ["webhook", "credit-issued", "no-mapping"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
+          "webhook_secret_hash": "0xSEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC0",
+          "batch_max_size": 100,
+          "webhook_timeout_ms": 5000,
+          "retry_max": 3
+        },
+        "webhook_event": {
+          "eventId": "evt-gs-002",
+          "eventType": "credit.issued",
+          "timestamp": 1740000001000,
+          "data": {
+            "gsSerial": "GS-VER-2026-UNKNOWN",
+            "projectId": "GS-PROJ-UNKNOWN",
+            "vintageYear": 2026,
+            "tonnesCo2e": 1.0,
+            "methodologyId": "GS-SOLAR-V1",
+            "status": "active"
+          }
+        },
+        "existing_mapping": null
+      },
+      "expected_outputs": {
+        "handler_result": {
+          "eventId": "evt-gs-002",
+          "processed": false,
+          "error": "No mapping found for GS serial GS-VER-2026-UNKNOWN"
+        }
+      }
+    }
+  ]
+}

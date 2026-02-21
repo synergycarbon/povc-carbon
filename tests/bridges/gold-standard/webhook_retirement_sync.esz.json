@@ -1,0 +1,98 @@
+{
+  "circuit": "gold_standard_bridge",
+  "escir_version": "0.8.3",
+  "description": "Webhook-based retirement sync between SC and Gold Standard",
+  "vectors": [
+    {
+      "id": "gs-webhook-retirement",
+      "description": "Gold Standard notifies SC that a mirrored credit has been retired",
+      "tags": ["webhook", "retirement", "sync", "happy-path"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
+          "webhook_secret_hash": "0xSEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC0",
+          "batch_max_size": 100,
+          "webhook_timeout_ms": 5000,
+          "retry_max": 3
+        },
+        "webhook_event": {
+          "eventId": "evt-gs-010",
+          "eventType": "credit.retired",
+          "timestamp": 1740100000000,
+          "data": {
+            "gsSerial": "GS-VER-2026-000042",
+            "projectId": "GS-PROJ-TZ-ALPHA",
+            "vintageYear": 2026,
+            "tonnesCo2e": 0.260,
+            "methodologyId": "GS-METHANE-AVOID-V2",
+            "status": "retired",
+            "beneficiaryName": "Acme Corp",
+            "retirementReason": "Scope 2 emissions offset Q1 2026"
+          }
+        },
+        "existing_mapping": {
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000042",
+          "gsSerial": "GS-VER-2026-000042",
+          "attestationHash": "0xATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT0",
+          "state": "SYNCED",
+          "bridgeLocked": false
+        }
+      },
+      "expected_outputs": {
+        "handler_result": {
+          "eventId": "evt-gs-010",
+          "processed": true,
+          "newState": "SYNCED",
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000042"
+        }
+      }
+    },
+    {
+      "id": "gs-webhook-review-rejected",
+      "description": "Gold Standard rejects a submitted credit — bridge lock released",
+      "tags": ["webhook", "review", "rejected", "unlock"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
+          "webhook_secret_hash": "0xSEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC0",
+          "batch_max_size": 100,
+          "webhook_timeout_ms": 5000,
+          "retry_max": 3
+        },
+        "webhook_event": {
+          "eventId": "evt-gs-011",
+          "eventType": "review.rejected",
+          "timestamp": 1740100001000,
+          "data": {
+            "gsSerial": "GS-VER-2026-000043",
+            "projectId": "GS-PROJ-TZ-ALPHA",
+            "vintageYear": 2026,
+            "tonnesCo2e": 0.310,
+            "methodologyId": "EPA-AP42-CH4-FLARE",
+            "status": "rejected",
+            "previousStatus": "pending_review"
+          }
+        },
+        "existing_mapping": {
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000043",
+          "gsSerial": "GS-VER-2026-000043",
+          "attestationHash": "0xATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT0",
+          "state": "SUBMITTED",
+          "bridgeLocked": true
+        }
+      },
+      "expected_outputs": {
+        "handler_result": {
+          "eventId": "evt-gs-011",
+          "processed": true,
+          "newState": "REJECTED",
+          "creditId": "SC-2026-tz-wellpad-alpha-01-000043"
+        },
+        "updated_mapping": {
+          "state": "REJECTED",
+          "bridgeLocked": false
+        }
+      }
+    }
+  ]
+}

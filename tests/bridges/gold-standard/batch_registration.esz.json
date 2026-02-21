@@ -1,0 +1,125 @@
+{
+  "circuit": "gold_standard_bridge",
+  "escir_version": "0.8.3",
+  "description": "Batch credit registration on Gold Standard registry",
+  "vectors": [
+    {
+      "id": "gs-batch-register-success",
+      "description": "Batch of 3 credits registered successfully on Gold Standard",
+      "tags": ["batch", "registration", "happy-path"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
+          "webhook_secret_hash": "0xSEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC0",
+          "batch_max_size": 100,
+          "webhook_timeout_ms": 5000,
+          "retry_max": 3
+        },
+        "batch": {
+          "batchId": "BATCH-GS-2026-001",
+          "submittedAt": 1740000000000,
+          "credits": [
+            {
+              "scCreditId": "SC-2026-tz-wellpad-alpha-01-000042",
+              "attestationHash": "0xATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT0",
+              "creditMetadataHash": "0xMETA01META01META01META01META01META01META01META01META01META01MET0",
+              "tonnesCo2e": 0.260,
+              "vintageYear": 2026,
+              "projectName": "ThermogenZero Alpha Wellpad - TEG Waste Heat Recovery",
+              "projectLocation": "Permian Basin, TX, USA",
+              "methodologyId": "EPA-AP42-CH4-FLARE"
+            },
+            {
+              "scCreditId": "SC-2026-tz-wellpad-alpha-01-000043",
+              "attestationHash": "0xATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT101ATT0",
+              "creditMetadataHash": "0xMETA02META02META02META02META02META02META02META02META02META02MET0",
+              "tonnesCo2e": 0.310,
+              "vintageYear": 2026,
+              "projectName": "ThermogenZero Alpha Wellpad - TEG Waste Heat Recovery",
+              "projectLocation": "Permian Basin, TX, USA",
+              "methodologyId": "EPA-AP42-CH4-FLARE"
+            },
+            {
+              "scCreditId": "SC-2026-tz-wellpad-beta-01-000001",
+              "attestationHash": "0xATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT0",
+              "creditMetadataHash": "0xMETA03META03META03META03META03META03META03META03META03META03MET0",
+              "tonnesCo2e": 0.180,
+              "vintageYear": 2026,
+              "projectName": "ThermogenZero Beta Wellpad - TEG Waste Heat Recovery",
+              "projectLocation": "Eagle Ford, TX, USA",
+              "methodologyId": "EPA-AP42-CH4-FLARE"
+            }
+          ]
+        }
+      },
+      "expected_outputs": {
+        "batch_result": {
+          "batchId": "BATCH-GS-2026-001",
+          "accepted": 3,
+          "rejected": 0,
+          "results": [
+            { "gsSerial": "GS-VER-2026-000042", "status": "pending" },
+            { "gsSerial": "GS-VER-2026-000043", "status": "pending" },
+            { "gsSerial": "GS-VER-2026-000044", "status": "pending" }
+          ]
+        },
+        "mappings_created": [
+          { "creditId": "SC-2026-tz-wellpad-alpha-01-000042", "gsSerial": "GS-VER-2026-000042", "state": "PENDING", "bridgeLocked": true },
+          { "creditId": "SC-2026-tz-wellpad-alpha-01-000043", "gsSerial": "GS-VER-2026-000043", "state": "PENDING", "bridgeLocked": true },
+          { "creditId": "SC-2026-tz-wellpad-beta-01-000001", "gsSerial": "GS-VER-2026-000044", "state": "PENDING", "bridgeLocked": true }
+        ]
+      }
+    },
+    {
+      "id": "gs-batch-partial-reject",
+      "description": "Batch registration where one credit is rejected by Gold Standard",
+      "tags": ["batch", "registration", "partial-reject"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
+          "webhook_secret_hash": "0xSEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC001SEC0",
+          "batch_max_size": 100,
+          "webhook_timeout_ms": 5000,
+          "retry_max": 3
+        },
+        "batch": {
+          "batchId": "BATCH-GS-2026-002",
+          "submittedAt": 1740000002000,
+          "credits": [
+            {
+              "scCreditId": "SC-2026-solar-project-A-000001",
+              "attestationHash": "0xATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT0",
+              "creditMetadataHash": "0xMETA04META04META04META04META04META04META04META04META04META04MET0",
+              "tonnesCo2e": 5.0,
+              "vintageYear": 2026,
+              "projectName": "SolarGrid Alpha - Grid Displacement",
+              "projectLocation": "Arizona, USA",
+              "methodologyId": "VM0006-GRID"
+            },
+            {
+              "scCreditId": "SC-2026-invalid-methodology-000001",
+              "attestationHash": "0xATT301ATT301ATT301ATT301ATT301ATT301ATT301ATT301ATT301ATT301ATT0",
+              "creditMetadataHash": "0xMETA05META05META05META05META05META05META05META05META05META05MET0",
+              "tonnesCo2e": 2.0,
+              "vintageYear": 2026,
+              "projectName": "Unknown Project",
+              "projectLocation": "Unknown",
+              "methodologyId": "INVALID-METHODOLOGY"
+            }
+          ]
+        }
+      },
+      "expected_outputs": {
+        "batch_result": {
+          "batchId": "BATCH-GS-2026-002",
+          "accepted": 1,
+          "rejected": 1,
+          "results": [
+            { "gsSerial": "GS-VER-2026-000050", "status": "pending" },
+            { "gsSerial": "", "status": "rejected" }
+          ]
+        }
+      }
+    }
+  ]
+}
