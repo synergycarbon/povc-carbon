@@ -5,14 +5,16 @@ export const ATTESTATION_MONITOR_MANIFEST: WidgetManifest = {
   name: 'Attestation Monitor',
   description: 'Real-time attestation feed for auditors showing verified and rejected attestations',
   category: 'operations',
-  version: '1.0.0',
+  version: '1.1.0',
+  visibility_tier: 'auditor',
   roles: ['auditor'],
   data_sources: {
     lex_topics: [
-      'lex://sc/attestations/verified',
-      'lex://sc/attestations/rejected',
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/attestations/verified',
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/attestations/rejected',
     ],
     eslite_tables: ['attestations'],
+    graph: 'verification_pipeline',
   },
   size: {
     min_width: 3,

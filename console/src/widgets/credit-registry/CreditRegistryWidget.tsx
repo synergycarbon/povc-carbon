@@ -1,7 +1,11 @@
 /**
  * Credit Registry Widget
  *
- * Displays carbon credit NFTs with real-time status updates.
+ * @graph   credit_registry — reads the DAG of credit issuance, transfer, and retirement
+ * @overlay Credit NFT status (Issued/Listed/Sold/Retired/Cancelled), vintage, methodology, source type
+ * @rbac    owner — visible to owner tier only (full registry access)
+ *
+ * Displays carbon credit NFTs with real-time status updates from graph-backed topics.
  * Supports filtering by vintage year, methodology, and source type.
  * Provides retire action via Spark circuit invocation.
  */
@@ -27,10 +31,18 @@ export function CreditRegistryWidget(): React.ReactElement {
   const theme = useEStreamTheme();
   const [filters, setFilters] = useState<CreditRegistryFilters>({});
 
-  useWidgetSubscription<CarbonCredit>('lex://sc/credits/issued');
-  useWidgetSubscription<CarbonCredit>('lex://sc/credits/transferred');
-  useWidgetSubscription<CarbonCredit>('lex://sc/credits/retired');
-  useWidgetSubscription<CarbonCredit>('lex://sc/credits/cancelled');
+  useWidgetSubscription<CarbonCredit>(
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/issued',
+  );
+  useWidgetSubscription<CarbonCredit>(
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/transferred',
+  );
+  useWidgetSubscription<CarbonCredit>(
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retired',
+  );
+  useWidgetSubscription<CarbonCredit>(
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/cancelled',
+  );
 
   const credits = useEsliteQuery<CarbonCredit>('carbon_credits', {
     orderBy: 'issued_at',

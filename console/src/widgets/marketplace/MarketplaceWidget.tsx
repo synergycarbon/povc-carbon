@@ -1,9 +1,13 @@
 /**
  * Marketplace Widget
  *
+ * @graph   marketplace_orderbook — reads the DAG of listing, settlement, and cancellation events
+ * @overlay Active listings with price, volume, vintage, source type, and sort controls
+ * @rbac    buyer — visible to buyer tier and above
+ *
  * Provides a full trading interface for carbon credits:
  * - Browse active listings with filters
- * - Real-time price and availability updates
+ * - Real-time price and availability updates via graph-backed topics
  * - Place orders and cancel listings via Spark actions
  */
 
@@ -25,9 +29,15 @@ export function MarketplaceWidget(): React.ReactElement {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sourceFilter, setSourceFilter] = useState<SourceType | ''>('');
 
-  useWidgetSubscription<MarketplaceListing>('lex://sc/marketplace/listed');
-  useWidgetSubscription<MarketplaceListing>('lex://sc/marketplace/settled');
-  useWidgetSubscription<MarketplaceListing>('lex://sc/marketplace/cancelled');
+  useWidgetSubscription<MarketplaceListing>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/listings/listed',
+  );
+  useWidgetSubscription<MarketplaceListing>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/listings/settled',
+  );
+  useWidgetSubscription<MarketplaceListing>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/listings/cancelled',
+  );
 
   const listings = useEsliteQuery<MarketplaceListing>('marketplace_listings', {
     where: { status: 'Active' },

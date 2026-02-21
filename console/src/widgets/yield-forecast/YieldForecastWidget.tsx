@@ -1,11 +1,15 @@
 /**
  * Yield Forecast Widget
  *
+ * @graph   yield_model — reads AI forecast outputs from the ops DAG
+ * @overlay Point estimates with confidence intervals, model version, horizon breakdown
+ * @rbac    owner — visible to owner tier only (full access)
+ *
  * AI-driven carbon yield predictions with:
  * - Point estimates and confidence intervals
  * - Model version tracking
  * - Horizon-based forecasting (monthly, quarterly, annual)
- * - Real-time updates via lex subscription
+ * - Real-time updates via graph-backed lex subscription
  */
 
 import React from 'react';
@@ -21,7 +25,9 @@ import { YIELD_FORECAST_MANIFEST } from './manifest';
 export function YieldForecastWidget(): React.ReactElement {
   const theme = useEStreamTheme();
 
-  const latestForecast = useWidgetSubscription<YieldForecast>('lex://sc/ai/forecast');
+  const latestForecast = useWidgetSubscription<YieldForecast>(
+    'esn://sustainability/carbon/org/synergycarbon/ops/ai/forecast',
+  );
 
   const forecasts = useEsliteQuery<YieldForecast>('yield_forecasts', {
     orderBy: 'generated_at',

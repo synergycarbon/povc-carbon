@@ -5,11 +5,15 @@ export const IMPACT_CERTIFICATE_MANIFEST: WidgetManifest = {
   name: 'Impact Certificate',
   description: 'Visual retirement certificate with verification QR code and provenance chain',
   category: 'impact',
-  version: '1.0.0',
+  version: '1.1.0',
+  visibility_tier: 'buyer',
   roles: ['buyer'],
   data_sources: {
-    lex_topics: ['lex://sc/retirements/certificate'],
+    lex_topics: [
+      'esn://sustainability/carbon/org/synergycarbon/registry/retirements/certificate',
+    ],
     eslite_tables: ['retirements', 'carbon_credits'],
+    graph: 'credit_registry',
   },
   size: {
     min_width: 3,

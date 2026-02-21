@@ -5,11 +5,15 @@ export const PRICING_ORACLE_MANIFEST: WidgetManifest = {
   name: 'Pricing Oracle',
   description: 'Forward curve visualization with spot price, tenor-based pricing, and confidence intervals',
   category: 'analytics',
-  version: '1.0.0',
-  roles: ['buyer'],
+  version: '1.1.0',
+  visibility_tier: 'owner',
+  roles: ['owner'],
   data_sources: {
-    lex_topics: ['lex://sc/ai/forward_curve'],
+    lex_topics: [
+      'esn://sustainability/carbon/org/synergycarbon/ops/ai/forward_curve',
+    ],
     eslite_tables: ['forward_curves'],
+    graph: 'pricing_model',
   },
   size: {
     min_width: 3,

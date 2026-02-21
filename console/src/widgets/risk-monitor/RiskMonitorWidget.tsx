@@ -1,11 +1,15 @@
 /**
  * Risk Monitor Widget
  *
+ * @graph   risk_model — reads yield + pricing data from the ops DAG for exposure analysis
+ * @overlay Yield risk (confidence spread), price risk (volatility), combined risk level heat map
+ * @rbac    owner — visible to owner tier only (full access)
+ *
  * Combines AI yield forecasts with forward curve pricing to present:
  * - Yield risk (confidence spread as % of point estimate)
  * - Price risk (curve volatility across tenors)
  * - Combined exposure metrics
- * - Risk heat indicators
+ * - Risk heat indicators via graph-backed ops topics
  */
 
 import React, { useMemo } from 'react';
@@ -23,8 +27,12 @@ type RiskLevel = 'low' | 'medium' | 'high';
 export function RiskMonitorWidget(): React.ReactElement {
   const theme = useEStreamTheme();
 
-  const latestForecast = useWidgetSubscription<YieldForecast>('lex://sc/ai/forecast');
-  const latestCurve = useWidgetSubscription<ForwardCurve>('lex://sc/ai/forward_curve');
+  const latestForecast = useWidgetSubscription<YieldForecast>(
+    'esn://sustainability/carbon/org/synergycarbon/ops/ai/forecast',
+  );
+  const latestCurve = useWidgetSubscription<ForwardCurve>(
+    'esn://sustainability/carbon/org/synergycarbon/ops/ai/forward_curve',
+  );
 
   const cachedForecasts = useEsliteQuery<YieldForecast>('yield_forecasts', {
     orderBy: 'generated_at',

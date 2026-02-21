@@ -1,10 +1,14 @@
 /**
  * Forward Contracts Widget
  *
+ * @graph   marketplace_orderbook — reads the DAG of contract lifecycle events
+ * @overlay Contract pipeline (Proposed/Active/Delivering/Settled), delivery progress, settlement
+ * @rbac    buyer — visible to buyer tier and above
+ *
  * Manages forward carbon credit contracts:
  * - View contract pipeline with status tracking
  * - Monitor delivery progress against schedule
- * - Real-time updates on proposals, acceptances, and settlements
+ * - Real-time updates on proposals, acceptances, and settlements via graph-backed topics
  * - Sign contracts via Spark action
  */
 
@@ -22,10 +26,18 @@ export function ForwardContractsWidget(): React.ReactElement {
   const theme = useEStreamTheme();
   const [statusFilter, setStatusFilter] = useState<ContractStatus | ''>('');
 
-  useWidgetSubscription<ForwardContract>('lex://sc/contracts/proposed');
-  useWidgetSubscription<ForwardContract>('lex://sc/contracts/accepted');
-  useWidgetSubscription<ForwardContract>('lex://sc/contracts/delivery');
-  useWidgetSubscription<ForwardContract>('lex://sc/contracts/settled');
+  useWidgetSubscription<ForwardContract>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/contracts/proposed',
+  );
+  useWidgetSubscription<ForwardContract>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/contracts/accepted',
+  );
+  useWidgetSubscription<ForwardContract>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/contracts/delivery',
+  );
+  useWidgetSubscription<ForwardContract>(
+    'esn://sustainability/carbon/org/synergycarbon/marketplace/contracts/settled',
+  );
 
   const contracts = useEsliteQuery<ForwardContract>('forward_contracts', {
     orderBy: 'created_at',

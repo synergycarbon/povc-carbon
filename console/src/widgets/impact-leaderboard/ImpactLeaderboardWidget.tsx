@@ -1,9 +1,13 @@
 /**
  * Impact Leaderboard Widget
  *
+ * @graph   impact_aggregator — reads ranked entity totals from the registry DAG
+ * @overlay Ranked entity list by tCO2e retired with relative bar visualization
+ * @rbac    public — no auth required; embeddable
+ *
  * Ranks entities by total tCO2e retired. Real-time updates via
- * WebTransport lex subscription. Supports configurable max entries
- * and time range filtering.
+ * graph-backed WebTransport lex subscription. Supports configurable
+ * max entries and time range filtering.
  */
 
 import React from 'react';
@@ -31,7 +35,9 @@ export function ImpactLeaderboardWidget({
     limit: max_entries,
   });
 
-  useWidgetSubscription<EntityImpact>('lex://sc/impact/updates');
+  useWidgetSubscription<EntityImpact>(
+    'esn://sustainability/carbon/org/synergycarbon/registry/impact/updates',
+  );
 
   const maxTonnes = entities?.[0]?.total_tco2e_retired ?? 1;
 

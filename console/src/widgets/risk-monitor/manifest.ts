@@ -5,14 +5,16 @@ export const RISK_MONITOR_MANIFEST: WidgetManifest = {
   name: 'Risk Monitor',
   description: 'Risk dashboard combining AI yield forecasts and forward curve pricing for exposure analysis',
   category: 'analytics',
-  version: '1.0.0',
-  roles: ['buyer'],
+  version: '1.1.0',
+  visibility_tier: 'owner',
+  roles: ['owner'],
   data_sources: {
     lex_topics: [
-      'lex://sc/ai/forecast',
-      'lex://sc/ai/forward_curve',
+      'esn://sustainability/carbon/org/synergycarbon/ops/ai/forecast',
+      'esn://sustainability/carbon/org/synergycarbon/ops/ai/forward_curve',
     ],
     eslite_tables: ['yield_forecasts', 'forward_curves'],
+    graph: 'risk_model',
   },
   size: {
     min_width: 3,

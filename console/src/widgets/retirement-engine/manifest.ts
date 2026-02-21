@@ -5,15 +5,17 @@ export const RETIREMENT_ENGINE_MANIFEST: WidgetManifest = {
   name: 'Retirement Engine',
   description: 'Manage retirement triggers, view retirement history, and invoke credit retirements',
   category: 'operations',
-  version: '1.0.0',
-  roles: ['owner'],
+  version: '1.1.0',
+  visibility_tier: 'buyer',
+  roles: ['buyer'],
   data_sources: {
     lex_topics: [
-      'lex://sc/retirements/triggered',
-      'lex://sc/retirements/confirmed',
-      'lex://sc/credits/retired',
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retirements/triggered',
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retirements/confirmed',
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retired',
     ],
     eslite_tables: ['retirements', 'carbon_credits'],
+    graph: 'credit_registry',
   },
   size: {
     min_width: 3,

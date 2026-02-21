@@ -1,8 +1,12 @@
 /**
  * Impact Counter Widget
  *
+ * @graph   impact_aggregator — reads aggregated retirement totals from the registry DAG
+ * @overlay Running totals: all-time tCO2e retired, year breakdown, month breakdown
+ * @rbac    public — no auth required; embeddable
+ *
  * Displays a running total of CO2e retired for an entity.
- * Subscribes to lex://sc/impact/updates via WebTransport for real-time updates.
+ * Subscribes to graph-backed registry impact topic via WebTransport for real-time updates.
  * Falls back to ESLite cache for offline display.
  */
 
@@ -24,7 +28,7 @@ export function ImpactCounterWidget({ entity_id }: ImpactCounterProps): React.Re
   const theme = useEStreamTheme();
 
   const liveData = useWidgetSubscription<EntityImpact>(
-    'lex://sc/impact/updates',
+    'esn://sustainability/carbon/org/synergycarbon/registry/impact/updates',
     { filter: entity_id ? { entity_id } : undefined },
   );
 

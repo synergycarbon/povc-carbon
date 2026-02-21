@@ -1,6 +1,10 @@
 /**
  * Impact Certificate Widget
  *
+ * @graph   credit_registry — reads the retirement provenance chain from the credit DAG
+ * @overlay Retirement certificate: credit details, beneficiary, evidence hash, provenance
+ * @rbac    buyer — visible to buyer tier and above; embeddable
+ *
  * Renders a visual retirement certificate with:
  * - Credit details (serial, vintage, methodology, tCO2e)
  * - Beneficiary attribution

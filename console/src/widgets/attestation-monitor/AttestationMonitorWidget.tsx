@@ -1,8 +1,12 @@
 /**
  * Attestation Monitor Widget
  *
+ * @graph   verification_pipeline — reads the DAG of attestation verification steps
+ * @overlay Attestation status (verified/rejected), confidence scores, quorum counts
+ * @rbac    auditor — visible to auditor tier and above
+ *
  * Real-time feed of verified and rejected attestations for auditors.
- * Subscribes to both attestation lex topics and maintains a rolling
+ * Subscribes to graph-backed verification lex topics and maintains a rolling
  * window of recent events with confidence scoring.
  */
 
@@ -26,10 +30,10 @@ export function AttestationMonitorWidget(): React.ReactElement {
   const [events, setEvents] = useState<AttestationEvent[]>([]);
 
   const latestVerified = useWidgetSubscription<Attestation>(
-    'lex://sc/attestations/verified',
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/attestations/verified',
   );
   const latestRejected = useWidgetSubscription<Attestation>(
-    'lex://sc/attestations/rejected',
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/attestations/rejected',
   );
 
   const cachedAttestations = useEsliteQuery<Attestation>('attestations', {

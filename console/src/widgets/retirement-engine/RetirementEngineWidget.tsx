@@ -1,9 +1,13 @@
 /**
  * Retirement Engine Widget
  *
+ * @graph   credit_registry — reads the retirement lifecycle from the credit DAG
+ * @overlay Retirement history, trigger breakdown (threshold/schedule/stream), live events
+ * @rbac    buyer — visible to buyer tier and above
+ *
  * Manages carbon credit retirement lifecycle:
  * - View retirement history with trigger type breakdown
- * - Monitor real-time retirement events
+ * - Monitor real-time retirement events via graph-backed topics
  * - Create retirement triggers (threshold, schedule, stream)
  * - Invoke manual retirements via Spark
  */
@@ -24,13 +28,15 @@ export function RetirementEngineWidget(): React.ReactElement {
   const [recentEvents, setRecentEvents] = useState<Retirement[]>([]);
 
   const latestTriggered = useWidgetSubscription<Retirement>(
-    'lex://sc/retirements/triggered',
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retirements/triggered',
   );
   const latestConfirmed = useWidgetSubscription<Retirement>(
-    'lex://sc/retirements/confirmed',
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retirements/confirmed',
   );
 
-  useWidgetSubscription<CarbonCredit>('lex://sc/credits/retired');
+  useWidgetSubscription<CarbonCredit>(
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/credits/retired',
+  );
 
   useEffect(() => {
     if (latestTriggered) {

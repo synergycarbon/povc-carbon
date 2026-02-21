@@ -5,11 +5,16 @@ export const AUDIT_TRAIL_MANIFEST: WidgetManifest = {
   name: 'Audit Trail',
   description: 'Hash-chained audit event log with filtering, search, and export for compliance review',
   category: 'operations',
-  version: '1.0.0',
+  version: '1.1.0',
+  visibility_tier: 'auditor',
   roles: ['auditor'],
   data_sources: {
-    lex_topics: ['lex://sc/audit/events'],
+    lex_topics: [
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/audit/events',
+      'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/compliance/audit/events',
+    ],
     eslite_tables: ['audit_events'],
+    graph: 'compliance_chain',
   },
   size: {
     min_width: 4,

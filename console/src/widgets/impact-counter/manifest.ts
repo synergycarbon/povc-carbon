@@ -5,11 +5,15 @@ export const IMPACT_COUNTER_MANIFEST: WidgetManifest = {
   name: 'Impact Counter',
   description: 'Running total of CO2e retired by an entity, with year/month breakdowns',
   category: 'impact',
-  version: '1.0.0',
+  version: '1.1.0',
+  visibility_tier: 'public',
   roles: ['public'],
   data_sources: {
-    lex_topics: ['lex://sc/impact/updates'],
+    lex_topics: [
+      'esn://sustainability/carbon/org/synergycarbon/registry/impact/updates',
+    ],
     eslite_tables: ['entity_impacts'],
+    graph: 'impact_aggregator',
   },
   size: {
     min_width: 2,

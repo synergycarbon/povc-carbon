@@ -1,8 +1,12 @@
 /**
  * Impact Live Meter Widget
  *
+ * @graph   verification_pipeline, impact_aggregator — reads live attestation stream + aggregated impact
+ * @overlay Current generation rate (kW), running carbon offset (tCO2e), recent attestation feed
+ * @rbac    public — no auth required; embeddable
+ *
  * Shows real-time energy generation and carbon offset with sub-second
- * updates via WebTransport lex topic subscription. Displays:
+ * updates via graph-backed WebTransport lex topic subscription. Displays:
  * - Current generation rate (kW)
  * - Running carbon offset (tCO2e)
  * - Live attestation feed
@@ -27,12 +31,12 @@ export function ImpactLiveMeterWidget({ entity_id }: ImpactLiveMeterProps): Reac
   const [recentAttestations, setRecentAttestations] = useState<Attestation[]>([]);
 
   const latestAttestation = useWidgetSubscription<Attestation>(
-    'lex://sc/attestations/verified',
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/attestations/verified',
     { filter: entity_id ? { tenant_id: entity_id } : undefined },
   );
 
   const impact = useWidgetSubscription<EntityImpact>(
-    'lex://sc/impact/updates',
+    'esn://sustainability/carbon/org/synergycarbon/registry/impact/updates',
     { filter: entity_id ? { entity_id } : undefined },
   );
 

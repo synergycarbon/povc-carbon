@@ -5,11 +5,15 @@ export const YIELD_FORECAST_MANIFEST: WidgetManifest = {
   name: 'Yield Forecast',
   description: 'AI-powered carbon credit yield predictions with confidence intervals and model versioning',
   category: 'analytics',
-  version: '1.0.0',
-  roles: ['buyer'],
+  version: '1.1.0',
+  visibility_tier: 'owner',
+  roles: ['owner'],
   data_sources: {
-    lex_topics: ['lex://sc/ai/forecast'],
+    lex_topics: [
+      'esn://sustainability/carbon/org/synergycarbon/ops/ai/forecast',
+    ],
     eslite_tables: ['yield_forecasts'],
+    graph: 'yield_model',
   },
   size: {
     min_width: 3,

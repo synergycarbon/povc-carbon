@@ -1,11 +1,15 @@
 /**
  * Governance Widget
  *
+ * @graph   governance_dag — reads the DAG of governance proposals, votes, and outcomes
+ * @overlay Proposals (pending/approved/rejected), methodology approvals, verifier registrations
+ * @rbac    auditor — visible to auditor tier and above
+ *
  * Comprehensive governance interface:
  * - Browse and vote on proposals (methodology, verifier, parameter)
  * - View methodology registry with status
  * - Register new verifiers
- * - Real-time governance event feed
+ * - Real-time governance event feed via graph-backed topics
  */
 
 import React, { useState, useMemo } from 'react';
@@ -25,10 +29,18 @@ export function GovernanceWidget(): React.ReactElement {
   const [activeTab, setActiveTab] = useState<GovernanceTab>('proposals');
   const [proposalTypeFilter, setProposalTypeFilter] = useState<ProposalType | ''>('');
 
-  useWidgetSubscription<GovernanceProposal>('lex://sc/governance/proposals/result');
-  useWidgetSubscription<Methodology>('lex://sc/governance/methodology/approved');
-  useWidgetSubscription('lex://sc/governance/verifier/registered');
-  useWidgetSubscription('lex://sc/governance/parameters/updated');
+  useWidgetSubscription<GovernanceProposal>(
+    'esn://sustainability/carbon/org/synergycarbon/governance/proposals/result',
+  );
+  useWidgetSubscription<Methodology>(
+    'esn://sustainability/carbon/org/synergycarbon/governance/methodology/approved',
+  );
+  useWidgetSubscription(
+    'esn://sustainability/carbon/org/synergycarbon/governance/verifier/registered',
+  );
+  useWidgetSubscription(
+    'esn://sustainability/carbon/org/synergycarbon/governance/parameters/updated',
+  );
 
   const proposals = useEsliteQuery<GovernanceProposal>('governance_proposals', {
     orderBy: 'created_at',

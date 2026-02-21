@@ -1,9 +1,13 @@
 /**
  * Audit Trail Widget
  *
+ * @graph   compliance_chain — reads the DAG of hash-chained compliance events
+ * @overlay Hash-chained audit events with action type, timestamp, and prev-hash linkage
+ * @rbac    auditor — visible to auditor tier and above
+ *
  * Displays a hash-chained audit event log for compliance review.
  * Features:
- * - Real-time event ingestion via lex subscription
+ * - Real-time event ingestion via graph-backed lex subscription
  * - Action type filtering
  * - Hash chain verification indicators
  * - CSV/JSON export capability
@@ -24,7 +28,9 @@ export function AuditTrailWidget(): React.ReactElement {
   const [actionFilter, setActionFilter] = useState<string>('');
   const [liveEvents, setLiveEvents] = useState<AuditEvent[]>([]);
 
-  const latestEvent = useWidgetSubscription<AuditEvent>('lex://sc/audit/events');
+  const latestEvent = useWidgetSubscription<AuditEvent>(
+    'esn://sustainability/carbon/org/synergycarbon/project/{project_id}/verification/audit/events',
+  );
 
   useEffect(() => {
     if (latestEvent) {

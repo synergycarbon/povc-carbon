@@ -1,11 +1,15 @@
 /**
  * Pricing Oracle Widget
  *
+ * @graph   pricing_model — reads forward curve data from the ops DAG
+ * @overlay Spot price, tenor-based forward curve with confidence intervals, premium vs spot
+ * @rbac    owner — visible to owner tier only (full access)
+ *
  * Visualizes the carbon credit forward curve:
  * - Spot price display
  * - Tenor-based price points with confidence intervals
  * - ASCII-style curve visualization
- * - Real-time updates via lex subscription
+ * - Real-time updates via graph-backed lex subscription
  */
 
 import React from 'react';
@@ -21,7 +25,9 @@ import { PRICING_ORACLE_MANIFEST } from './manifest';
 export function PricingOracleWidget(): React.ReactElement {
   const theme = useEStreamTheme();
 
-  const latestCurve = useWidgetSubscription<ForwardCurve>('lex://sc/ai/forward_curve');
+  const latestCurve = useWidgetSubscription<ForwardCurve>(
+    'esn://sustainability/carbon/org/synergycarbon/ops/ai/forward_curve',
+  );
 
   const cachedCurves = useEsliteQuery<ForwardCurve>('forward_curves', {
     orderBy: 'generated_at',
