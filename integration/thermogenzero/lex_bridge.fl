@@ -1,0 +1,234 @@
+// ThermogenZero Lex Bridge
+// Cross-org attestation bridge: TZ FPGA witness nodes → SC verification pipeline
+//
+// Bridge path:
+//   esn/.../thermogenzero/carbon/ → esn/.../synergycarbon/project/thermogenzero/verification/
+//
+// Receives EPA AP-42 methane destruction attestations from TZ edge nodes,
+// validates ML-DSA-87 witness signatures, maps to SC verification format,
+// and publishes to the SC attestation ingest topic.
+
+type TzAttestationHash = bytes(32)
+type TzWitnessSignature = bytes(4627)
+
+type TzAttestation = struct {
+    attestation_hash: TzAttestationHash,
+    reduction_tonnes: u64,
+    methodology_id: bytes(16),
+    witness_signatures: TzWitnessSignature[5],
+    witness_count: u8,
+    site_id: bytes(32),
+    epoch_id: u64,
+    timestamp: u64,
+    merkle_root: bytes(32),
+    gas_consumed_mcf: u64,
+    flare_temp_c: u64,
+    teg_power_w: u64,
+}
+
+type TzWitnessNode = struct {
+    node_id: bytes(32),
+    fpga_platform: u8,
+    ml_dsa_87_pubkey: bytes(2592),
+    site_id: bytes(32),
+    enrolled_at: u64,
+    last_attestation: u64,
+}
+
+type BridgeMapping = struct {
+    mapping_id: bytes(16),
+    tz_site_id: bytes(32),
+    sc_project_id: bytes(32),
+    methodology_id: bytes(16),
+    active: bool,
+    created_at: u64,
+}
+
+type BridgedAttestation = struct {
+    bridge_id: bytes(32),
+    original_hash: TzAttestationHash,
+    measurement_id: bytes(32),
+    sensor_id: bytes(32),
+    value: u64,
+    unit: u8,
+    timestamp: u64,
+    location_hash: bytes(32),
+    hardware_attestation: bytes(64),
+    methodology_id: bytes(16),
+    reduction_tonnes: u64,
+    witness_count: u8,
+    bridge_signature: bytes(4627),
+    bridged_at: u64,
+}
+
+type BridgeEdge = struct {
+    edge_id: bytes(16),
+    edge_type: u8,
+    source_id: bytes(32),
+    target_id: bytes(32),
+    created_at: u64,
+}
+
+state_machine bridge_attestation_lifecycle {
+    initial RECEIVED
+    persistence wal
+    terminal [FORWARDED, REJECTED]
+    li_anomaly_detection true
+
+    RECEIVED -> VALIDATED when signatures_verified guard witness_count >= 3
+    RECEIVED -> REJECTED when signature_failed
+    VALIDATED -> MAPPED when format_converted
+    MAPPED -> FORWARDED when published_to_pipeline
+    VALIDATED -> REJECTED when mapping_failed
+}
+
+dag tz_bridge {
+    node TzAttestation
+    node TzWitnessNode
+    node BridgeMapping
+    node BridgedAttestation
+    edge BridgeEdge
+    overlay bridge_status: u8 curate delta_curate
+    overlay attestation_throughput: u64 bitmask delta_curate
+    overlay signature_failure_rate: u64 bitmask delta_curate
+    overlay witness_liveness: u8 curate delta_curate
+    overlay mapping_health: u8 curate delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed bridge_anomaly
+    ai_feed witness_liveness
+    observe tz_bridge: [bridge_status, attestation_throughput, signature_failure_rate, witness_liveness] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series bridge_provenance: tz_bridge
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Receive raw attestation from TZ lex topic and validate witness signatures
+circuit receive_tz_attestation(dag_id: bytes(32), attestation: TzAttestation, pk: bytes(1568)) -> BridgedAttestation
+    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification {
+        governance hierarchical
+        approval_required true
+        audit_trail true
+        sovereignty us
+        compliance [epa_ghg, iso_14064, verra_vcs]
+    }
+    lex_bridge esn/energy/thermogenzero/carbon -> esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    precision A
+    constant_time true
+    witness threshold(3, 5)
+    rbac [bridge_operator, verifier, registry_admin]
+    observe metrics: [attestation_hash, reduction_tonnes, methodology_id, witness_count, site_id]
+    invariant "reduction_positive" { attestation.reduction_tonnes > 0 }
+    invariant "witness_threshold" { attestation.witness_count >= 3 }
+    invariant "methodology_valid" { attestation.methodology_id != 0x00 }
+    monitor "bridge_throughput" { attestations_per_epoch > 0 }
+    monitor "signature_failure_rate" { sig_fail_rate < 0.01 }
+    fuzz_target
+    esz_emit "verify/thermogenzero_bridge.esz"
+    li_feed full_escir true, optimized_ir true
+{
+    let valid_sigs = 0
+    let i = 0
+    while i < attestation.witness_count {
+        let witness = context_lookup("tz_witnesses", attestation.witness_signatures[i])
+        let sig_valid = mldsa_verify(attestation.attestation_hash, attestation.witness_signatures[i], witness.ml_dsa_87_pubkey)
+        if sig_valid { valid_sigs = valid_sigs + 1 }
+        i = i + 1
+    }
+
+    let threshold_met = valid_sigs >= 3
+    let mapping = context_lookup("bridge_mappings", attestation.site_id)
+
+    let measurement_id = sha3_256(attestation.attestation_hash ++ attestation.epoch_id ++ attestation.timestamp)
+    let location_hash = sha3_256(attestation.site_id)
+    let hw_attestation = sha3_256(attestation.merkle_root ++ attestation.attestation_hash)
+
+    let kem = mlkem_encaps(pk)
+    let anomaly = streamsight_anomaly(attestation.attestation_hash)
+
+    let bridge_id = sha3_256(measurement_id ++ attestation.attestation_hash)
+    let bridge_sig = mldsa_sign(bridge_id, mapping.sc_project_id)
+
+    store("bridged_attestations", bridge_id, bridge_id)
+
+    BridgedAttestation {
+        bridge_id: bridge_id,
+        original_hash: attestation.attestation_hash,
+        measurement_id: measurement_id,
+        sensor_id: attestation.site_id,
+        value: attestation.reduction_tonnes,
+        unit: 5,
+        timestamp: attestation.timestamp,
+        location_hash: location_hash,
+        hardware_attestation: hw_attestation,
+        methodology_id: attestation.methodology_id,
+        reduction_tonnes: attestation.reduction_tonnes,
+        witness_count: valid_sigs,
+        bridge_signature: bridge_sig,
+        bridged_at: now(),
+    }
+}
+
+// Enroll a TZ FPGA witness node as an authorized attester
+circuit enroll_tz_witness(dag_id: bytes(32), witness: TzWitnessNode, enrollment_sig: bytes(4627)) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    precision C
+    povc true
+    rbac [registry_admin, bridge_operator]
+    observe metrics: [node_id, fpga_platform, site_id]
+    invariant "pubkey_nonzero" { witness.ml_dsa_87_pubkey != 0x00 }
+{
+    let enrollment_valid = mldsa_verify(witness.node_id, enrollment_sig, witness.ml_dsa_87_pubkey)
+    store("tz_witnesses", witness.node_id, witness)
+    witness.node_id
+}
+
+// Register a site-to-project bridge mapping
+circuit register_bridge_mapping(dag_id: bytes(32), mapping: BridgeMapping) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    precision C
+    povc true
+    rbac [registry_admin]
+    observe metrics: [mapping_id, tz_site_id, sc_project_id, methodology_id]
+{
+    store("bridge_mappings", mapping.tz_site_id, mapping)
+    mapping.mapping_id
+}
+
+// Forward validated attestation to SC verification pipeline
+circuit forward_to_pipeline(dag_id: bytes(32), bridged: BridgedAttestation, pipeline_dag_id: bytes(32)) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    precision A
+    witness threshold(2, 3)
+    rbac [bridge_operator, verifier]
+    observe metrics: [bridge_id, measurement_id, reduction_tonnes]
+    invariant "bridge_sig_valid" { sig_verified == true }
+    critical_path
+{
+    let sig_verified = mldsa_verify(bridged.bridge_id, bridged.bridge_signature, bridged.sensor_id)
+    publish("sc.attestations.thermogenzero.raw", bridged)
+    bridged.bridge_id
+}
+
+stream tz_bridge_events: event<BridgedAttestation>
+    retention 99y
+    consumers [verification_pipeline, registry, audit, compliance, streamsight]
+    classify reduction_tonnes: VERIFIED_DATA, methodology_id: METADATA, witness_count: METADATA
+
+stream tz_witness_events: event<TzWitnessNode>
+    retention 99y
+    consumers [registry, audit, streamsight]
+    classify node_id: METADATA, fpga_platform: METADATA, site_id: METADATA
+
+stream bridge_mapping_events: event<BridgeMapping>
+    retention 99y
+    consumers [registry, audit, governance]
+    classify tz_site_id: METADATA, sc_project_id: METADATA, methodology_id: METADATA

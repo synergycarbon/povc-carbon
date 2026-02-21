@@ -1,0 +1,230 @@
+{
+  "circuit": "sc_tz_cross_org_pipeline",
+  "escir_version": "0.8.1",
+  "description": "Cross-org end-to-end: TZ edge -> lex_bridge -> SC verification -> credit issuance",
+  "vectors": [
+    {
+      "id": "tz-e2e-single-epoch",
+      "description": "Single epoch from TZ FPGA witness through full SC pipeline to credit issuance",
+      "tags": ["thermogenzero", "end-to-end", "happy-path", "cross-org"],
+      "inputs": {
+        "step_1_tz_edge": {
+          "source_type": "thermoelectric",
+          "tenant_id": "thermogenzero",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 100,
+          "total_energy_wh": 212.5,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "witness_count": 3,
+          "tz_lex_topic": "esn/energy/thermogenzero/carbon/site/alpha"
+        },
+        "step_2_lex_bridge": {
+          "bridge_circuit": "integration/thermogenzero/lex_bridge.fl",
+          "source_lex": "esn/energy/thermogenzero/carbon",
+          "dest_lex": "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "signature_validation": "ML-DSA-87",
+          "quorum_size": 3
+        },
+        "step_3_sc_verification": {
+          "pipeline_circuit": "circuits/fl/verification_pipeline.fl",
+          "witness_threshold": "3-of-5",
+          "compliance_frameworks": ["epa_ghg", "iso_14064", "verra_vcs"],
+          "expected_tco2e": 0.260
+        },
+        "step_4_credit_issuance": {
+          "registry_circuit": "circuits/fl/credit_registry.fl",
+          "credit_type": "Avoidance",
+          "vintage_year": 2026,
+          "vintage_quarter": "Q1",
+          "serial_prefix": "SC"
+        }
+      },
+      "expected_outputs": {
+        "tz_attestation_emitted": true,
+        "bridge_validated": true,
+        "bridge_mapped": true,
+        "sc_measurement_ingested": true,
+        "sc_attestation_committed": true,
+        "sc_witnesses_verified": {
+          "count": 3,
+          "threshold_met": true
+        },
+        "sc_compliance_passed": {
+          "epa_ghg": true,
+          "iso_14064": true,
+          "verra_vcs": true,
+          "flags": "0x0F"
+        },
+        "credit_issued": {
+          "serial_number": "SC-2026-tz-esz-wellpad-alpha-000001",
+          "tenant_id": "thermogenzero",
+          "project_id": "thermogenzero",
+          "vintage_year": 2026,
+          "credit_type": "Avoidance",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "tonnes_co2e": 0.260,
+          "status": "Issued"
+        },
+        "audit_events_count": 5,
+        "lex_topics_published": [
+          "sc.attestations.thermogenzero.raw",
+          "lex://sc/attestations/verified",
+          "lex://sc/credits/issued"
+        ]
+      }
+    },
+    {
+      "id": "tz-e2e-multi-site-quarterly",
+      "description": "Multi-site quarterly aggregation: Alpha + Bravo sites through full pipeline",
+      "tags": ["thermogenzero", "end-to-end", "multi-site", "quarterly", "cross-org"],
+      "inputs": {
+        "step_1_tz_edge_alpha": {
+          "source_type": "thermoelectric",
+          "tenant_id": "thermogenzero",
+          "site_id": "esz-wellpad-alpha",
+          "epochs": 2160,
+          "total_energy_wh": 459000.0,
+          "total_gas_consumed_mcf": 1080.0,
+          "avg_flare_temp_c": 810,
+          "avg_teg_power_w": 212.5,
+          "witness_count": 3,
+          "tz_lex_topic": "esn/energy/thermogenzero/carbon/site/alpha"
+        },
+        "step_1_tz_edge_bravo": {
+          "source_type": "thermoelectric",
+          "tenant_id": "thermogenzero",
+          "site_id": "esz-wellpad-bravo",
+          "epochs": 2160,
+          "total_energy_wh": 612000.0,
+          "total_gas_consumed_mcf": 1404.0,
+          "avg_flare_temp_c": 820,
+          "avg_teg_power_w": 283.0,
+          "witness_count": 3,
+          "tz_lex_topic": "esn/energy/thermogenzero/carbon/site/bravo"
+        },
+        "step_2_lex_bridge": {
+          "bridge_circuit": "integration/thermogenzero/lex_bridge.fl",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "quorum_size": 3
+        },
+        "step_3_sc_verification": {
+          "pipeline_circuit": "circuits/fl/verification_pipeline.fl",
+          "witness_threshold": "3-of-5",
+          "compliance_frameworks": ["epa_ghg", "iso_14064", "verra_vcs"]
+        },
+        "step_4_credit_issuance": {
+          "registry_circuit": "circuits/fl/credit_registry.fl",
+          "credit_type": "Avoidance",
+          "vintage_year": 2026,
+          "vintage_quarter": "Q1"
+        }
+      },
+      "expected_outputs": {
+        "alpha_attestations_bridged": 2160,
+        "bravo_attestations_bridged": 2160,
+        "total_attestations_verified": 4320,
+        "alpha_total_tco2e": 562.1,
+        "bravo_total_tco2e": 730.8,
+        "combined_total_tco2e": 1292.9,
+        "credits_issued_alpha": {
+          "count_gte": 1,
+          "vintage_year": 2026,
+          "vintage_quarter": "Q1"
+        },
+        "credits_issued_bravo": {
+          "count_gte": 1,
+          "vintage_year": 2026,
+          "vintage_quarter": "Q1"
+        },
+        "quarterly_report": {
+          "epa_ghg_generated": true,
+          "iso_14064_generated": true,
+          "verra_monitoring_generated": true
+        }
+      }
+    },
+    {
+      "id": "tz-e2e-bridge-failure-recovery",
+      "description": "Bridge rejects attestation, TZ resends with corrected witness set, pipeline recovers",
+      "tags": ["thermogenzero", "end-to-end", "recovery", "cross-org"],
+      "inputs": {
+        "step_1_initial_attempt": {
+          "source_type": "thermoelectric",
+          "tenant_id": "thermogenzero",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 200,
+          "witness_count": 2,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "expected_result": "REJECTED"
+        },
+        "step_2_retry": {
+          "epoch_id": 200,
+          "witness_count": 3,
+          "additional_witness": "tz-fpga-witness-alpha-03",
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "expected_result": "ACCEPTED"
+        },
+        "step_3_verification": {
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "expected_tco2e": 0.260
+        }
+      },
+      "expected_outputs": {
+        "initial_bridge_rejected": true,
+        "initial_rejection_reason": "Witness count 2 below threshold 3",
+        "retry_bridge_accepted": true,
+        "retry_verification_passed": true,
+        "credit_issued": {
+          "tonnes_co2e": 0.260,
+          "status": "Issued"
+        },
+        "audit_trail": {
+          "rejection_recorded": true,
+          "retry_recorded": true,
+          "total_events": 7
+        }
+      }
+    },
+    {
+      "id": "tz-e2e-flare-temp-below-threshold",
+      "description": "Attestation bridges but fails SC verification due to flare temp below EPA minimum",
+      "tags": ["thermogenzero", "end-to-end", "rejection", "methodology", "cross-org"],
+      "inputs": {
+        "step_1_tz_edge": {
+          "source_type": "thermoelectric",
+          "tenant_id": "thermogenzero",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 300,
+          "total_energy_wh": 180.0,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 650,
+          "teg_power_w": 180.0,
+          "witness_count": 3
+        },
+        "step_2_lex_bridge": {
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "quorum_size": 3
+        },
+        "step_3_adapter_calc": {
+          "expected_compliant": false,
+          "expected_reason": "Flare temperature 650°C below minimum 760°C"
+        }
+      },
+      "expected_outputs": {
+        "bridge_accepted": true,
+        "adapter_compliant": false,
+        "adapter_rejection_reason": "Flare temperature 650°C below minimum 760°C",
+        "credit_issued": false,
+        "anomaly_flagged": true,
+        "anomaly_topic": "sc.anomalies.thermogenzero.verification"
+      }
+    }
+  ]
+}

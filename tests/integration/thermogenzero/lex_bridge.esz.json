@@ -1,0 +1,262 @@
+{
+  "circuit": "sc_tz_lex_bridge",
+  "escir_version": "0.8.1",
+  "description": "ThermogenZero lex_bridge attestation reception and validation",
+  "vectors": [
+    {
+      "id": "tz-bridge-happy-path",
+      "description": "Valid TZ attestation bridged to SC verification pipeline via lex_bridge",
+      "tags": ["thermogenzero", "lex-bridge", "happy-path", "epa-ap42"],
+      "inputs": {
+        "config": {
+          "quorum_size": 3,
+          "quorum_pool": 5,
+          "quorum_window_s": 300,
+          "max_energy_deviation_pct": 5.0,
+          "min_flare_temp_c": 760.0
+        },
+        "tz_attestation": {
+          "attestation_hash": "0xA1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718",
+          "reduction_tonnes": 260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_03"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_02_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_03_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 100,
+          "timestamp": 1708000000000000,
+          "merkle_root": "0xFEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210",
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5
+        },
+        "bridge_mapping": {
+          "tz_site_id": "esz-wellpad-alpha",
+          "sc_project_id": "thermogenzero",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "active": true
+        },
+        "signatures_valid": true
+      },
+      "expected_outputs": {
+        "bridge_accepted": true,
+        "bridged_attestation": {
+          "original_hash": "0xA1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718",
+          "reduction_tonnes": 260,
+          "witness_count": 3,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "site_id": "esz-wellpad-alpha",
+          "unit": 5
+        },
+        "published_to": "sc.attestations.thermogenzero.raw",
+        "state_transition": "RECEIVED -> VALIDATED -> MAPPED -> FORWARDED"
+      }
+    },
+    {
+      "id": "tz-bridge-insufficient-witnesses",
+      "description": "TZ attestation rejected due to insufficient witness signatures (2 of 3 required)",
+      "tags": ["thermogenzero", "lex-bridge", "rejection", "quorum"],
+      "inputs": {
+        "config": {
+          "quorum_size": 3,
+          "quorum_pool": 5,
+          "quorum_window_s": 300,
+          "max_energy_deviation_pct": 5.0,
+          "min_flare_temp_c": 760.0
+        },
+        "tz_attestation": {
+          "attestation_hash": "0xB2C3D4E5F6071829B2C3D4E5F6071829B2C3D4E5F6071829B2C3D4E5F6071829",
+          "reduction_tonnes": 130,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 2,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_02_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 101,
+          "timestamp": 1708003600000000,
+          "merkle_root": "0x1111222233334444555566667777888811112222333344445555666677778888",
+          "gas_consumed_mcf": 0.25,
+          "flare_temp_c": 810,
+          "teg_power_w": 210.0
+        },
+        "bridge_mapping": {
+          "tz_site_id": "esz-wellpad-alpha",
+          "sc_project_id": "thermogenzero",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "active": true
+        },
+        "signatures_valid": true
+      },
+      "expected_outputs": {
+        "bridge_accepted": false,
+        "rejection_reason": "Witness count 2 below threshold 3",
+        "state_transition": "RECEIVED -> REJECTED"
+      }
+    },
+    {
+      "id": "tz-bridge-invalid-signature",
+      "description": "TZ attestation rejected due to invalid ML-DSA-87 witness signature",
+      "tags": ["thermogenzero", "lex-bridge", "rejection", "signature"],
+      "inputs": {
+        "config": {
+          "quorum_size": 3,
+          "quorum_pool": 5,
+          "quorum_window_s": 300,
+          "max_energy_deviation_pct": 5.0,
+          "min_flare_temp_c": 760.0
+        },
+        "tz_attestation": {
+          "attestation_hash": "0xC3D4E5F607182930C3D4E5F607182930C3D4E5F607182930C3D4E5F607182930",
+          "reduction_tonnes": 200,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "INVALID_ML_DSA_87_SIG",
+            "INVALID_ML_DSA_87_SIG",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_03"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_02_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_03_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 102,
+          "timestamp": 1708007200000000,
+          "merkle_root": "0x2222333344445555666677778888999922223333444455556666777788889999",
+          "gas_consumed_mcf": 0.4,
+          "flare_temp_c": 790,
+          "teg_power_w": 205.0
+        },
+        "bridge_mapping": {
+          "tz_site_id": "esz-wellpad-alpha",
+          "sc_project_id": "thermogenzero",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "active": true
+        },
+        "signatures_valid": false
+      },
+      "expected_outputs": {
+        "bridge_accepted": false,
+        "rejection_reason": "Valid signatures 1 below threshold 3",
+        "state_transition": "RECEIVED -> REJECTED",
+        "anomaly_flagged": true
+      }
+    },
+    {
+      "id": "tz-bridge-bravo-site",
+      "description": "Valid attestation from ESZ Wellpad Bravo site via per-site sub-lex mapping",
+      "tags": ["thermogenzero", "lex-bridge", "happy-path", "bravo-site"],
+      "inputs": {
+        "config": {
+          "quorum_size": 3,
+          "quorum_pool": 5,
+          "quorum_window_s": 300,
+          "max_energy_deviation_pct": 5.0,
+          "min_flare_temp_c": 760.0
+        },
+        "tz_attestation": {
+          "attestation_hash": "0xD4E5F60718293041D4E5F60718293041D4E5F60718293041D4E5F60718293041",
+          "reduction_tonnes": 340,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_BRAVO_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_BRAVO_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_BRAVO_01_ML_DSA_87_PK",
+            "TZ_WITNESS_BRAVO_02_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-bravo",
+          "epoch_id": 100,
+          "timestamp": 1708000000000000,
+          "merkle_root": "0xAAAABBBBCCCCDDDDEEEEFFFF00001111AAAABBBBCCCCDDDDEEEEFFFF00001111",
+          "gas_consumed_mcf": 0.65,
+          "flare_temp_c": 820,
+          "teg_power_w": 283.0
+        },
+        "bridge_mapping": {
+          "tz_site_id": "esz-wellpad-bravo",
+          "sc_project_id": "thermogenzero",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "active": true
+        },
+        "signatures_valid": true
+      },
+      "expected_outputs": {
+        "bridge_accepted": true,
+        "bridged_attestation": {
+          "original_hash": "0xD4E5F60718293041D4E5F60718293041D4E5F60718293041D4E5F60718293041",
+          "reduction_tonnes": 340,
+          "witness_count": 3,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "site_id": "esz-wellpad-bravo",
+          "unit": 5
+        },
+        "published_to": "sc.attestations.thermogenzero.raw",
+        "state_transition": "RECEIVED -> VALIDATED -> MAPPED -> FORWARDED"
+      }
+    },
+    {
+      "id": "tz-bridge-unmapped-site",
+      "description": "TZ attestation rejected because site has no bridge mapping configured",
+      "tags": ["thermogenzero", "lex-bridge", "rejection", "mapping"],
+      "inputs": {
+        "config": {
+          "quorum_size": 3,
+          "quorum_pool": 5,
+          "quorum_window_s": 300,
+          "max_energy_deviation_pct": 5.0,
+          "min_flare_temp_c": 760.0
+        },
+        "tz_attestation": {
+          "attestation_hash": "0xE5F6071829304152E5F6071829304152E5F6071829304152E5F6071829304152",
+          "reduction_tonnes": 100,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_PLACEHOLDER_1",
+            "VALID_ML_DSA_87_SIG_PLACEHOLDER_2",
+            "VALID_ML_DSA_87_SIG_PLACEHOLDER_3"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_UNKNOWN_01_ML_DSA_87_PK",
+            "TZ_WITNESS_UNKNOWN_02_ML_DSA_87_PK",
+            "TZ_WITNESS_UNKNOWN_03_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-unknown",
+          "epoch_id": 100,
+          "timestamp": 1708000000000000,
+          "merkle_root": "0x9999888877776666555544443333222299998888777766665555444433332222",
+          "gas_consumed_mcf": 0.3,
+          "flare_temp_c": 800,
+          "teg_power_w": 150.0
+        },
+        "bridge_mapping": null,
+        "signatures_valid": true
+      },
+      "expected_outputs": {
+        "bridge_accepted": false,
+        "rejection_reason": "No bridge mapping for site esz-wellpad-unknown",
+        "state_transition": "RECEIVED -> VALIDATED -> REJECTED"
+      }
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+# ThermogenZero — First Project Registration in SynergyCarbon Credit Registry
+# Issue: synergycarbon/povc-carbon#78
+#
+# ThermogenZero converts stranded wellpad methane into electricity via
+# thermoelectric generators (TEGs), avoiding methane flaring/venting.
+# Each ESZ plant site runs FPGA-based Carbon Witness Nodes that produce
+# hardware-attested measurements signed with ML-DSA-87.
+
+project:
+  id: thermogenzero
+  name: ThermogenZero
+  description: >-
+    Thermoelectric methane-to-power conversion at stranded gas wellpads.
+    TEG arrays capture waste methane, generate electricity, and produce
+    hardware-attested carbon reduction measurements via FPGA witness nodes.
+  tenant_id: thermogenzero
+  account_type: PROJECT_DEVELOPER
+  status: active
+  registered_at: "2026-02-20T00:00:00Z"
+
+methodology:
+  id: EPA-AP42-CH4-FLARE
+  name: EPA AP-42 Methane Flare Avoidance
+  standard: EPA AP-42
+  version: "5.0"
+  section: "13.5"
+  source_types:
+    - thermoelectric
+  credit_type: Avoidance
+  description: >-
+    Quantification of avoided methane emissions from stranded gas wellpads
+    via thermoelectric conversion. Baseline: uncontrolled venting/flaring.
+    Project: TEG conversion with continuous monitoring.
+  parameters:
+    gwp_factor: 28.0
+    methane_density_kg_per_mcf: 19.15
+    default_destruction_efficiency: 0.995
+    co2e_per_mcf_methane: 536.2
+    verification_discount: 0.05
+    min_flare_temp_c: 760.0
+    max_energy_deviation_pct: 5.0
+    baseline_deviation_pct: 20.0
+    baseline_window_days: 30
+    sampling_interval_s: 60
+    epoch_duration_s: 3600
+  formula: |
+    tco2e = gas_consumed_mcf * methane_density_kg_per_mcf * gwp_factor * destruction_efficiency / 1000
+  registry_compatibility:
+    - verra_vcs
+    - gold_standard
+  compliance:
+    - epa_ghg
+    - iso_14064
+    - verra_vcs
+  approved_at: "2026-02-20T00:00:00Z"
+
+witness_nodes:
+  platform: fpga
+  signature_algorithm: ML-DSA-87
+  quorum_size: 3
+  quorum_pool: 5
+  quorum_window_s: 300
+  heartbeat_interval_s: 60
+  key_rotation_interval_days: 365
+  nodes:
+    - node_id: "tz-fpga-witness-alpha-01"
+      site_id: "esz-wellpad-alpha"
+      ml_dsa_87_pubkey: "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK"
+      fpga_model: "Xilinx Artix-7"
+      firmware_version: "2.1.0"
+      enrolled_at: "2026-02-20T00:00:00Z"
+    - node_id: "tz-fpga-witness-alpha-02"
+      site_id: "esz-wellpad-alpha"
+      ml_dsa_87_pubkey: "TZ_WITNESS_ALPHA_02_ML_DSA_87_PK"
+      fpga_model: "Xilinx Artix-7"
+      firmware_version: "2.1.0"
+      enrolled_at: "2026-02-20T00:00:00Z"
+    - node_id: "tz-fpga-witness-alpha-03"
+      site_id: "esz-wellpad-alpha"
+      ml_dsa_87_pubkey: "TZ_WITNESS_ALPHA_03_ML_DSA_87_PK"
+      fpga_model: "Xilinx Artix-7"
+      firmware_version: "2.1.0"
+      enrolled_at: "2026-02-20T00:00:00Z"
+    - node_id: "tz-fpga-witness-bravo-01"
+      site_id: "esz-wellpad-bravo"
+      ml_dsa_87_pubkey: "TZ_WITNESS_BRAVO_01_ML_DSA_87_PK"
+      fpga_model: "Xilinx Artix-7"
+      firmware_version: "2.1.0"
+      enrolled_at: "2026-02-20T00:00:00Z"
+    - node_id: "tz-fpga-witness-bravo-02"
+      site_id: "esz-wellpad-bravo"
+      ml_dsa_87_pubkey: "TZ_WITNESS_BRAVO_02_ML_DSA_87_PK"
+      fpga_model: "Xilinx Artix-7"
+      firmware_version: "2.1.0"
+      enrolled_at: "2026-02-20T00:00:00Z"
+
+sites:
+  - site_id: "esz-wellpad-alpha"
+    name: "ESZ Wellpad Alpha"
+    region: us-west
+    location_hash_description: "SHA3-256(lat || lon || alt) — raw coords never transmitted"
+    teg_count: 18
+    capacity_kw: 3.825
+    commissioned_at: "2026-01-15T00:00:00Z"
+    sub_lex: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/site/alpha
+  - site_id: "esz-wellpad-bravo"
+    name: "ESZ Wellpad Bravo"
+    region: us-west
+    location_hash_description: "SHA3-256(lat || lon || alt) — raw coords never transmitted"
+    teg_count: 24
+    capacity_kw: 5.1
+    commissioned_at: "2026-02-01T00:00:00Z"
+    sub_lex: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/site/bravo
+
+lex_mappings:
+  tz_source: esn/energy/thermogenzero/carbon
+  sc_destination: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+  bridge_circuit: integration/thermogenzero/lex_bridge.fl
+  per_site:
+    - tz_topic: esn/energy/thermogenzero/carbon/site/alpha
+      sc_topic: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/site/alpha/attestations
+    - tz_topic: esn/energy/thermogenzero/carbon/site/bravo
+      sc_topic: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/site/bravo/attestations
+  fan_up:
+    verified_data: true
+    credit_total: true
+    compliance: true
+    raw_sensor: false
+
+credit_vintage:
+  period: quarterly
+  quarters:
+    - { label: "Q1", start_month: 1, end_month: 3 }
+    - { label: "Q2", start_month: 4, end_month: 6 }
+    - { label: "Q3", start_month: 7, end_month: 9 }
+    - { label: "Q4", start_month: 10, end_month: 12 }
+  first_vintage_year: 2026
+  serial_prefix: "SC"
+  serial_format: "SC-{year}-tz-{site_id}-{sequence}"
+  min_mint_tco2e: 0.001
+  batch_mint_max: 100
+  auto_list_threshold_tco2e: 0.0
+
+reporting:
+  interval: quarterly
+  reports:
+    - type: epa_ghg
+      format: xml
+      submission: electronic
+      deadline_days_after_quarter: 60
+    - type: iso_14064
+      format: pdf
+      review: third_party
+      deadline_days_after_quarter: 90
+    - type: verra_monitoring
+      format: json
+      sync: automatic
+      deadline_days_after_quarter: 45
+  audit:
+    retention_years: 99
+    trail_consumers:
+      - registry
+      - epa_reporting
+      - audit
+      - compliance
+      - streamsight
