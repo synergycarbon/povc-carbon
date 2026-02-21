@@ -1,0 +1,194 @@
+// Cross-Bridge BRIDGE_LOCKED Coordinator
+// Global lock enforcement across all registry bridges (Verra, Gold Standard, CDM)
+// Prevents double-counting: a credit locked by Bridge A cannot be submitted to Bridge B
+//
+// Subscribes: sc.bridges.verra.status, sc.bridges.gold_standard.status, sc.bridges.cdm.status
+// Publishes:  sc.bridges.lock_status
+
+type BridgeType = u8
+// 0=verra_vcs, 1=gold_standard, 2=cdm
+
+type BridgeLockRecord = struct {
+    credit_id: bytes(32),
+    locked_by_bridge: BridgeType,
+    bridge_id: bytes(16),
+    lock_state: u8,
+    locked_at: u64,
+    unlocked_at: u64,
+    lock_reason: string,
+    external_serial: string,
+}
+
+type BridgeLockRequest = struct {
+    credit_id: bytes(32),
+    bridge_type: BridgeType,
+    bridge_id: bytes(16),
+    reason: string,
+}
+
+type BridgeUnlockRequest = struct {
+    credit_id: bytes(32),
+    bridge_type: BridgeType,
+    bridge_id: bytes(16),
+    unlock_reason: u8,
+    external_serial: string,
+}
+
+type BridgeLockQueryResult = struct {
+    credit_id: bytes(32),
+    is_locked: bool,
+    locked_by_bridge: BridgeType,
+    bridge_id: bytes(16),
+    lock_state: u8,
+    locked_at: u64,
+    external_serial: string,
+}
+
+type CrossBridgeConflict = struct {
+    credit_id: bytes(32),
+    requesting_bridge: BridgeType,
+    blocking_bridge: BridgeType,
+    blocking_bridge_id: bytes(16),
+    blocked_at: u64,
+    blocking_serial: string,
+}
+
+type BridgeLockSyncReport = struct {
+    total_locked: u32,
+    locked_by_verra: u32,
+    locked_by_gs: u32,
+    locked_by_cdm: u32,
+    conflicts_blocked: u32,
+    last_sync_at: u64,
+}
+
+// lock_state: 0=unlocked, 1=locked_pending, 2=locked_submitted, 3=locked_listed, 4=released_rejection, 5=released_retirement
+// unlock_reason: 0=rejection, 1=retirement_propagation, 2=manual_override, 3=timeout
+
+graph bridge_lock_graph {
+    node BridgeLockRecord
+    node CrossBridgeConflict
+    edge locks: BridgeLockRecord -> BridgeLockRecord { guard credit_unique }
+    edge conflicts: CrossBridgeConflict -> BridgeLockRecord { guard bridge_mismatch }
+    overlay lock_state: u8 curate delta_curate
+    overlay conflict_count: u64 bitmask delta_curate
+    overlay bridge_distribution: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed lock_anomaly
+    ai_feed conflict_patterns
+    observe bridge_lock_graph: [lock_state, conflict_count, bridge_distribution] threshold: {
+        anomaly_score 0.85
+        baseline_window 60
+    }
+}
+
+series bridge_lock_events: bridge_lock_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Acquire a global bridge lock for a credit — fails if already locked by another bridge
+circuit bridge_lock_acquire(graph_id: bytes(32), request: BridgeLockRequest) -> BridgeLockRecord
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/acquire
+    precision C
+    povc true
+    subscribe sc.bridges.verra.status
+    subscribe sc.bridges.gold_standard.status
+    subscribe sc.bridges.cdm.status
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, bridge_type, bridge_id]
+    invariant "no_cross_bridge_lock" { existing_lock == null || existing_lock.locked_by_bridge == request.bridge_type }
+{
+    BridgeLockRecord {
+        credit_id: request.credit_id,
+        locked_by_bridge: request.bridge_type,
+        bridge_id: request.bridge_id,
+        lock_state: 1,
+        locked_at: now(),
+        unlocked_at: 0,
+        lock_reason: request.reason,
+        external_serial: "",
+    }
+}
+
+// Release a bridge lock (on rejection or retirement propagation)
+circuit bridge_lock_release(graph_id: bytes(32), request: BridgeUnlockRequest) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/release
+    precision C
+    povc true
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, bridge_type, unlock_reason]
+    invariant "lock_owner_match" { existing_lock.locked_by_bridge == request.bridge_type }
+{
+    true
+}
+
+// Query the global lock status of a credit
+circuit bridge_lock_query(graph_id: bytes(32), credit_id: bytes(32)) -> BridgeLockQueryResult
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/query
+    precision B
+    observe metrics: [credit_id, is_locked, locked_by_bridge]
+{
+    BridgeLockQueryResult {
+        credit_id: credit_id,
+        is_locked: false,
+        locked_by_bridge: 0,
+        bridge_id: 0x00,
+        lock_state: 0,
+        locked_at: 0,
+        external_serial: "",
+    }
+}
+
+// Record a cross-bridge conflict (credit submitted to bridge B while locked by bridge A)
+circuit bridge_lock_conflict(graph_id: bytes(32), conflict: CrossBridgeConflict) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/conflict
+    precision C
+    povc true
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, requesting_bridge, blocking_bridge]
+{
+    conflict.credit_id
+}
+
+// Sync lock state from all bridges — aggregate view
+circuit bridge_lock_sync(graph_id: bytes(32)) -> BridgeLockSyncReport
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/sync
+    precision C
+    subscribe sc.bridges.verra.status
+    subscribe sc.bridges.gold_standard.status
+    subscribe sc.bridges.cdm.status
+    observe metrics: [total_locked, locked_by_verra, locked_by_gs, locked_by_cdm, conflicts_blocked]
+{
+    BridgeLockSyncReport {
+        total_locked: 0,
+        locked_by_verra: 0,
+        locked_by_gs: 0,
+        locked_by_cdm: 0,
+        conflicts_blocked: 0,
+        last_sync_at: now(),
+    }
+}
+
+// Update lock state on bridge status change (SUBMITTED, LISTED, etc.)
+circuit bridge_lock_state_update(graph_id: bytes(32), credit_id: bytes(32), bridge_type: BridgeType, new_lock_state: u8) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/state
+    precision C
+    povc true
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, bridge_type, new_lock_state]
+{
+    true
+}
+
+stream bridge_lock_events_stream: event<BridgeLockRecord>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+stream bridge_conflict_events: event<CrossBridgeConflict>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight, governance]

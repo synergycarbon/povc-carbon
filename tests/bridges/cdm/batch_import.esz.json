@@ -1,0 +1,168 @@
+{
+  "circuit": "cdm_bridge",
+  "escir_version": "0.8.3",
+  "description": "Batch import of historical CDM credits into SynergyCarbon",
+  "vectors": [
+    {
+      "id": "cdm-batch-import-success",
+      "description": "Batch import of 3 legacy CDM CER credits — all valid and imported",
+      "tags": ["batch", "import", "happy-path", "legacy"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
+          "soap_wsdl_hash": "0xWSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSD0",
+          "batch_max_size": 100,
+          "import_timeout_ms": 30000,
+          "retry_max": 3,
+          "legacy_format_version": 1
+        },
+        "import_request": {
+          "project_ref": "CDM-PRJ-1234",
+          "vintage_year_min": 2012,
+          "vintage_year_max": 2020,
+          "config": {
+            "page_size": 100,
+            "max_pages": 10,
+            "dedup_enabled": true,
+            "dry_run": false
+          }
+        },
+        "cdm_credits": [
+          {
+            "cdm_serial": "CDM-CER-2015-001234",
+            "project_ref": "CDM-PRJ-1234",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2015,
+            "tonnes_co2e": 1250.0,
+            "issuance_date": "2015-06-15T00:00:00Z",
+            "host_country": "IN",
+            "credit_type": "CER"
+          },
+          {
+            "cdm_serial": "CDM-CER-2016-001235",
+            "project_ref": "CDM-PRJ-1234",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2016,
+            "tonnes_co2e": 1320.0,
+            "issuance_date": "2016-07-20T00:00:00Z",
+            "host_country": "IN",
+            "credit_type": "CER"
+          },
+          {
+            "cdm_serial": "CDM-CER-2017-001236",
+            "project_ref": "CDM-PRJ-1234",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2017,
+            "tonnes_co2e": 980.0,
+            "issuance_date": "2017-03-10T00:00:00Z",
+            "host_country": "IN",
+            "credit_type": "CER"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "import_result": {
+          "total_queried": 3,
+          "imported": 3,
+          "skipped_duplicate": 0,
+          "skipped_invalid": 0,
+          "errors": 0
+        },
+        "mappings_created": [
+          { "cdm_serial": "CDM-CER-2015-001234", "state": "IMPORTED", "credit_type": "CER", "host_country": "IN" },
+          { "cdm_serial": "CDM-CER-2016-001235", "state": "IMPORTED", "credit_type": "CER", "host_country": "IN" },
+          { "cdm_serial": "CDM-CER-2017-001236", "state": "IMPORTED", "credit_type": "CER", "host_country": "IN" }
+        ]
+      }
+    },
+    {
+      "id": "cdm-batch-import-dedup",
+      "description": "Batch import skips credits already mapped in SC (deduplication)",
+      "tags": ["batch", "import", "dedup"],
+      "inputs": {
+        "existing_mappings": [
+          { "cdm_serial": "CDM-CER-2015-001234", "credit_id": "SC-CDM-2015-CDM-PRJ-1234-CDM-CER-2015-001234" }
+        ],
+        "cdm_credits": [
+          {
+            "cdm_serial": "CDM-CER-2015-001234",
+            "project_ref": "CDM-PRJ-1234",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2015,
+            "tonnes_co2e": 1250.0,
+            "issuance_date": "2015-06-15T00:00:00Z",
+            "host_country": "IN",
+            "credit_type": "CER"
+          },
+          {
+            "cdm_serial": "CDM-CER-2018-001237",
+            "project_ref": "CDM-PRJ-1234",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2018,
+            "tonnes_co2e": 1100.0,
+            "issuance_date": "2018-05-01T00:00:00Z",
+            "host_country": "IN",
+            "credit_type": "CER"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "import_result": {
+          "total_queried": 2,
+          "imported": 1,
+          "skipped_duplicate": 1,
+          "skipped_invalid": 0,
+          "errors": 0
+        }
+      }
+    },
+    {
+      "id": "cdm-batch-import-invalid-credit",
+      "description": "Batch import skips credits with invalid data (zero tonnes, missing serial)",
+      "tags": ["batch", "import", "validation"],
+      "inputs": {
+        "cdm_credits": [
+          {
+            "cdm_serial": "",
+            "project_ref": "CDM-PRJ-9999",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2019,
+            "tonnes_co2e": 500.0,
+            "issuance_date": "2019-01-01T00:00:00Z",
+            "host_country": "BR",
+            "credit_type": "CER"
+          },
+          {
+            "cdm_serial": "CDM-CER-2019-009999",
+            "project_ref": "CDM-PRJ-9999",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2019,
+            "tonnes_co2e": 0,
+            "issuance_date": "2019-01-01T00:00:00Z",
+            "host_country": "BR",
+            "credit_type": "CER"
+          },
+          {
+            "cdm_serial": "CDM-CER-2019-009998",
+            "project_ref": "CDM-PRJ-9999",
+            "methodology_ref": "AM0001",
+            "vintage_year": 2019,
+            "tonnes_co2e": 750.0,
+            "issuance_date": "2019-06-15T00:00:00Z",
+            "host_country": "BR",
+            "credit_type": "CER"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "import_result": {
+          "total_queried": 3,
+          "imported": 1,
+          "skipped_duplicate": 0,
+          "skipped_invalid": 2,
+          "errors": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "circuit": "cdm_bridge",
+  "escir_version": "0.8.3",
+  "description": "Full BRIDGE_LOCKED lifecycle for CDM bridge: PENDING → SUBMITTED → REGISTERED → RETIRED",
+  "vectors": [
+    {
+      "id": "cdm-submit-and-lock",
+      "description": "Credit submitted to CDM enters BRIDGE_LOCKED state on SC",
+      "tags": ["bridge_lock", "submit", "happy-path"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
+          "soap_wsdl_hash": "0xWSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSDL01WSD0",
+          "retry_max": 3
+        },
+        "submit_request": {
+          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "sc_serial": "SC-2026-tz-wellpad-delta-01-000200",
+          "attestation_hash": "0xATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT0",
+          "methodology_ref": "AM0001",
+          "vintage_year": 2026,
+          "tonnes_co2e": 0.550,
+          "project_name": "ThermogenZero Delta Wellpad - TEG Waste Heat Recovery",
+          "project_location": "Eagle Ford, TX, USA",
+          "host_country": "US",
+          "credit_type": "CER"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "SUBMITTED",
+          "bridge_locked": true,
+          "cdm_serial": null
+        },
+        "sc_credit_status": {
+          "transferable": false,
+          "retirable": false,
+          "reason": "BRIDGE_LOCKED"
+        }
+      }
+    },
+    {
+      "id": "cdm-registration-accepted",
+      "description": "CDM accepts credit registration — state transitions to REGISTERED, remains locked",
+      "tags": ["bridge_lock", "registered", "status-poll"],
+      "inputs": {
+        "status_update": {
+          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "cdm_serial": "CDM-CER-2026-000200",
+          "previous_state": 1,
+          "new_state": 2,
+          "event_type": "credit.accepted",
+          "timestamp": 1740000000000
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REGISTERED",
+          "bridge_locked": true,
+          "cdm_serial": "CDM-CER-2026-000200",
+          "cdm_project_ref": "CDM-PRJ-5678"
+        }
+      }
+    },
+    {
+      "id": "cdm-retirement-propagation",
+      "description": "Credit retired on CDM — retirement propagates to SC, lock released",
+      "tags": ["bridge_lock", "retirement", "propagation"],
+      "inputs": {
+        "status_update": {
+          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "cdm_serial": "CDM-CER-2026-000200",
+          "previous_state": 2,
+          "new_state": 3,
+          "event_type": "credit.retired",
+          "timestamp": 1742000000000
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "RETIRED",
+          "bridge_locked": false,
+          "cdm_serial": "CDM-CER-2026-000200"
+        },
+        "sc_retirement": {
+          "triggered": true,
+          "trigger_type": "bridge_propagation"
+        }
+      }
+    },
+    {
+      "id": "cdm-rejection-unlock",
+      "description": "CDM rejects credit — lock released, credit returns to SC pool",
+      "tags": ["bridge_lock", "rejection", "unlock"],
+      "inputs": {
+        "submit_request": {
+          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
+          "sc_serial": "SC-2026-tz-wellpad-delta-01-000300",
+          "attestation_hash": "0xATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT300ATT0",
+          "methodology_ref": "INVALID-METHOD",
+          "vintage_year": 2026,
+          "tonnes_co2e": 0.200,
+          "project_name": "Test Project",
+          "project_location": "Test Location",
+          "host_country": "US",
+          "credit_type": "CER"
+        },
+        "status_update": {
+          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
+          "cdm_serial": "",
+          "previous_state": 1,
+          "new_state": 4,
+          "event_type": "credit.rejected",
+          "timestamp": 1740100000000
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REJECTED",
+          "bridge_locked": false,
+          "rejection_reason": "Methodology not recognized by CDM Executive Board"
+        },
+        "sc_credit_status": {
+          "transferable": true,
+          "retirable": true,
+          "reason": "BRIDGE_UNLOCKED"
+        }
+      }
+    }
+  ]
+}

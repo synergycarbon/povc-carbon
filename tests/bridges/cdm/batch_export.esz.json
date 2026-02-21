@@ -1,0 +1,103 @@
+{
+  "circuit": "cdm_bridge",
+  "escir_version": "0.8.3",
+  "description": "Batch export/registration of SC credits to CDM registry",
+  "vectors": [
+    {
+      "id": "cdm-batch-export-success",
+      "description": "Batch export of 2 SC credits to CDM — both accepted",
+      "tags": ["batch", "export", "happy-path"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
+          "batch_size": 50,
+          "lock_on_submit": true
+        },
+        "credits": [
+          {
+            "credit_id": "SC-2026-tz-wellpad-gamma-01-000001",
+            "sc_serial_number": "SC-2026-tz-wellpad-gamma-01-000001",
+            "attestation_hash": "0xATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT0",
+            "tonnes_co2e": 0.380,
+            "vintage_year": 2026,
+            "project_name": "ThermogenZero Gamma Wellpad - TEG Waste Heat Recovery",
+            "project_location": "Permian Basin, TX, USA",
+            "methodology_ref": "AM0001",
+            "host_country": "US",
+            "credit_type": "CER"
+          },
+          {
+            "credit_id": "SC-2026-tz-wellpad-gamma-01-000002",
+            "sc_serial_number": "SC-2026-tz-wellpad-gamma-01-000002",
+            "attestation_hash": "0xATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT0",
+            "tonnes_co2e": 0.420,
+            "vintage_year": 2026,
+            "project_name": "ThermogenZero Gamma Wellpad - TEG Waste Heat Recovery",
+            "project_location": "Permian Basin, TX, USA",
+            "methodology_ref": "AM0001",
+            "host_country": "US",
+            "credit_type": "CER"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "export_result": {
+          "total_requested": 2,
+          "submitted": 2,
+          "skipped_locked": 0,
+          "skipped_existing": 0,
+          "rejected": 0,
+          "errors": 0
+        },
+        "mappings": [
+          { "credit_id": "SC-2026-tz-wellpad-gamma-01-000001", "state": "SUBMITTED", "bridge_locked": true },
+          { "credit_id": "SC-2026-tz-wellpad-gamma-01-000002", "state": "SUBMITTED", "bridge_locked": true }
+        ],
+        "sc_credit_status": {
+          "transferable": false,
+          "retirable": false,
+          "reason": "BRIDGE_LOCKED"
+        }
+      }
+    },
+    {
+      "id": "cdm-batch-export-locked-skip",
+      "description": "Batch export skips credits already BRIDGE_LOCKED on another bridge",
+      "tags": ["batch", "export", "bridge_lock", "skip"],
+      "inputs": {
+        "existing_mappings": [
+          {
+            "credit_id": "SC-2026-tz-wellpad-gamma-01-000001",
+            "state": "SUBMITTED",
+            "bridge_locked": true,
+            "cdm_serial": "CDM-CER-2026-000501"
+          }
+        ],
+        "credits": [
+          {
+            "credit_id": "SC-2026-tz-wellpad-gamma-01-000001",
+            "sc_serial_number": "SC-2026-tz-wellpad-gamma-01-000001",
+            "attestation_hash": "0xATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT0",
+            "tonnes_co2e": 0.380,
+            "vintage_year": 2026,
+            "project_name": "ThermogenZero Gamma Wellpad",
+            "project_location": "Permian Basin, TX, USA",
+            "methodology_ref": "AM0001",
+            "host_country": "US",
+            "credit_type": "CER"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "export_result": {
+          "total_requested": 1,
+          "submitted": 0,
+          "skipped_locked": 1,
+          "skipped_existing": 0,
+          "rejected": 0,
+          "errors": 0
+        }
+      }
+    }
+  ]
+}

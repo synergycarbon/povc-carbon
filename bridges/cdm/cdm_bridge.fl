@@ -1,0 +1,224 @@
+// CDM (Clean Development Mechanism) Registry Bridge Circuit
+// Batch import/export for legacy CDM credits via SOAP/XML API
+// Handles: batch import, batch export, status sync, retirement propagation
+// registry_type: 2 = cdm (see source_network.fl)
+// Subscribes: sc.credits.issued
+// Publishes:  sc.bridges.cdm.status
+
+type CdmBridgeConfig = struct {
+    bridge_id: bytes(16),
+    api_endpoint_hash: bytes(32),
+    credential_vault_ref: bytes(32),
+    sync_interval_s: u32,
+    retry_max: u8,
+    batch_max_size: u32,
+    soap_timeout_ms: u32,
+    legacy_format: bool,
+}
+
+type CdmCreditRecord = struct {
+    credit_id: bytes(32),
+    sc_serial: string,
+    cdm_serial: string,
+    cdm_project_ref: string,
+    cpa_id: string,
+    state: u8,
+    submitted_at: u64,
+    registered_at: u64,
+    retired_at: u64,
+    attestation_hash: bytes(32),
+    methodology_ref: string,
+    vintage_year: u16,
+    tonnes_co2e: u64,
+}
+
+type CdmSubmitRequest = struct {
+    credit_id: bytes(32),
+    sc_serial: string,
+    attestation_hash: bytes(32),
+    methodology_ref: string,
+    vintage_year: u16,
+    tonnes_co2e: u64,
+    project_name: string,
+    project_location: string,
+    host_country: string,
+    cpa_id: string,
+}
+
+type CdmBatchImport = struct {
+    batch_id: bytes(16),
+    source_registry: string,
+    credits: list<CdmCreditRecord>,
+    imported_at: u64,
+    batch_size: u32,
+    validation_hash: bytes(32),
+}
+
+type CdmBatchExport = struct {
+    batch_id: bytes(16),
+    credits: list<CdmSubmitRequest>,
+    exported_at: u64,
+    batch_size: u32,
+    acknowledgment_hash: bytes(32),
+}
+
+type CdmStatusUpdate = struct {
+    credit_id: bytes(32),
+    cdm_serial: string,
+    previous_state: u8,
+    new_state: u8,
+    event_type: string,
+    timestamp: u64,
+}
+
+type CdmSyncResult = struct {
+    bridge_id: bytes(16),
+    credits_synced: u32,
+    credits_pending: u32,
+    credits_registered: u32,
+    credits_retired: u32,
+    credits_rejected: u32,
+    last_sync_at: u64,
+}
+
+// state: 0=pending, 1=submitted, 2=registered, 3=retired, 4=rejected
+
+graph cdm_bridge_graph {
+    node CdmBridgeConfig
+    node CdmCreditRecord
+    node CdmBatchImport
+    node CdmBatchExport
+    node CdmStatusUpdate
+    edge maps: CdmCreditRecord -> CdmCreditRecord { guard state_valid }
+    edge batch_imports: CdmBatchImport -> CdmCreditRecord { guard batch_validated }
+    edge batch_exports: CdmBatchExport -> CdmCreditRecord { guard export_authorized }
+    overlay bridge_state: u8 curate delta_curate
+    overlay sync_lag: u64 bitmask delta_curate
+    overlay batch_progress: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed bridge_anomaly
+    ai_feed batch_throughput
+    ai_feed sync_health
+    observe cdm_bridge_graph: [bridge_state, sync_lag, batch_progress] threshold: {
+        anomaly_score 0.85
+        baseline_window 120
+    }
+}
+
+series cdm_bridge_events: cdm_bridge_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Batch import legacy CDM credits into SynergyCarbon
+circuit cdm_batch_import(graph_id: bytes(32), batch: CdmBatchImport) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/batch-import
+    precision C
+    povc true
+    publish sc.bridges.cdm.status
+    observe metrics: [batch_id, batch_size, source_registry, imported_at]
+{
+    batch.batch_id
+}
+
+// Batch export SC credits to CDM registry
+circuit cdm_batch_export(graph_id: bytes(32), batch: CdmBatchExport) -> bytes(16)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/batch-export
+    precision C
+    povc true
+    subscribe sc.credits.issued
+    publish sc.bridges.cdm.status
+    observe metrics: [batch_id, batch_size, exported_at]
+{
+    batch.batch_id
+}
+
+// Submit a single credit to CDM for cross-listing
+circuit cdm_submit_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/submit
+    precision C
+    povc true
+    subscribe sc.credits.issued
+    publish sc.bridges.cdm.status
+    observe metrics: [credit_id, sc_serial, methodology_ref, vintage_year, tonnes_co2e]
+{
+    request.credit_id
+}
+
+// Handle CDM status update (polled from SOAP API)
+circuit cdm_status_update(graph_id: bytes(32), update: CdmStatusUpdate) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/status
+    precision C
+    povc true
+    publish sc.bridges.cdm.status
+    observe metrics: [credit_id, cdm_serial, previous_state, new_state, event_type]
+{
+    true
+}
+
+// Periodic sync: poll CDM SOAP API for status of all SUBMITTED credits
+circuit cdm_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> CdmSyncResult
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/sync
+    precision C
+    observe metrics: [bridge_id, credits_synced, credits_pending, credits_registered]
+{
+    CdmSyncResult {
+        bridge_id: bridge_id,
+        credits_synced: 0,
+        credits_pending: 0,
+        credits_registered: 0,
+        credits_retired: 0,
+        credits_rejected: 0,
+        last_sync_at: 0,
+    }
+}
+
+// Lock a credit for CDM bridge submission (prevents SC-side transfer/retirement)
+circuit cdm_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/lock
+    precision C
+    povc true
+    publish sc.bridges.cdm.status
+    observe metrics: [credit_id]
+{
+    true
+}
+
+// Unlock a credit after CDM rejection (allows SC-side operations again)
+circuit cdm_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/unlock
+    precision C
+    povc true
+    publish sc.bridges.cdm.status
+    observe metrics: [credit_id]
+{
+    true
+}
+
+// Propagate retirement from CDM to SynergyCarbon
+circuit cdm_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), cdm_serial: string) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/retire
+    precision C
+    povc true
+    subscribe sc.bridges.cdm.status
+    publish sc.credits.retired
+    observe metrics: [credit_id, cdm_serial]
+{
+    true
+}
+
+stream cdm_import_events: event<CdmBatchImport>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+stream cdm_export_events: event<CdmBatchExport>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+stream cdm_status_events: event<CdmStatusUpdate>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
