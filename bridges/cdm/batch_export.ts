@@ -2,255 +2,331 @@
  * CDM Batch Export — SC Credit Registration on CDM
  *
  * Bulk export/registration of SynergyCarbon credits onto the CDM registry.
- * Handles conversion from SC internal representation to CDM XML format,
- * batch submission via SOAP API, and mapping state transitions.
+ * Collects eligible SC credits, converts to CDM format, submits via the
+ * CDM SOAP bulk registration endpoint, and updates mapping state.
  *
- * Flow:
- *   1. Collect SC credits by ID list
- *   2. Validate each credit is eligible for export (not already locked)
- *   3. Convert SC format → CDM registration request
- *   4. Submit batch to CDM via SOAP API
- *   5. Create/update bridge mappings (PENDING → SUBMITTED)
- *   6. Return export results with per-credit status
+ * Export flow:
+ *   1. Collect SC credits in PENDING state targeting CDM
+ *   2. Validate each credit is not BRIDGE_LOCKED by another bridge
+ *   3. Transition each to SUBMITTED (acquires BRIDGE_LOCK)
+ *   4. Batch-submit to CDM via SOAP API
+ *   5. Process CDM response — update mappings with CDM serials or rejections
+ *   6. Publish export events for downstream consumers
  */
 
 import {
-  type CDMClient,
-  type CDMRegistrationRequest,
-  type CDMRegistrationResponse,
-  type CDMCreditType,
+  type CdmClient,
+  type CdmCreditRegistration,
+  type CdmBulkRegistrationResponse,
 } from './client';
-import {
-  type CDMBridgeMappingStore,
-  type CDMBridgeMappingRecord,
-  is_bridge_locked,
-} from './mapping';
+import { CdmMappingStore, type CdmMappingRecord } from './mapping';
 
 // ---------------------------------------------------------------------------
-// Export Types
+// Export Configuration
 // ---------------------------------------------------------------------------
 
 export interface BatchExportConfig {
   batch_size: number;
-  lock_on_submit: boolean;
+  max_retries_per_credit: number;
+  project_name_prefix: string;
+  default_host_country: string;
 }
 
 const DEFAULT_EXPORT_CONFIG: BatchExportConfig = {
   batch_size: 50,
-  lock_on_submit: true,
+  max_retries_per_credit: 3,
+  project_name_prefix: 'SynergyCarbon',
+  default_host_country: 'USA',
 };
 
-export interface ExportCreditInput {
-  credit_id: string;
-  sc_serial_number: string;
-  attestation_hash: string;
-  tonnes_co2e: number;
-  vintage_year: number;
-  project_name: string;
-  project_location: string;
-  methodology_ref: string;
-  host_country: string;
-  credit_type: CDMCreditType;
-}
-
-export interface ExportedCreditResult {
-  credit_id: string;
-  cdm_serial: string;
-  status: 'submitted' | 'skipped_locked' | 'skipped_existing' | 'rejected' | 'error';
-  transaction_id?: string;
-  error?: string;
-}
+// ---------------------------------------------------------------------------
+// Export Result Types
+// ---------------------------------------------------------------------------
 
 export interface BatchExportResult {
   batch_id: string;
-  total_requested: number;
-  submitted: number;
-  skipped_locked: number;
-  skipped_existing: number;
+  total_submitted: number;
+  accepted: number;
   rejected: number;
-  errors: number;
-  results: ExportedCreditResult[];
+  skipped_locked: number;
+  skipped_retry_exceeded: number;
+  results: ExportedCreditRecord[];
+  errors: ExportError[];
   started_at: number;
   completed_at: number;
+}
+
+export interface ExportedCreditRecord {
+  credit_id: string;
+  sc_serial: string;
+  cdm_serial: string;
+  cdm_project_ref: string;
+  status: 'pending_review' | 'registered' | 'rejected';
+  transaction_id: string;
+}
+
+export interface ExportError {
+  credit_id: string;
+  error: string;
+}
+
+// ---------------------------------------------------------------------------
+// Bridge Lock Checker (cross-bridge coordination)
+// ---------------------------------------------------------------------------
+
+export interface BridgeLockChecker {
+  is_locked(credit_id: string): boolean;
+  locked_by(credit_id: string): string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Batch Exporter
 // ---------------------------------------------------------------------------
 
-export class CDMBatchExporter {
-  private readonly client: CDMClient;
-  private readonly store: CDMBridgeMappingStore;
+export class CdmBatchExporter {
+  private readonly client: CdmClient;
+  private readonly store: CdmMappingStore;
+  private readonly config: BatchExportConfig;
+  private readonly lock_checker: BridgeLockChecker | null;
 
-  constructor(client: CDMClient, store: CDMBridgeMappingStore) {
+  constructor(
+    client: CdmClient,
+    store: CdmMappingStore,
+    config?: Partial<BatchExportConfig>,
+    lock_checker?: BridgeLockChecker,
+  ) {
     this.client = client;
     this.store = store;
+    this.config = { ...DEFAULT_EXPORT_CONFIG, ...config };
+    this.lock_checker = lock_checker ?? null;
   }
 
-  async export_credits(
-    credits: ExportCreditInput[],
-    config?: Partial<BatchExportConfig>,
-  ): Promise<BatchExportResult> {
-    const cfg = { ...DEFAULT_EXPORT_CONFIG, ...config };
-    const batch_id = generate_export_batch_id();
+  /**
+   * Export all PENDING credits to CDM in batches.
+   */
+  async export_pending(): Promise<BatchExportResult> {
+    const pending = this.store.get_all_by_state('PENDING');
+    return this.export_credits(pending);
+  }
+
+  /**
+   * Export a specific list of credits to CDM.
+   */
+  async export_credits(credits: CdmMappingRecord[]): Promise<BatchExportResult> {
+    const batch_id = generate_batch_id();
     const started_at = Date.now();
-    const all_results: ExportedCreditResult[] = [];
+    const all_results: ExportedCreditRecord[] = [];
+    const all_errors: ExportError[] = [];
+    let skipped_locked = 0;
+    let skipped_retry_exceeded = 0;
+    let total_accepted = 0;
+    let total_rejected = 0;
 
-    const { eligible, skipped } = this.partition_eligible(credits);
-    all_results.push(...skipped);
-
-    for (let i = 0; i < eligible.length; i += cfg.batch_size) {
-      const chunk = eligible.slice(i, i + cfg.batch_size);
-      const chunk_results = await this.submit_chunk(chunk, cfg);
-      all_results.push(...chunk_results);
-    }
-
-    return {
-      batch_id,
-      total_requested: credits.length,
-      submitted: all_results.filter((r) => r.status === 'submitted').length,
-      skipped_locked: all_results.filter((r) => r.status === 'skipped_locked').length,
-      skipped_existing: all_results.filter((r) => r.status === 'skipped_existing').length,
-      rejected: all_results.filter((r) => r.status === 'rejected').length,
-      errors: all_results.filter((r) => r.status === 'error').length,
-      results: all_results,
-      started_at,
-      completed_at: Date.now(),
-    };
-  }
-
-  private partition_eligible(credits: ExportCreditInput[]): {
-    eligible: ExportCreditInput[];
-    skipped: ExportedCreditResult[];
-  } {
-    const eligible: ExportCreditInput[] = [];
-    const skipped: ExportedCreditResult[] = [];
+    const eligible: CdmMappingRecord[] = [];
 
     for (const credit of credits) {
-      const existing = this.store.get_by_credit_id(credit.credit_id);
-
-      if (existing && is_bridge_locked(existing.state)) {
-        skipped.push({
+      if (this.lock_checker && this.lock_checker.is_locked(credit.credit_id)) {
+        const locked_by = this.lock_checker.locked_by(credit.credit_id);
+        all_errors.push({
           credit_id: credit.credit_id,
-          cdm_serial: existing.cdm_serial ?? '',
-          status: 'skipped_locked',
-          error: `Credit is BRIDGE_LOCKED in state ${existing.state}`,
+          error: `BRIDGE_LOCKED by ${locked_by ?? 'unknown bridge'} — cannot submit to CDM`,
         });
+        skipped_locked++;
         continue;
       }
 
-      if (existing && (existing.state === 'REGISTERED' || existing.state === 'RETIRED')) {
-        skipped.push({
-          credit_id: credit.credit_id,
-          cdm_serial: existing.cdm_serial ?? '',
-          status: 'skipped_existing',
-          error: `Credit already ${existing.state} on CDM`,
-        });
+      if (credit.retry_count >= this.config.max_retries_per_credit) {
+        skipped_retry_exceeded++;
         continue;
       }
 
       eligible.push(credit);
     }
 
-    return { eligible, skipped };
-  }
+    for (let i = 0; i < eligible.length; i += this.config.batch_size) {
+      const batch = eligible.slice(i, i + this.config.batch_size);
 
-  private async submit_chunk(
-    credits: ExportCreditInput[],
-    config: BatchExportConfig,
-  ): Promise<ExportedCreditResult[]> {
-    const registration_requests: CDMRegistrationRequest[] = credits.map((c) => ({
-      sc_credit_id: c.credit_id,
-      sc_serial_number: c.sc_serial_number,
-      attestation_hash: c.attestation_hash,
-      tonnes_co2e: c.tonnes_co2e,
-      vintage_year: c.vintage_year,
-      project_name: c.project_name,
-      project_location: c.project_location,
-      methodology_ref: c.methodology_ref,
-      host_country: c.host_country,
-      credit_type: c.credit_type,
-    }));
-
-    let responses: CDMRegistrationResponse[];
-    try {
-      responses = await this.client.register_batch(registration_requests);
-    } catch (err) {
-      return credits.map((c) => ({
-        credit_id: c.credit_id,
-        cdm_serial: '',
-        status: 'error' as const,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-    }
-
-    const results: ExportedCreditResult[] = [];
-
-    for (let i = 0; i < credits.length; i++) {
-      const credit = credits[i];
-      const response = responses[i];
-
-      if (!response || response.status === 'rejected') {
-        results.push({
-          credit_id: credit.credit_id,
-          cdm_serial: response?.cdm_serial ?? '',
-          status: 'rejected',
-          transaction_id: response?.transaction_id,
-        });
-        continue;
+      for (const record of batch) {
+        try {
+          this.store.transition(record.credit_id, 'SUBMITTED');
+        } catch (err) {
+          all_errors.push({
+            credit_id: record.credit_id,
+            error: `Failed to transition to SUBMITTED: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
       }
 
       try {
-        const existing = this.store.get_by_credit_id(credit.credit_id);
+        const registrations = batch.map((r) => build_cdm_registration(r, this.config));
+        const response = await this.client.register_batch(registrations);
 
-        if (existing) {
-          this.store.transition(credit.credit_id, 'SUBMITTED', {
-            cdm_serial: response.cdm_serial,
-            cdm_project_ref: response.project_ref,
-          });
-        } else {
-          const record = this.store.create({
-            credit_id: credit.credit_id,
-            sc_serial_number: credit.sc_serial_number,
-            attestation_hash: credit.attestation_hash,
-            methodology_ref: credit.methodology_ref,
-            vintage_year: credit.vintage_year,
-            tonnes_co2e: credit.tonnes_co2e,
-            credit_type: credit.credit_type,
-            host_country: credit.host_country,
-          });
-          this.store.transition(credit.credit_id, 'SUBMITTED', {
-            cdm_serial: response.cdm_serial,
-            cdm_project_ref: response.project_ref,
+        const { results, errors, accepted, rejected } = process_batch_response(
+          batch,
+          response,
+          this.store,
+        );
+
+        all_results.push(...results);
+        all_errors.push(...errors);
+        total_accepted += accepted;
+        total_rejected += rejected;
+      } catch (err) {
+        for (const record of batch) {
+          this.store.record_error(
+            record.credit_id,
+            err instanceof Error ? err.message : String(err),
+          );
+          all_errors.push({
+            credit_id: record.credit_id,
+            error: `Batch submission failed: ${err instanceof Error ? err.message : String(err)}`,
           });
         }
-
-        results.push({
-          credit_id: credit.credit_id,
-          cdm_serial: response.cdm_serial,
-          status: 'submitted',
-          transaction_id: response.transaction_id,
-        });
-      } catch (err) {
-        results.push({
-          credit_id: credit.credit_id,
-          cdm_serial: response.cdm_serial,
-          status: 'error',
-          error: err instanceof Error ? err.message : String(err),
-        });
       }
     }
 
-    return results;
+    return {
+      batch_id,
+      total_submitted: eligible.length,
+      accepted: total_accepted,
+      rejected: total_rejected,
+      skipped_locked,
+      skipped_retry_exceeded,
+      results: all_results,
+      errors: all_errors,
+      started_at,
+      completed_at: Date.now(),
+    };
+  }
+
+  /**
+   * Re-export a single credit that was previously rejected.
+   */
+  async retry_single(credit_id: string): Promise<ExportedCreditRecord> {
+    const record = this.store.get_by_credit_id(credit_id);
+    if (!record) {
+      throw new Error(`No CDM mapping found for credit ${credit_id}`);
+    }
+
+    if (record.state !== 'REJECTED' && record.state !== 'PENDING') {
+      throw new Error(`Credit ${credit_id} is in ${record.state} state — cannot re-export`);
+    }
+
+    if (this.lock_checker && this.lock_checker.is_locked(credit_id)) {
+      throw new Error(`Credit ${credit_id} is BRIDGE_LOCKED — cannot submit to CDM`);
+    }
+
+    if (record.state === 'REJECTED') {
+      this.store.transition(credit_id, 'PENDING');
+    }
+    this.store.transition(credit_id, 'SUBMITTED');
+
+    const registration = build_cdm_registration(record, this.config);
+    const response = await this.client.register_credit(registration);
+
+    if (response.status === 'rejected') {
+      this.store.transition(credit_id, 'REJECTED', {
+        rejection_reason: `CDM rejected: ${response.cdm_serial}`,
+      });
+      throw new Error(`CDM rejected credit ${credit_id}`);
+    }
+
+    this.store.transition(credit_id, 'REGISTERED', {
+      cdm_serial: response.cdm_serial,
+      cdm_project_ref: response.project_ref,
+    });
+
+    return {
+      credit_id,
+      sc_serial: record.sc_serial_number,
+      cdm_serial: response.cdm_serial,
+      cdm_project_ref: response.project_ref,
+      status: response.status,
+      transaction_id: response.transaction_id,
+    };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Internal Helpers
 // ---------------------------------------------------------------------------
 
-function generate_export_batch_id(): string {
-  const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).substring(2, 8);
-  return `CDM-EXPORT-${ts}-${rand}`;
+function build_cdm_registration(
+  record: CdmMappingRecord,
+  config: BatchExportConfig,
+): CdmCreditRegistration {
+  return {
+    project_ref: record.cdm_project_ref ?? `${config.project_name_prefix}-${record.vintage_year}`,
+    cpa_id: record.cpa_id ?? '',
+    host_country: record.host_country || config.default_host_country,
+    methodology_ref: record.methodology_ref,
+    vintage_year: record.vintage_year,
+    tonnes_co2e: record.tonnes_co2e,
+    monitoring_report_ref: record.attestation_hash,
+    sc_credit_id: record.credit_id,
+    sc_serial_number: record.sc_serial_number,
+    sc_attestation_hash: record.attestation_hash,
+  };
+}
+
+function process_batch_response(
+  batch: CdmMappingRecord[],
+  response: CdmBulkRegistrationResponse,
+  store: CdmMappingStore,
+): {
+  results: ExportedCreditRecord[];
+  errors: ExportError[];
+  accepted: number;
+  rejected: number;
+} {
+  const results: ExportedCreditRecord[] = [];
+  const errors: ExportError[] = [];
+  let accepted = 0;
+  let rejected = 0;
+
+  for (let i = 0; i < response.results.length && i < batch.length; i++) {
+    const cdm_result = response.results[i];
+    const record = batch[i];
+
+    if (cdm_result.status === 'rejected') {
+      try {
+        store.transition(record.credit_id, 'REJECTED', {
+          rejection_reason: `CDM rejected: transaction ${cdm_result.transaction_id}`,
+        });
+      } catch {
+        // Already transitioned
+      }
+      errors.push({
+        credit_id: record.credit_id,
+        error: `CDM rejected: transaction ${cdm_result.transaction_id}`,
+      });
+      rejected++;
+    } else {
+      try {
+        store.transition(record.credit_id, 'REGISTERED', {
+          cdm_serial: cdm_result.cdm_serial,
+          cdm_project_ref: cdm_result.project_ref,
+        });
+      } catch {
+        // Already transitioned
+      }
+      results.push({
+        credit_id: record.credit_id,
+        sc_serial: record.sc_serial_number,
+        cdm_serial: cdm_result.cdm_serial,
+        cdm_project_ref: cdm_result.project_ref,
+        status: cdm_result.status,
+        transaction_id: cdm_result.transaction_id,
+      });
+      accepted++;
+    }
+  }
+
+  return { results, errors, accepted, rejected };
+}
+
+function generate_batch_id(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 10);
+  return `cdm-export-${timestamp}-${random}`;
 }

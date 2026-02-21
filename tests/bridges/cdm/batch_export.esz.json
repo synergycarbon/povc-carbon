@@ -1,102 +1,106 @@
 {
   "circuit": "cdm_bridge",
-  "escir_version": "0.8.3",
-  "description": "Batch export/registration of SC credits to CDM registry",
+  "description": "CDM batch export of SC credits to CDM registry",
   "vectors": [
     {
-      "id": "cdm-batch-export-success",
-      "description": "Batch export of 2 SC credits to CDM — both accepted",
-      "tags": ["batch", "export", "happy-path"],
+      "id": "export-pending-batch",
+      "description": "Export PENDING credits to CDM — all accepted",
+      "tags": ["batch-export", "happy-path"],
       "inputs": {
-        "config": {
-          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
-          "batch_size": 50,
-          "lock_on_submit": true
-        },
-        "credits": [
+        "pending_credits": [
           {
-            "credit_id": "SC-2026-tz-wellpad-gamma-01-000001",
-            "sc_serial_number": "SC-2026-tz-wellpad-gamma-01-000001",
-            "attestation_hash": "0xATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT0",
-            "tonnes_co2e": 0.380,
+            "credit_id": "SC-CDM-2026-00000001",
+            "sc_serial_number": "SC-CDM-2026-wellpad-alpha-001",
+            "attestation_hash": "0xATT001",
+            "methodology_ref": "EPA-AP42-CH4-FLARE",
             "vintage_year": 2026,
-            "project_name": "ThermogenZero Gamma Wellpad - TEG Waste Heat Recovery",
-            "project_location": "Permian Basin, TX, USA",
-            "methodology_ref": "AM0001",
-            "host_country": "US",
-            "credit_type": "CER"
+            "tonnes_co2e": 0.450,
+            "host_country": "USA",
+            "state": "PENDING"
           },
           {
-            "credit_id": "SC-2026-tz-wellpad-gamma-01-000002",
-            "sc_serial_number": "SC-2026-tz-wellpad-gamma-01-000002",
-            "attestation_hash": "0xATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT501ATT0",
-            "tonnes_co2e": 0.420,
+            "credit_id": "SC-CDM-2026-00000002",
+            "sc_serial_number": "SC-CDM-2026-wellpad-alpha-002",
+            "attestation_hash": "0xATT002",
+            "methodology_ref": "EPA-AP42-CH4-FLARE",
             "vintage_year": 2026,
-            "project_name": "ThermogenZero Gamma Wellpad - TEG Waste Heat Recovery",
-            "project_location": "Permian Basin, TX, USA",
-            "methodology_ref": "AM0001",
-            "host_country": "US",
-            "credit_type": "CER"
+            "tonnes_co2e": 0.380,
+            "host_country": "USA",
+            "state": "PENDING"
           }
-        ]
+        ],
+        "cdm_api_response": {
+          "batch_transaction_id": "CDM-TX-2026-001",
+          "accepted": 2,
+          "rejected": 0,
+          "results": [
+            { "cdm_serial": "CDM-CER-2026-US-0100", "status": "registered", "project_ref": "PA-SC-001" },
+            { "cdm_serial": "CDM-CER-2026-US-0101", "status": "registered", "project_ref": "PA-SC-001" }
+          ]
+        }
       },
       "expected_outputs": {
-        "export_result": {
-          "total_requested": 2,
-          "submitted": 2,
-          "skipped_locked": 0,
-          "skipped_existing": 0,
+        "result": {
+          "total_submitted": 2,
+          "accepted": 2,
           "rejected": 0,
-          "errors": 0
+          "skipped_locked": 0
         },
-        "mappings": [
-          { "credit_id": "SC-2026-tz-wellpad-gamma-01-000001", "state": "SUBMITTED", "bridge_locked": true },
-          { "credit_id": "SC-2026-tz-wellpad-gamma-01-000002", "state": "SUBMITTED", "bridge_locked": true }
-        ],
-        "sc_credit_status": {
-          "transferable": false,
-          "retirable": false,
-          "reason": "BRIDGE_LOCKED"
-        }
+        "mapping_states": [
+          { "credit_id": "SC-CDM-2026-00000001", "state": "REGISTERED", "cdm_serial": "CDM-CER-2026-US-0100" },
+          { "credit_id": "SC-CDM-2026-00000002", "state": "REGISTERED", "cdm_serial": "CDM-CER-2026-US-0101" }
+        ]
       }
     },
     {
-      "id": "cdm-batch-export-locked-skip",
-      "description": "Batch export skips credits already BRIDGE_LOCKED on another bridge",
-      "tags": ["batch", "export", "bridge_lock", "skip"],
+      "id": "export-partial-rejection",
+      "description": "CDM rejects some credits in batch — partial success",
+      "tags": ["batch-export", "partial-rejection"],
       "inputs": {
-        "existing_mappings": [
-          {
-            "credit_id": "SC-2026-tz-wellpad-gamma-01-000001",
-            "state": "SUBMITTED",
-            "bridge_locked": true,
-            "cdm_serial": "CDM-CER-2026-000501"
-          }
+        "pending_credits": [
+          { "credit_id": "SC-CDM-2026-00000003", "state": "PENDING" },
+          { "credit_id": "SC-CDM-2026-00000004", "state": "PENDING" }
         ],
-        "credits": [
-          {
-            "credit_id": "SC-2026-tz-wellpad-gamma-01-000001",
-            "sc_serial_number": "SC-2026-tz-wellpad-gamma-01-000001",
-            "attestation_hash": "0xATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT500ATT0",
-            "tonnes_co2e": 0.380,
-            "vintage_year": 2026,
-            "project_name": "ThermogenZero Gamma Wellpad",
-            "project_location": "Permian Basin, TX, USA",
-            "methodology_ref": "AM0001",
-            "host_country": "US",
-            "credit_type": "CER"
-          }
-        ]
+        "cdm_api_response": {
+          "accepted": 1,
+          "rejected": 1,
+          "results": [
+            { "cdm_serial": "CDM-CER-2026-US-0102", "status": "registered" },
+            { "cdm_serial": "", "status": "rejected", "transaction_id": "CDM-TX-REJ-001" }
+          ]
+        }
       },
       "expected_outputs": {
-        "export_result": {
-          "total_requested": 1,
-          "submitted": 0,
-          "skipped_locked": 1,
-          "skipped_existing": 0,
-          "rejected": 0,
-          "errors": 0
+        "result": {
+          "accepted": 1,
+          "rejected": 1
+        },
+        "mapping_states": [
+          { "credit_id": "SC-CDM-2026-00000003", "state": "REGISTERED", "bridge_locked": true },
+          { "credit_id": "SC-CDM-2026-00000004", "state": "REJECTED", "bridge_locked": false }
+        ]
+      }
+    },
+    {
+      "id": "export-blocked-by-cross-bridge-lock",
+      "description": "Credits locked by another bridge are skipped during export",
+      "tags": ["batch-export", "bridge-lock", "cross-bridge"],
+      "inputs": {
+        "pending_credits": [
+          { "credit_id": "SC-CDM-2026-00000005", "state": "PENDING" }
+        ],
+        "cross_bridge_lock": {
+          "credit_id": "SC-CDM-2026-00000005",
+          "locked_by": "verra_vcs",
+          "locked_at": "2026-02-15T10:00:00Z"
         }
+      },
+      "expected_outputs": {
+        "result": {
+          "total_submitted": 0,
+          "skipped_locked": 1
+        },
+        "error_message": "BRIDGE_LOCKED by verra_vcs — cannot submit to CDM"
       }
     }
   ]

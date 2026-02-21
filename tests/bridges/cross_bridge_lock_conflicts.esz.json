@@ -1,206 +1,214 @@
 {
   "circuit": "bridge_lock",
-  "escir_version": "0.8.3",
   "description": "Cross-bridge BRIDGE_LOCKED conflict scenarios — prevents double-counting across registries",
   "vectors": [
     {
       "id": "verra-locked-blocks-gs-submit",
-      "description": "Credit locked by Verra bridge — Gold Standard submission blocked",
-      "tags": ["cross-bridge", "conflict", "verra", "gold-standard"],
+      "description": "Credit locked by Verra cannot be submitted to Gold Standard",
+      "tags": ["cross-bridge", "conflict", "verra-vs-gs"],
       "inputs": {
-        "existing_lock": {
-          "credit_id": "0xCRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100C",
-          "locked_by_bridge": 0,
-          "bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
-          "lock_state": 2,
-          "locked_at": 1740000000000,
-          "external_serial": "VCS-2026-SC-000100"
+        "precondition": {
+          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
+          "global_lock": {
+            "locked_by_bridge": 0,
+            "bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
+            "lock_state": 1,
+            "locked_at": "2026-02-15T10:00:00Z",
+            "lock_reason": "Submitted to Verra VCS for cross-listing"
+          }
         },
         "lock_request": {
-          "credit_id": "0xCRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100C",
+          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
           "bridge_type": 1,
-          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
-          "reason": "Gold Standard cross-listing"
+          "bridge_id": "0xBRIDGE02BRIDGE02BRIDGE02BRIDGE02",
+          "reason": "Submit to Gold Standard for cross-listing"
         }
       },
       "expected_outputs": {
-        "lock_acquired": false,
-        "conflict": {
-          "credit_id": "0xCRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100C",
-          "requesting_bridge": 1,
-          "blocking_bridge": 0,
-          "blocking_serial": "VCS-2026-SC-000100"
+        "lock_response": {
+          "granted": false,
+          "conflict_bridge": 0,
+          "conflict_bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
+          "reason": "Credit already locked by verra_vcs bridge"
         },
-        "error": "Credit is BRIDGE_LOCKED by verra_vcs (serial: VCS-2026-SC-000100)"
+        "audit_entry": {
+          "action": 2,
+          "result": false,
+          "reason": "Lock denied: conflict with verra_vcs"
+        }
       }
     },
     {
       "id": "gs-locked-blocks-cdm-submit",
-      "description": "Credit locked by Gold Standard bridge — CDM submission blocked",
-      "tags": ["cross-bridge", "conflict", "gold-standard", "cdm"],
+      "description": "Credit locked by Gold Standard cannot be submitted to CDM",
+      "tags": ["cross-bridge", "conflict", "gs-vs-cdm"],
       "inputs": {
-        "existing_lock": {
-          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
-          "locked_by_bridge": 1,
-          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
-          "lock_state": 1,
-          "locked_at": 1740500000000,
-          "external_serial": "GS-VER-2026-000042"
+        "precondition": {
+          "credit_id": "0xCRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400C",
+          "global_lock": {
+            "locked_by_bridge": 1,
+            "bridge_id": "0xBRIDGE02BRIDGE02BRIDGE02BRIDGE02",
+            "lock_state": 1,
+            "locked_at": "2026-02-10T14:00:00Z",
+            "lock_reason": "Mirrored on Gold Standard"
+          }
         },
         "lock_request": {
-          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "credit_id": "0xCRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400C",
           "bridge_type": 2,
-          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
-          "reason": "CDM registration"
+          "bridge_id": "0xBRIDGE03BRIDGE03BRIDGE03BRIDGE03",
+          "reason": "Batch export to CDM"
         }
       },
       "expected_outputs": {
-        "lock_acquired": false,
-        "conflict": {
-          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
-          "requesting_bridge": 2,
-          "blocking_bridge": 1,
-          "blocking_serial": "GS-VER-2026-000042"
-        },
-        "error": "Credit is BRIDGE_LOCKED by gold_standard (serial: GS-VER-2026-000042)"
+        "lock_response": {
+          "granted": false,
+          "conflict_bridge": 1,
+          "reason": "Credit already locked by gold_standard bridge"
+        }
       }
     },
     {
       "id": "cdm-locked-blocks-verra-submit",
-      "description": "Credit locked by CDM bridge — Verra submission blocked",
-      "tags": ["cross-bridge", "conflict", "cdm", "verra"],
+      "description": "Credit locked by CDM cannot be submitted to Verra",
+      "tags": ["cross-bridge", "conflict", "cdm-vs-verra"],
       "inputs": {
-        "existing_lock": {
-          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
-          "locked_by_bridge": 2,
-          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
-          "lock_state": 2,
-          "locked_at": 1741000000000,
-          "external_serial": "CDM-CER-2026-000300"
+        "precondition": {
+          "credit_id": "0xCRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500C",
+          "global_lock": {
+            "locked_by_bridge": 2,
+            "bridge_id": "0xBRIDGE03BRIDGE03BRIDGE03BRIDGE03",
+            "lock_state": 1,
+            "locked_at": "2026-01-20T09:00:00Z",
+            "lock_reason": "Registered on CDM"
+          }
         },
         "lock_request": {
-          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
+          "credit_id": "0xCRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500C",
           "bridge_type": 0,
           "bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
-          "reason": "Verra VCS cross-listing"
+          "reason": "Submit to Verra VCS"
         }
       },
       "expected_outputs": {
-        "lock_acquired": false,
-        "conflict": {
-          "credit_id": "0xCRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300CRED300C",
-          "requesting_bridge": 0,
-          "blocking_bridge": 2,
-          "blocking_serial": "CDM-CER-2026-000300"
+        "lock_response": {
+          "granted": false,
+          "conflict_bridge": 2,
+          "reason": "Credit already locked by cdm bridge"
         }
       }
     },
     {
-      "id": "rejection-releases-lock-allows-new-bridge",
-      "description": "Credit rejected by Verra — lock released — Gold Standard submission succeeds",
-      "tags": ["cross-bridge", "rejection", "resubmit", "happy-path"],
+      "id": "lock-after-rejection-allowed",
+      "description": "After Verra rejects and unlocks, credit can be submitted to Gold Standard",
+      "tags": ["cross-bridge", "rejection", "resubmit"],
       "inputs": {
-        "initial_lock": {
-          "credit_id": "0xCRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400C",
-          "locked_by_bridge": 0,
-          "lock_state": 2,
-          "external_serial": "VCS-2026-SC-000400"
-        },
-        "rejection_event": {
-          "credit_id": "0xCRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400C",
+        "step_1_unlock": {
+          "credit_id": "0xCRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600C",
           "bridge_type": 0,
-          "unlock_reason": 0,
-          "external_serial": "VCS-2026-SC-000400"
+          "unlock_reason": "Verra review rejected — monitoring report incomplete"
         },
-        "new_lock_request": {
-          "credit_id": "0xCRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400C",
+        "step_2_lock_request": {
+          "credit_id": "0xCRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600C",
           "bridge_type": 1,
-          "bridge_id": "0xBRDG01BRDG01BRDG01BRDG01BRDG0100",
-          "reason": "Gold Standard re-listing after Verra rejection"
+          "bridge_id": "0xBRIDGE02BRIDGE02BRIDGE02BRIDGE02",
+          "reason": "Submit to Gold Standard after Verra rejection"
         }
       },
       "expected_outputs": {
-        "lock_released": true,
-        "new_lock_acquired": true,
-        "new_lock": {
-          "credit_id": "0xCRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400CRED400C",
-          "locked_by_bridge": 1,
-          "lock_state": 1
-        }
+        "unlock_result": true,
+        "lock_response": {
+          "granted": true,
+          "conflict_bridge": 0,
+          "reason": ""
+        },
+        "audit_trail": [
+          { "action": 4, "bridge_type": 0, "result": true, "reason": "Unlock: Verra rejection" },
+          { "action": 1, "bridge_type": 1, "result": true, "reason": "Lock granted: Gold Standard" }
+        ]
       }
     },
     {
-      "id": "retirement-releases-lock-terminal",
-      "description": "Credit retired via Verra — lock released as terminal state — no further bridge operations",
+      "id": "lock-after-retirement-propagation",
+      "description": "After retirement propagation releases lock, credit is terminal — no new lock allowed",
       "tags": ["cross-bridge", "retirement", "terminal"],
       "inputs": {
-        "initial_lock": {
-          "credit_id": "0xCRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500C",
-          "locked_by_bridge": 0,
-          "lock_state": 3,
-          "external_serial": "VCS-2026-SC-000500"
-        },
-        "retirement_event": {
-          "credit_id": "0xCRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500CRED500C",
+        "step_1_unlock": {
+          "credit_id": "0xCRED700CRED700CRED700CRED700CRED700CRED700CRED700CRED700CRED700C",
           "bridge_type": 0,
-          "unlock_reason": 1,
-          "external_serial": "VCS-2026-SC-000500"
+          "unlock_reason": "Retirement propagated from Verra"
+        },
+        "step_2_lock_request": {
+          "credit_id": "0xCRED700CRED700CRED700CRED700CRED700CRED700CRED700CRED700CRED700C",
+          "bridge_type": 1,
+          "bridge_id": "0xBRIDGE02BRIDGE02BRIDGE02BRIDGE02",
+          "reason": "Submit to Gold Standard"
         }
       },
       "expected_outputs": {
-        "lock_released": true,
-        "lock_state": 5,
-        "credit_terminal": true,
-        "further_bridge_operations_allowed": false
+        "lock_response": {
+          "granted": false,
+          "reason": "Credit is in terminal RETIRED state — cannot be submitted to any bridge"
+        }
       }
     },
     {
-      "id": "same-bridge-relock-allowed",
-      "description": "Same bridge can re-acquire lock on a credit it already holds",
-      "tags": ["cross-bridge", "relock", "same-bridge"],
+      "id": "same-bridge-relock-idempotent",
+      "description": "Same bridge requesting lock on already-locked credit is idempotent",
+      "tags": ["cross-bridge", "idempotent"],
       "inputs": {
-        "existing_lock": {
-          "credit_id": "0xCRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600C",
-          "locked_by_bridge": 2,
-          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
-          "lock_state": 1,
-          "locked_at": 1741500000000
+        "precondition": {
+          "credit_id": "0xCRED800CRED800CRED800CRED800CRED800CRED800CRED800CRED800CRED800C",
+          "global_lock": {
+            "locked_by_bridge": 0,
+            "bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
+            "lock_state": 1
+          }
         },
         "lock_request": {
-          "credit_id": "0xCRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600CRED600C",
-          "bridge_type": 2,
-          "bridge_id": "0xCDMBRDG01CDMBRDG01CDMBRDG01CDM0",
-          "reason": "CDM state update"
+          "credit_id": "0xCRED800CRED800CRED800CRED800CRED800CRED800CRED800CRED800CRED800C",
+          "bridge_type": 0,
+          "bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
+          "reason": "Re-lock same bridge (idempotent)"
         }
       },
       "expected_outputs": {
-        "lock_acquired": true,
-        "conflict": null
+        "lock_response": {
+          "granted": true,
+          "reason": "Lock already held by requesting bridge"
+        }
       }
     },
     {
-      "id": "lock-sync-report",
-      "description": "Global lock sync report — aggregate across all bridges",
-      "tags": ["cross-bridge", "sync", "report"],
+      "id": "force-unlock-admin",
+      "description": "Admin force-unlock releases a stuck bridge lock",
+      "tags": ["cross-bridge", "admin", "force-unlock"],
       "inputs": {
-        "locks": [
-          { "credit_id": "CRED-A", "locked_by_bridge": 0, "lock_state": 2 },
-          { "credit_id": "CRED-B", "locked_by_bridge": 0, "lock_state": 3 },
-          { "credit_id": "CRED-C", "locked_by_bridge": 1, "lock_state": 1 },
-          { "credit_id": "CRED-D", "locked_by_bridge": 2, "lock_state": 2 },
-          { "credit_id": "CRED-E", "locked_by_bridge": 2, "lock_state": 1 }
-        ],
-        "conflicts": [
-          { "credit_id": "CRED-A", "requesting_bridge": 1, "blocking_bridge": 0 }
-        ]
+        "precondition": {
+          "credit_id": "0xCRED900CRED900CRED900CRED900CRED900CRED900CRED900CRED900CRED900C",
+          "global_lock": {
+            "locked_by_bridge": 2,
+            "bridge_id": "0xBRIDGE03BRIDGE03BRIDGE03BRIDGE03",
+            "lock_state": 1,
+            "locked_at": "2025-12-01T00:00:00Z",
+            "lock_reason": "CDM submission stuck"
+          }
+        },
+        "force_unlock": {
+          "credit_id": "0xCRED900CRED900CRED900CRED900CRED900CRED900CRED900CRED900CRED900C",
+          "admin_reason": "CDM bridge unresponsive for 90 days — manual override"
+        }
       },
       "expected_outputs": {
-        "sync_report": {
-          "total_locked": 5,
-          "locked_by_verra": 2,
-          "locked_by_gs": 1,
-          "locked_by_cdm": 2,
-          "conflicts_blocked": 1
+        "unlock_result": true,
+        "lock_status_after": {
+          "is_locked": false,
+          "lock_state": 0
+        },
+        "audit_entry": {
+          "action": 4,
+          "result": true,
+          "reason": "Force unlock: CDM bridge unresponsive for 90 days"
         }
       }
     }

@@ -1,0 +1,117 @@
+{
+  "circuit": "cdm_bridge",
+  "description": "CDM BRIDGE_LOCKED lifecycle: PENDING → SUBMITTED → REGISTERED → RETIRED",
+  "vectors": [
+    {
+      "id": "cdm-submit-and-lock",
+      "description": "Credit submitted to CDM enters BRIDGE_LOCKED state on SC",
+      "tags": ["bridge_lock", "submit", "happy-path"],
+      "inputs": {
+        "submit_request": {
+          "credit_id": "SC-CDM-2026-tz-wellpad-001",
+          "sc_serial": "SC-CDM-2026-wellpad-alpha-01-000100",
+          "attestation_hash": "0xATT100CDM",
+          "methodology_ref": "EPA-AP42-CH4-FLARE",
+          "vintage_year": 2026,
+          "tonnes_co2e": 0.450,
+          "project_name": "ThermogenZero Alpha Wellpad - TEG Waste Heat Recovery",
+          "project_location": "Permian Basin, TX, USA",
+          "host_country": "USA",
+          "cpa_id": ""
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "SUBMITTED",
+          "bridge_locked": true,
+          "cdm_serial": null
+        },
+        "sc_credit_status": {
+          "transferable": false,
+          "retirable": false,
+          "reason": "BRIDGE_LOCKED"
+        }
+      }
+    },
+    {
+      "id": "cdm-registers-credit",
+      "description": "CDM registers credit — state transitions to REGISTERED, remains locked",
+      "tags": ["bridge_lock", "registered", "sync"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-tz-wellpad-001",
+          "current_state": "SUBMITTED"
+        },
+        "cdm_status_response": {
+          "cdm_serial": "CDM-CER-2026-US-000100",
+          "status": "registered",
+          "project_ref": "PA-SC-TZ-001",
+          "cpa_id": "CPA-SC-TZ-001-01"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REGISTERED",
+          "bridge_locked": true,
+          "cdm_serial": "CDM-CER-2026-US-000100",
+          "cdm_project_ref": "PA-SC-TZ-001"
+        }
+      }
+    },
+    {
+      "id": "cdm-retirement-propagation",
+      "description": "Credit retired on CDM — retirement propagates to SC, lock released",
+      "tags": ["bridge_lock", "retirement", "propagation"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-tz-wellpad-001",
+          "current_state": "REGISTERED",
+          "cdm_serial": "CDM-CER-2026-US-000100"
+        },
+        "cdm_status_response": {
+          "cdm_serial": "CDM-CER-2026-US-000100",
+          "status": "retired",
+          "retired_at": "2026-06-15T12:00:00Z",
+          "retired_to": "Acme Corp — Scope 2 offset"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "RETIRED",
+          "bridge_locked": false,
+          "cdm_serial": "CDM-CER-2026-US-000100"
+        },
+        "sc_retirement": {
+          "triggered": true,
+          "trigger_type": "bridge_propagation"
+        }
+      }
+    },
+    {
+      "id": "cdm-rejection-unlocks",
+      "description": "CDM rejects credit — bridge lock released, credit returns to transferable",
+      "tags": ["rejection", "unlock", "bridge_lock"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-solar-farm-001",
+          "current_state": "SUBMITTED",
+          "bridge_locked": true
+        },
+        "cdm_status_response": {
+          "status": "rejected"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REJECTED",
+          "bridge_locked": false
+        },
+        "sc_credit_status": {
+          "transferable": true,
+          "retirable": true,
+          "reason": "BRIDGE_UNLOCKED"
+        }
+      }
+    }
+  ]
+}

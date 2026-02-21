@@ -1,0 +1,106 @@
+{
+  "circuit": "cdm_bridge",
+  "description": "CDM SOAP API status sync — polling-based state updates",
+  "vectors": [
+    {
+      "id": "sync-discovers-registration",
+      "description": "Periodic sync discovers CDM has registered a SUBMITTED credit",
+      "tags": ["sync", "registration", "polling"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-sync-001",
+          "current_state": "SUBMITTED",
+          "cdm_serial": null
+        },
+        "cdm_api_response": {
+          "status": "registered",
+          "cdm_serial": "CDM-CER-2026-US-0200",
+          "project_ref": "PA-SC-SYNC-001",
+          "cpa_id": "CPA-SC-SYNC-001-01"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REGISTERED",
+          "bridge_locked": true,
+          "cdm_serial": "CDM-CER-2026-US-0200"
+        },
+        "status_event": {
+          "previous_state": "SUBMITTED",
+          "new_state": "REGISTERED",
+          "event_type": "sync_status_change"
+        }
+      }
+    },
+    {
+      "id": "sync-discovers-retirement",
+      "description": "Periodic sync discovers CDM has retired a REGISTERED credit",
+      "tags": ["sync", "retirement", "polling"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-sync-002",
+          "current_state": "REGISTERED",
+          "cdm_serial": "CDM-CER-2026-US-0201"
+        },
+        "cdm_api_response": {
+          "status": "retired",
+          "retired_at": "2026-05-01T00:00:00Z",
+          "retired_to": "CarbonNeutral Corp"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "RETIRED",
+          "bridge_locked": false
+        },
+        "retirement_propagation": {
+          "triggered": true,
+          "trigger_type": "sync_discovery"
+        }
+      }
+    },
+    {
+      "id": "sync-discovers-suspension",
+      "description": "CDM suspends a credit — maps to REJECTED, releases lock",
+      "tags": ["sync", "suspension", "unlock"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-sync-003",
+          "current_state": "REGISTERED",
+          "cdm_serial": "CDM-CER-2026-US-0202"
+        },
+        "cdm_api_response": {
+          "status": "suspended"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REJECTED",
+          "bridge_locked": false
+        }
+      }
+    },
+    {
+      "id": "sync-no-change",
+      "description": "Periodic sync finds no status change — mapping unchanged",
+      "tags": ["sync", "no-op"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "SC-CDM-2026-sync-004",
+          "current_state": "REGISTERED",
+          "cdm_serial": "CDM-CER-2026-US-0203"
+        },
+        "cdm_api_response": {
+          "status": "registered"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REGISTERED",
+          "bridge_locked": true
+        },
+        "state_changed": false
+      }
+    }
+  ]
+}
