@@ -1,0 +1,150 @@
+{
+  "circuit": "sc_tz_e2e_failure_recovery",
+  "escir_version": "0.8.1",
+  "description": "Pipeline failure and retry scenarios for cross-org TZ→SC flow",
+  "vectors": [
+    {
+      "id": "insufficient-witnesses-retry",
+      "description": "Initial attestation rejected (2/3 witnesses), retry succeeds with 3/3",
+      "tags": ["e2e", "thermogenzero", "recovery", "witness", "retry"],
+      "inputs": {
+        "attempt_1": {
+          "attestation_hash": "0xRETRY01AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 400,
+          "timestamp": 1708400000000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "witness_count": 2,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02"
+          ],
+          "expected_bridge_result": "REJECTED"
+        },
+        "attempt_2": {
+          "attestation_hash": "0xRETRY01AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 400,
+          "timestamp": 1708400000000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_03"
+          ],
+          "expected_bridge_result": "ACCEPTED"
+        }
+      },
+      "expected_outputs": {
+        "attempt_1_rejected": true,
+        "attempt_1_dead_letter": false,
+        "attempt_2_bridged": true,
+        "attempt_2_credit_minted": true,
+        "total_pipeline_results": 2,
+        "final_credit_count": 1
+      }
+    },
+    {
+      "id": "invalid-metering-quarantine",
+      "description": "Attestation with invalid IEC 62053 metering is rejected; valid attestation succeeds after",
+      "tags": ["e2e", "thermogenzero", "recovery", "metering", "iec62053"],
+      "inputs": {
+        "bad_attestation": {
+          "attestation_hash": "0xMETER_BAD_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 500,
+          "timestamp": 1708500000000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "witness_count": 3,
+          "metering": {
+            "meter_id": "0xMETER_TAMPERED_01",
+            "accuracy_class": 0,
+            "voltage_v": 240000,
+            "current_ma": 885,
+            "active_power_mw": 212500,
+            "reactive_power_mvar": 100000,
+            "apparent_power_mva": 212735,
+            "power_factor_pct": 9990,
+            "frequency_mhz": 60000,
+            "energy_wh": 212
+          },
+          "calibration_cert": {
+            "accuracy_class": 0,
+            "error_pct_at_5": 30,
+            "error_pct_at_20": 15,
+            "error_pct_at_100": 18,
+            "error_pct_at_120": 19,
+            "calibrated_at": 1700000000000,
+            "expires_at": 1800000000000
+          }
+        },
+        "good_attestation": {
+          "attestation_hash": "0xMETER_GOOD_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 501,
+          "timestamp": 1708503600000,
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "witness_count": 3
+        }
+      },
+      "expected_outputs": {
+        "bad_attestation_bridged": false,
+        "bad_attestation_reason": "Power triangle inconsistency",
+        "good_attestation_bridged": true,
+        "good_attestation_credit_minted": true,
+        "pipeline_recovered": true
+      }
+    },
+    {
+      "id": "dead-letter-overflow",
+      "description": "Multiple consecutive failures trigger dead-letter routing",
+      "tags": ["e2e", "thermogenzero", "dead-letter", "resilience"],
+      "inputs": {
+        "bad_attestations": [
+          {
+            "attestation_hash": "0xDEAD01",
+            "gas_consumed_mcf": 0,
+            "flare_temp_c": 800,
+            "teg_power_w": 0,
+            "failure_reason": "Gas consumption must be positive"
+          },
+          {
+            "attestation_hash": "0xDEAD02",
+            "gas_consumed_mcf": 0.5,
+            "flare_temp_c": 500,
+            "teg_power_w": 100,
+            "failure_reason": "Flare temperature 500°C below minimum 760°C"
+          },
+          {
+            "attestation_hash": "0xDEAD03",
+            "gas_consumed_mcf": 0,
+            "flare_temp_c": 700,
+            "teg_power_w": 50,
+            "failure_reason": "Gas consumption must be positive"
+          }
+        ],
+        "recovery_attestation": {
+          "attestation_hash": "0xRECOVER_AFTER_DL",
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5,
+          "witness_count": 3
+        }
+      },
+      "expected_outputs": {
+        "dead_letter_entries": 3,
+        "recovery_bridged": true,
+        "pipeline_health_after_recovery": "healthy"
+      }
+    }
+  ]
+}

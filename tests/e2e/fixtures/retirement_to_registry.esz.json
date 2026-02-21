@@ -1,0 +1,123 @@
+{
+  "circuit": "sc_tz_e2e_retirement_to_registry",
+  "escir_version": "0.8.1",
+  "description": "Full flow: TZ edge → bridge → verify → mint → retire → certificate → Verra sync",
+  "vectors": [
+    {
+      "id": "full-retirement-flow",
+      "description": "Single attestation through entire pipeline including retirement, certificate, and Verra bridge",
+      "tags": ["e2e", "thermogenzero", "retirement", "certificate", "verra", "full-flow"],
+      "inputs": {
+        "attestation": {
+          "attestation_hash": "0xFULLFLOW_A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4",
+          "reduction_tonnes": 260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_03"
+          ],
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 600,
+          "timestamp": 1708600000000,
+          "merkle_root": "0xFULLFLOW_MERKLE_ROOT_0000000000000000000000000000000000000000000000",
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5
+        },
+        "retirement_options": {
+          "auto_retire": true,
+          "retirement_reason": "Q1 2026 voluntary offset — ThermogenZero methane destruction",
+          "retirement_beneficiary": "SynergyCarbon Foundation"
+        },
+        "verra_bridge": {
+          "enabled": true,
+          "registry": "verra",
+          "auto_submit": true
+        }
+      },
+      "expected_outputs": {
+        "pipeline_stages_completed": [
+          "bridge_receive",
+          "attestation_adapt",
+          "verification",
+          "credit_mint",
+          "retirement",
+          "certificate",
+          "verra_bridge"
+        ],
+        "adapter_result": {
+          "bridged": true,
+          "methane_calc_compliant": true,
+          "tco2e_gt": 0
+        },
+        "verification": {
+          "eligible": true,
+          "compliance_flags": "0x0F",
+          "witness_count": 3
+        },
+        "credit": {
+          "project_id": "thermogenzero",
+          "status": "Issued",
+          "methodology_id": "EPA-AP42-5.0-S13.5"
+        },
+        "retirement": {
+          "permanent": true,
+          "tonnes_co2e_gt": 0
+        },
+        "certificate": {
+          "has_certificate_id": true,
+          "has_verify_url": true,
+          "project_id": "thermogenzero",
+          "reason": "Q1 2026 voluntary offset — ThermogenZero methane destruction"
+        },
+        "verra_synced": true,
+        "total_pipeline_success": true,
+        "stage_count": 7
+      }
+    },
+    {
+      "id": "retirement-batch-verra",
+      "description": "Batch of 2 attestations retired and synced to Verra",
+      "tags": ["e2e", "thermogenzero", "retirement", "batch", "verra"],
+      "inputs": {
+        "attestations": [
+          {
+            "attestation_hash": "0xRET_BATCH_01_AAAA",
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 700,
+            "timestamp": 1708700000000,
+            "gas_consumed_mcf": 0.5,
+            "flare_temp_c": 800,
+            "teg_power_w": 212.5,
+            "witness_count": 3
+          },
+          {
+            "attestation_hash": "0xRET_BATCH_02_BBBB",
+            "site_id": "esz-wellpad-bravo",
+            "epoch_id": 700,
+            "timestamp": 1708700000000,
+            "gas_consumed_mcf": 0.65,
+            "flare_temp_c": 820,
+            "teg_power_w": 283.0,
+            "witness_count": 3
+          }
+        ],
+        "retirement_options": {
+          "auto_retire": true,
+          "retirement_reason": "Batch voluntary offset"
+        }
+      },
+      "expected_outputs": {
+        "bridged_count": 2,
+        "credits_minted": 2,
+        "retirements": 2,
+        "certificates_generated": 2,
+        "verra_syncs": 2,
+        "all_permanent": true,
+        "total_tco2e_gt": 0
+      }
+    }
+  ]
+}

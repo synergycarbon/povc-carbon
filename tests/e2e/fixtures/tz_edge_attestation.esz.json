@@ -1,0 +1,177 @@
+{
+  "circuit": "sc_tz_e2e_edge_attestation",
+  "escir_version": "0.8.1",
+  "description": "Mock TZ FPGA edge node attestation for E2E cross-org pipeline testing",
+  "vectors": [
+    {
+      "id": "tz-edge-alpha-epoch-100",
+      "description": "Single valid TZ edge attestation from Wellpad Alpha, epoch 100",
+      "tags": ["e2e", "thermogenzero", "edge", "happy-path", "methane"],
+      "inputs": {
+        "source": {
+          "org": "thermogenzero",
+          "site_id": "esz-wellpad-alpha",
+          "lex_topic": "esn/energy/thermogenzero/carbon/site/alpha",
+          "witness_platform": "fpga",
+          "signature_algorithm": "ML-DSA-87"
+        },
+        "attestation": {
+          "attestation_hash": "0xA1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718",
+          "reduction_tonnes": 260,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_03"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_02_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_03_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 100,
+          "timestamp": 1708000000000,
+          "merkle_root": "0xFEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210",
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 800,
+          "teg_power_w": 212.5
+        },
+        "metering": {
+          "meter_id": "0xMETER_ALPHA_01",
+          "accuracy_class": 0,
+          "voltage_v": 240000,
+          "current_ma": 885,
+          "active_power_mw": 212500,
+          "reactive_power_mvar": 10000,
+          "apparent_power_mva": 212735,
+          "power_factor_pct": 9990,
+          "frequency_mhz": 60000,
+          "energy_wh": 212
+        },
+        "calibration_cert": {
+          "cert_id": "0xCALIB_ALPHA_01",
+          "meter_id": "0xMETER_ALPHA_01",
+          "accuracy_class": 0,
+          "calibration_lab_id": "0xNIST_LAB_001",
+          "calibrated_at": 1700000000000,
+          "expires_at": 1800000000000,
+          "error_pct_at_5": 30,
+          "error_pct_at_20": 15,
+          "error_pct_at_100": 18,
+          "error_pct_at_120": 19
+        }
+      },
+      "expected_outputs": {
+        "adapter_bridged": true,
+        "methane_calc": {
+          "tco2e_gt": 0,
+          "compliant": true,
+          "destruction_efficiency_gte": 0.995,
+          "methodology_version": "EPA-AP42-5.0-S13.5"
+        },
+        "metering_valid": true,
+        "verification_eligible": true,
+        "credit_minted": true,
+        "credit": {
+          "project_id": "thermogenzero",
+          "vintage_year": 2024,
+          "methodology_id": "EPA-AP42-5.0-S13.5",
+          "status": "Issued"
+        }
+      }
+    },
+    {
+      "id": "tz-edge-bravo-epoch-100",
+      "description": "Single valid TZ edge attestation from Wellpad Bravo, epoch 100",
+      "tags": ["e2e", "thermogenzero", "edge", "happy-path", "methane", "bravo"],
+      "inputs": {
+        "source": {
+          "org": "thermogenzero",
+          "site_id": "esz-wellpad-bravo",
+          "lex_topic": "esn/energy/thermogenzero/carbon/site/bravo",
+          "witness_platform": "fpga",
+          "signature_algorithm": "ML-DSA-87"
+        },
+        "attestation": {
+          "attestation_hash": "0xD4E5F60718293041D4E5F60718293041D4E5F60718293041D4E5F60718293041",
+          "reduction_tonnes": 340,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_BRAVO_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_BRAVO_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01"
+          ],
+          "witness_public_keys": [
+            "TZ_WITNESS_BRAVO_01_ML_DSA_87_PK",
+            "TZ_WITNESS_BRAVO_02_ML_DSA_87_PK",
+            "TZ_WITNESS_ALPHA_01_ML_DSA_87_PK"
+          ],
+          "site_id": "esz-wellpad-bravo",
+          "epoch_id": 100,
+          "timestamp": 1708000000000,
+          "merkle_root": "0xAAAABBBBCCCCDDDDEEEEFFFF00001111AAAABBBBCCCCDDDDEEEEFFFF00001111",
+          "gas_consumed_mcf": 0.65,
+          "flare_temp_c": 820,
+          "teg_power_w": 283.0
+        }
+      },
+      "expected_outputs": {
+        "adapter_bridged": true,
+        "methane_calc": {
+          "tco2e_gt": 0,
+          "compliant": true,
+          "destruction_efficiency_gte": 0.995
+        },
+        "verification_eligible": true,
+        "credit_minted": true,
+        "credit": {
+          "project_id": "thermogenzero",
+          "vintage_year": 2024,
+          "status": "Issued"
+        }
+      }
+    },
+    {
+      "id": "tz-edge-low-temp",
+      "description": "TZ edge attestation with flare temp below EPA AP-42 minimum — rejected by adapter",
+      "tags": ["e2e", "thermogenzero", "edge", "rejection", "methodology"],
+      "inputs": {
+        "source": {
+          "org": "thermogenzero",
+          "site_id": "esz-wellpad-alpha",
+          "lex_topic": "esn/energy/thermogenzero/carbon/site/alpha"
+        },
+        "attestation": {
+          "attestation_hash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+          "reduction_tonnes": 100,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "witness_count": 3,
+          "witness_signatures": [
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_01",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_02",
+            "VALID_ML_DSA_87_SIG_WITNESS_ALPHA_03"
+          ],
+          "site_id": "esz-wellpad-alpha",
+          "epoch_id": 300,
+          "timestamp": 1708100000000,
+          "merkle_root": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "gas_consumed_mcf": 0.5,
+          "flare_temp_c": 650,
+          "teg_power_w": 180.0
+        }
+      },
+      "expected_outputs": {
+        "adapter_bridged": false,
+        "methane_calc": {
+          "tco2e": 0,
+          "compliant": false,
+          "rejection_reason": "Flare temperature 650°C below minimum 760°C"
+        },
+        "credit_minted": false
+      }
+    }
+  ]
+}

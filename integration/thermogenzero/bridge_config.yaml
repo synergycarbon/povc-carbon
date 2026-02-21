@@ -1,0 +1,275 @@
+# ThermogenZero Lex Bridge Configuration
+# Full routing rules for cross-org attestation flow:
+#   TZ FPGA witness nodes → lex_bridge → SC verification pipeline
+#
+# Closes: synergycarbon/povc-carbon #69
+
+bridge:
+  id: tz-sc-lex-bridge-001
+  name: ThermogenZero → SynergyCarbon Attestation Bridge
+  version: "1.0.0"
+  status: active
+  created_at: "2026-02-20T00:00:00Z"
+
+  source_org:
+    id: thermogenzero
+    lex_root: esn/energy/thermogenzero
+  destination_org:
+    id: synergycarbon
+    lex_root: esn/sustainability/carbon/org/synergycarbon
+
+  bridge_circuit: integration/thermogenzero/lex_bridge.fl
+  adapter: integration/thermogenzero/attestation_adapter.ts
+  monitoring: integration/thermogenzero/monitoring.ts
+
+# ---------------------------------------------------------------------------
+# Topic Routing Rules
+# ---------------------------------------------------------------------------
+# TZ publishes attestations per-site; SC subscribes at the project level
+# and per-site for granular ingestion.
+
+routing:
+  global:
+    source: esn/energy/thermogenzero/carbon
+    destination: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    attestation_types: [methane, solar, ccs]
+
+  per_site:
+    - source: esn/energy/thermogenzero/carbon/site/alpha
+      destination: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/site/alpha/attestations
+      site_id: esz-wellpad-alpha
+      active: true
+
+    - source: esn/energy/thermogenzero/carbon/site/bravo
+      destination: esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/site/bravo/attestations
+      site_id: esz-wellpad-bravo
+      active: true
+
+  internal_topics:
+    raw_attestations: sc.attestations.thermogenzero.raw
+    verified_attestations: sc.attestations.thermogenzero.verified
+    failed_attestations: sc.attestations.thermogenzero.failed
+    credits_minted: sc.credits.thermogenzero.minted
+    retirements: sc.retirements.thermogenzero
+    anomalies: sc.anomalies.thermogenzero.verification
+
+# ---------------------------------------------------------------------------
+# Filter Rules
+# ---------------------------------------------------------------------------
+# Accept/reject attestations by type, methodology, and site status.
+
+filters:
+  attestation_types:
+    - type: methane
+      methodology_id: EPA-AP42-CH4-FLARE
+      action: accept
+      priority: 1
+
+    - type: solar
+      methodology_id: SOLAR-IEC-61724
+      action: accept
+      priority: 2
+
+    - type: ccs
+      methodology_id: CCS-ISO-27914
+      action: accept
+      priority: 3
+
+    - type: "*"
+      action: reject
+      reason: "Unknown attestation type"
+
+  validation:
+    min_witness_count: 3
+    witness_pool_size: 5
+    max_epoch_age_s: 7200
+    require_hardware_attestation: true
+    require_methodology_id: true
+    min_reduction_tonnes: 0
+
+  methodology_allowlist:
+    - EPA-AP42-CH4-FLARE
+    - SOLAR-IEC-61724
+    - CCS-ISO-27914
+
+# ---------------------------------------------------------------------------
+# Rate Limiting & Backpressure
+# ---------------------------------------------------------------------------
+
+rate_limiting:
+  global:
+    max_attestations_per_second: 100
+    max_attestations_per_minute: 3000
+    max_attestations_per_hour: 100000
+    burst_size: 200
+
+  per_site:
+    max_attestations_per_second: 50
+    max_attestations_per_minute: 1500
+
+  backpressure:
+    strategy: token_bucket
+    queue_max_depth: 10000
+    queue_overflow_action: reject_newest
+    slow_consumer_timeout_s: 30
+    resume_threshold_pct: 75
+
+# ---------------------------------------------------------------------------
+# Error Handling & Dead Letter
+# ---------------------------------------------------------------------------
+
+error_handling:
+  retry:
+    max_attempts: 5
+    base_delay_ms: 1000
+    max_delay_ms: 60000
+    backoff_multiplier: 2.0
+    jitter: true
+
+  dead_letter:
+    topic: sc.attestations.thermogenzero.dead_letter
+    retention_days: 90
+    alert_threshold: 10
+    alert_window_s: 3600
+
+  circuit_breaker:
+    failure_threshold: 50
+    failure_window_s: 300
+    reset_timeout_s: 60
+    half_open_max_requests: 5
+
+# ---------------------------------------------------------------------------
+# Pipeline Wiring
+# ---------------------------------------------------------------------------
+# Connects the bridge output to downstream SC circuits.
+
+pipeline:
+  stages:
+    - name: attestation_adapter
+      circuit: integration/thermogenzero/attestation_adapter.ts
+      input_topic: sc.attestations.thermogenzero.raw
+      output_topic: sc.attestations.thermogenzero.adapted
+      timeout_ms: 5000
+
+    - name: verification_pipeline
+      circuit: circuits/fl/verification_pipeline.fl
+      input_topic: sc.attestations.thermogenzero.adapted
+      output_topic: sc.attestations.thermogenzero.verified
+      timeout_ms: 10000
+
+    - name: credit_registry
+      circuit: circuits/fl/credit_registry.fl
+      input_topic: sc.attestations.thermogenzero.verified
+      output_topic: sc.credits.thermogenzero.minted
+      timeout_ms: 10000
+
+    - name: retirement_engine
+      circuit: circuits/legacy/escir/core/retirement_engine.escir.yaml
+      input_topic: sc.credits.thermogenzero.minted
+      output_topic: sc.retirements.thermogenzero
+      trigger: on_demand
+
+    - name: verra_bridge
+      circuit: bridges/verra/verra_bridge.fl
+      input_topic: sc.retirements.thermogenzero
+      output_topic: sc.bridges.verra.status
+      trigger: on_retirement
+
+# ---------------------------------------------------------------------------
+# Witness Configuration
+# ---------------------------------------------------------------------------
+
+witnesses:
+  signature_algorithm: ML-DSA-87
+  quorum_size: 3
+  quorum_pool: 5
+  quorum_window_s: 300
+  heartbeat_interval_s: 60
+  key_rotation_interval_days: 365
+  liveness_timeout_s: 600
+
+# ---------------------------------------------------------------------------
+# Metering Integration (IEC 62053)
+# ---------------------------------------------------------------------------
+
+metering:
+  enabled: true
+  standard: IEC-62053
+  validation_circuit: integration/metering/iec62053_metering.fl
+  types_module: integration/metering/types.ts
+  require_calibration_cert: true
+  quarantine_on_tamper: true
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+
+security:
+  transport: ML-KEM-1024
+  signing: ML-DSA-87
+  hashing: SHA3-256
+  sovereignty: us
+  compliance:
+    - epa_ghg
+    - iso_14064
+    - verra_vcs
+  rbac:
+    bridge_operator: [receive, validate, forward]
+    verifier: [verify, audit]
+    registry_admin: [manage_mappings, manage_witnesses, override]
+
+# ---------------------------------------------------------------------------
+# StreamSight Observability
+# ---------------------------------------------------------------------------
+
+streamsight:
+  namespace: sc.bridge.thermogenzero
+  metrics:
+    - name: attestations_received
+      type: counter
+      labels: [site_id, methodology_id]
+
+    - name: attestations_bridged
+      type: counter
+      labels: [site_id, methodology_id]
+
+    - name: attestations_rejected
+      type: counter
+      labels: [site_id, rejection_reason]
+
+    - name: bridge_latency_ms
+      type: histogram
+      buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000]
+
+    - name: pipeline_latency_ms
+      type: histogram
+      labels: [stage]
+      buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000]
+
+    - name: credits_minted_tco2e
+      type: counter
+      labels: [site_id, vintage_year]
+
+    - name: dead_letter_count
+      type: counter
+
+    - name: circuit_breaker_state
+      type: gauge
+      values: [closed, half_open, open]
+
+  alerts:
+    - name: high_rejection_rate
+      condition: "rate(attestations_rejected[5m]) / rate(attestations_received[5m]) > 0.10"
+      severity: warning
+
+    - name: dead_letter_spike
+      condition: "increase(dead_letter_count[1h]) > 10"
+      severity: critical
+
+    - name: bridge_latency_high
+      condition: "histogram_quantile(0.99, bridge_latency_ms) > 5000"
+      severity: warning
+
+    - name: pipeline_stalled
+      condition: "rate(attestations_bridged[10m]) == 0 && rate(attestations_received[10m]) > 0"
+      severity: critical

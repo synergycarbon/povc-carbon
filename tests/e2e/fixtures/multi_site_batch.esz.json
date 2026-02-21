@@ -1,0 +1,133 @@
+{
+  "circuit": "sc_tz_e2e_multi_site_batch",
+  "escir_version": "0.8.1",
+  "description": "Multi-site batch attestation: Alpha + Bravo through full pipeline in a single epoch batch",
+  "vectors": [
+    {
+      "id": "multi-site-epoch-batch",
+      "description": "Batch of 4 attestations across 2 sites in a single epoch processing run",
+      "tags": ["e2e", "thermogenzero", "batch", "multi-site", "happy-path"],
+      "inputs": {
+        "batch_config": {
+          "batch_size": 4,
+          "baseline_power_w": 212.5,
+          "auto_retire": false
+        },
+        "attestations": [
+          {
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 200,
+            "timestamp": 1708200000000,
+            "gas_consumed_mcf": 0.5,
+            "flare_temp_c": 800,
+            "teg_power_w": 212.5,
+            "witness_count": 3,
+            "attestation_hash": "0xBATCH01A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4"
+          },
+          {
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 201,
+            "timestamp": 1708203600000,
+            "gas_consumed_mcf": 0.48,
+            "flare_temp_c": 810,
+            "teg_power_w": 210.0,
+            "witness_count": 3,
+            "attestation_hash": "0xBATCH02A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4E5F60718A1B2C3D4"
+          },
+          {
+            "site_id": "esz-wellpad-bravo",
+            "epoch_id": 200,
+            "timestamp": 1708200000000,
+            "gas_consumed_mcf": 0.65,
+            "flare_temp_c": 820,
+            "teg_power_w": 283.0,
+            "witness_count": 3,
+            "attestation_hash": "0xBATCH03D4E5F60718293041D4E5F60718293041D4E5F60718293041D4E5F60718"
+          },
+          {
+            "site_id": "esz-wellpad-bravo",
+            "epoch_id": 201,
+            "timestamp": 1708203600000,
+            "gas_consumed_mcf": 0.62,
+            "flare_temp_c": 815,
+            "teg_power_w": 280.0,
+            "witness_count": 3,
+            "attestation_hash": "0xBATCH04D4E5F60718293041D4E5F60718293041D4E5F60718293041D4E5F60718"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "total_attestations": 4,
+        "bridged_count": 4,
+        "rejected_count": 0,
+        "total_tco2e_gt": 0,
+        "all_compliant": true,
+        "credits_minted": 4,
+        "sites_represented": ["esz-wellpad-alpha", "esz-wellpad-bravo"],
+        "pipeline_completed": true
+      }
+    },
+    {
+      "id": "multi-site-mixed-results",
+      "description": "Batch with 1 rejection (low flare temp) and 3 successes",
+      "tags": ["e2e", "thermogenzero", "batch", "multi-site", "mixed"],
+      "inputs": {
+        "batch_config": {
+          "batch_size": 4,
+          "auto_retire": false
+        },
+        "attestations": [
+          {
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 300,
+            "timestamp": 1708300000000,
+            "gas_consumed_mcf": 0.5,
+            "flare_temp_c": 800,
+            "teg_power_w": 212.5,
+            "witness_count": 3,
+            "attestation_hash": "0xMIXED01AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          {
+            "site_id": "esz-wellpad-alpha",
+            "epoch_id": 301,
+            "timestamp": 1708303600000,
+            "gas_consumed_mcf": 0.5,
+            "flare_temp_c": 650,
+            "teg_power_w": 180.0,
+            "witness_count": 3,
+            "attestation_hash": "0xMIXED02BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+          },
+          {
+            "site_id": "esz-wellpad-bravo",
+            "epoch_id": 300,
+            "timestamp": 1708300000000,
+            "gas_consumed_mcf": 0.65,
+            "flare_temp_c": 820,
+            "teg_power_w": 283.0,
+            "witness_count": 3,
+            "attestation_hash": "0xMIXED03CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+          },
+          {
+            "site_id": "esz-wellpad-bravo",
+            "epoch_id": 301,
+            "timestamp": 1708303600000,
+            "gas_consumed_mcf": 0.6,
+            "flare_temp_c": 810,
+            "teg_power_w": 275.0,
+            "witness_count": 3,
+            "attestation_hash": "0xMIXED04DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+          }
+        ]
+      },
+      "expected_outputs": {
+        "total_attestations": 4,
+        "bridged_count": 3,
+        "rejected_count": 1,
+        "rejection_reasons": [
+          { "epoch_id": 301, "site_id": "esz-wellpad-alpha", "reason": "Flare temperature 650°C below minimum 760°C" }
+        ],
+        "credits_minted": 3
+      }
+    }
+  ]
+}
