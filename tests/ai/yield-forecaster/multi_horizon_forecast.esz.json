@@ -1,0 +1,117 @@
+{
+  "circuit": "sc_yield_forecaster_v2",
+  "escir_version": "0.8.3",
+  "description": "Multi-horizon yield forecast with Mamba/S4 SSM",
+  "vectors": [
+    {
+      "id": "solar-all-horizons",
+      "description": "Solar farm forecast across all 5 horizons (24h, 7d, 30d, 90d, 1y)",
+      "tags": ["solar", "multi-horizon", "mamba-s4"],
+      "inputs": {
+        "model_config": {
+          "hidden_dim": 512,
+          "state_dim": 64,
+          "num_layers": 8,
+          "context_window": 8760,
+          "quantization": "bitnet_b158"
+        },
+        "features": {
+          "power_mean_w": 5000.0,
+          "trend_slope": 0.02,
+          "r_squared": 0.85,
+          "capacity_factor": 0.25,
+          "minting_rate_tco2e_hour": 0.083,
+          "gas_flow_mcf_hour": 0.0,
+          "ch4_mass_kg": 0.0,
+          "attestation_success_rate": 0.98,
+          "spot_price_usd": 25.0,
+          "volume_24h_tco2e": 1500.0,
+          "forward_committed_pct": 0.40,
+          "ambient_temp_c": 32.0,
+          "wind_speed_ms": 3.5,
+          "irradiance_wm2": 850.0,
+          "precipitation_mm": 0.0,
+          "timestamp": 1708000000
+        },
+        "horizons": [0, 1, 2, 3, 4],
+        "tenant_id": "synergy-solar-farm-01",
+        "project_id": "solar-az-mesa-01"
+      },
+      "expected_outputs": {
+        "forecast_valid": true,
+        "prediction_count": 5,
+        "horizons": [
+          {
+            "horizon": 0,
+            "horizon_days": 1,
+            "has_confidence_80": true,
+            "has_confidence_95": true,
+            "predicted_tco2e_positive": true
+          },
+          {
+            "horizon": 1,
+            "horizon_days": 7,
+            "has_confidence_80": true,
+            "has_confidence_95": true,
+            "predicted_tco2e_positive": true
+          },
+          {
+            "horizon": 2,
+            "horizon_days": 30,
+            "has_confidence_80": true,
+            "has_confidence_95": true,
+            "predicted_tco2e_positive": true
+          },
+          {
+            "horizon": 3,
+            "horizon_days": 90,
+            "has_confidence_80": true,
+            "has_confidence_95": true,
+            "predicted_tco2e_positive": true
+          },
+          {
+            "horizon": 4,
+            "horizon_days": 365,
+            "has_confidence_80": true,
+            "has_confidence_95": true,
+            "predicted_tco2e_positive": true
+          }
+        ],
+        "confidence_interval_widening": "95_wider_than_80",
+        "horizon_scaling": "longer_horizons_wider_intervals"
+      }
+    },
+    {
+      "id": "methane-capture-steady",
+      "description": "Methane capture site with steady gas flow",
+      "tags": ["methane", "steady-state", "mamba-s4"],
+      "inputs": {
+        "features": {
+          "power_mean_w": 200.0,
+          "trend_slope": 0.0,
+          "r_squared": 0.92,
+          "capacity_factor": 0.30,
+          "minting_rate_tco2e_hour": 0.011,
+          "gas_flow_mcf_hour": 0.5,
+          "ch4_mass_kg": 2.5,
+          "attestation_success_rate": 0.95,
+          "spot_price_usd": 28.0,
+          "volume_24h_tco2e": 800.0,
+          "forward_committed_pct": 0.60,
+          "ambient_temp_c": 15.0,
+          "wind_speed_ms": 5.0,
+          "irradiance_wm2": 400.0,
+          "precipitation_mm": 2.0,
+          "timestamp": 1708100000
+        },
+        "horizons": [1, 2, 3],
+        "tenant_id": "thermogenzero",
+        "project_id": "tz-wellpad-alpha-01"
+      },
+      "expected_outputs": {
+        "forecast_valid": true,
+        "prediction_count": 3
+      }
+    }
+  ]
+}

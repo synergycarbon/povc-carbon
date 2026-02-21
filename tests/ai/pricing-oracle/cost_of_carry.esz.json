@@ -1,0 +1,72 @@
+{
+  "circuit": "sc_cost_of_carry",
+  "escir_version": "0.8.3",
+  "description": "Cost-of-carry model validation",
+  "vectors": [
+    {
+      "id": "standard-carry-30d",
+      "description": "30-day carry cost with standard parameters",
+      "tags": ["carry", "30d", "standard"],
+      "inputs": {
+        "spot_price": 25.00,
+        "tenor_days": 30,
+        "config": {
+          "risk_free_rate_annual": 0.05,
+          "convenience_yield_annual": 0.02,
+          "storage_cost_per_tonne_annual": 0.25,
+          "insurance_rate_annual": 0.005
+        }
+      },
+      "expected_outputs": {
+        "forward_above_spot": true,
+        "carry_multiplier_above_1": true,
+        "breakdown": {
+          "time_value_positive": true,
+          "storage_cost_positive": true,
+          "insurance_cost_positive": true,
+          "convenience_yield_positive": true,
+          "net_carry_cost_positive": true
+        }
+      }
+    },
+    {
+      "id": "standard-carry-365d",
+      "description": "1-year carry cost with standard parameters",
+      "tags": ["carry", "1y", "standard"],
+      "inputs": {
+        "spot_price": 25.00,
+        "tenor_days": 365,
+        "config": {
+          "risk_free_rate_annual": 0.05,
+          "convenience_yield_annual": 0.02,
+          "storage_cost_per_tonne_annual": 0.25,
+          "insurance_rate_annual": 0.005
+        }
+      },
+      "expected_outputs": {
+        "forward_price_approx": 25.75,
+        "carry_multiplier_approx": 1.03,
+        "longer_tenor_higher_carry": true
+      }
+    },
+    {
+      "id": "implied-convenience-yield",
+      "description": "Compute implied convenience yield from observed forward price",
+      "tags": ["carry", "implied-yield"],
+      "inputs": {
+        "spot_price": 25.00,
+        "forward_price": 25.50,
+        "tenor_days": 180,
+        "config": {
+          "risk_free_rate_annual": 0.05,
+          "storage_cost_per_tonne_annual": 0.25,
+          "insurance_rate_annual": 0.005
+        }
+      },
+      "expected_outputs": {
+        "implied_yield_positive": true,
+        "implied_yield_reasonable": true
+      }
+    }
+  ]
+}

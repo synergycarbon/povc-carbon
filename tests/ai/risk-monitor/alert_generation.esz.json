@@ -1,0 +1,114 @@
+{
+  "circuit": "sc_risk_alert_manager",
+  "escir_version": "0.8.3",
+  "description": "Risk alert generation, cooldown, and escalation",
+  "vectors": [
+    {
+      "id": "warning-alert",
+      "description": "Score above warning threshold generates alert",
+      "tags": ["alert", "warning"],
+      "inputs": {
+        "target_id": "contract-001",
+        "risk_score": {
+          "risk_type": 0,
+          "score": 55.0,
+          "severity": 2,
+          "indicators": {},
+          "mitigation_suggestions": ["Require collateral or letter of credit"],
+          "assessed_at": 1708000000
+        },
+        "timestamp": 1708000000,
+        "thresholds": {
+          "warning_score": 50,
+          "critical_score": 75,
+          "cooldown_s": 3600
+        }
+      },
+      "expected_outputs": {
+        "alert_generated": true,
+        "alert_severity": 2,
+        "alert_threshold": 50,
+        "message_contains": "WARNING",
+        "acknowledged": false,
+        "escalated": false
+      }
+    },
+    {
+      "id": "critical-alert",
+      "description": "Score above critical threshold generates critical alert",
+      "tags": ["alert", "critical"],
+      "inputs": {
+        "target_id": "contract-002",
+        "risk_score": {
+          "risk_type": 1,
+          "score": 85.0,
+          "severity": 3,
+          "indicators": {},
+          "mitigation_suggestions": ["Activate backup supply sources"],
+          "assessed_at": 1708000000
+        },
+        "timestamp": 1708000000
+      },
+      "expected_outputs": {
+        "alert_generated": true,
+        "alert_severity": 3,
+        "message_contains": "CRITICAL"
+      }
+    },
+    {
+      "id": "cooldown-suppression",
+      "description": "Alert suppressed during cooldown period",
+      "tags": ["alert", "cooldown"],
+      "inputs": {
+        "target_id": "contract-001",
+        "risk_score": {
+          "risk_type": 0,
+          "score": 60.0,
+          "severity": 2,
+          "indicators": {},
+          "mitigation_suggestions": [],
+          "assessed_at": 1708001800
+        },
+        "first_alert_timestamp": 1708000000,
+        "second_alert_timestamp": 1708001800,
+        "cooldown_s": 3600
+      },
+      "expected_outputs": {
+        "first_alert_generated": true,
+        "second_alert_generated": false,
+        "reason": "within_cooldown_period"
+      }
+    },
+    {
+      "id": "auto-escalation",
+      "description": "Unacknowledged critical alert auto-escalates after 30 minutes",
+      "tags": ["alert", "escalation"],
+      "inputs": {
+        "alert_created_at": 1708000000,
+        "check_timestamp": 1708001800,
+        "severity": 3,
+        "auto_escalate_after_s": 1800
+      },
+      "expected_outputs": {
+        "escalated": true,
+        "notify_channels": ["console", "webhook", "governance"]
+      }
+    },
+    {
+      "id": "resolution-on-improvement",
+      "description": "Alert auto-resolves when risk score drops below threshold",
+      "tags": ["alert", "resolution"],
+      "inputs": {
+        "target_id": "contract-003",
+        "initial_score": 60.0,
+        "improved_score": 20.0,
+        "warning_threshold": 50
+      },
+      "expected_outputs": {
+        "initial_alert_generated": true,
+        "alert_resolved_on_improvement": true,
+        "active_alerts_for_target": 0
+      }
+    }
+  ]
+}

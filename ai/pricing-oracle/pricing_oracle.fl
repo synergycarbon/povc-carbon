@@ -1,0 +1,82 @@
+// Forward Pricing Oracle Circuit
+// Generates forward price curves from spot prices, yield forecasts, and cost-of-carry
+// Outputs: forward curve by maturity (1M, 3M, 6M, 1Y, 2Y)
+
+type SpotInput = struct {
+    price_usd_cents: u64,
+    volume_24h: u64,
+    bid_ask_spread: u64,
+    timestamp: u64,
+}
+
+type ForwardCurvePoint = struct {
+    tenor_label: bytes(4),
+    tenor_days: u32,
+    forward_price_cents: u64,
+    carry_cost_cents: u64,
+    supply_adj_cents: i64,
+    methodology_premium_bps: u32,
+    confidence_lo_cents: u64,
+    confidence_hi_cents: u64,
+}
+
+type BasisAlert = struct {
+    tenor_days: u32,
+    expected_cents: u64,
+    observed_cents: u64,
+    sigma_deviation: u64,
+    timestamp: u64,
+}
+
+// curve_position: 0=spot, 1=1m, 2=3m, 3=6m, 4=1y, 5=2y
+
+graph pricing_oracle_graph {
+    node SpotInput
+    node ForwardCurvePoint
+    node BasisAlert
+    edge prices: SpotInput -> ForwardCurvePoint { guard market_data_fresh }
+    edge alerts: ForwardCurvePoint -> BasisAlert { guard basis_exceeded }
+    overlay price_trend: i64 bitmask delta_curate
+    overlay volatility: u64 bitmask delta_curate
+    overlay liquidity: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed forward_curve_pipeline
+    observe pricing_oracle_graph: [price_trend, volatility, liquidity] threshold: {
+        anomaly_score 0.80
+        baseline_window 60
+    }
+}
+
+circuit compute_forward_curve(graph_id: bytes(32), spot: SpotInput, methodology: bytes(32)) -> list<ForwardCurvePoint>
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/forward/compute
+    precision D
+    observe metrics: [spot_price, methodology, tenor_count]
+{
+    []
+}
+
+circuit check_basis(graph_id: bytes(32), expected_cents: u64, observed_cents: u64, tenor_days: u32) -> BasisAlert
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/basis/check
+    precision C
+    observe metrics: [tenor_days, sigma_deviation]
+{
+    BasisAlert {
+        tenor_days: tenor_days,
+        expected_cents: expected_cents,
+        observed_cents: observed_cents,
+        sigma_deviation: 0,
+        timestamp: 0,
+    }
+}
+
+stream forward_curves: event<list<ForwardCurvePoint>>
+    retention 5y
+    consumers [marketplace, trading, streamsight, alerting]
+
+stream basis_alerts: event<BasisAlert>
+    retention 5y
+    consumers [ops, trading, streamsight, alerting]

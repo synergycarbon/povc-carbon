@@ -1,0 +1,101 @@
+{
+  "circuit": "sc_eslm_ab_test",
+  "escir_version": "0.8.3",
+  "description": "A/B testing framework for model comparison",
+  "vectors": [
+    {
+      "id": "traffic-routing",
+      "description": "10% traffic split routes approximately 10% to treatment",
+      "tags": ["ab-test", "routing"],
+      "inputs": {
+        "config": {
+          "test_id": "ab-yield-v1-vs-v2",
+          "control_version": "v1.0.1",
+          "treatment_version": "v1.0.2",
+          "traffic_split_pct": 10,
+          "min_samples": 100,
+          "max_duration_s": 86400,
+          "significance_level": 0.05
+        },
+        "total_requests": 1000
+      },
+      "expected_outputs": {
+        "treatment_requests_approx_pct": 10,
+        "control_requests_approx_pct": 90,
+        "tolerance_pct": 5
+      }
+    },
+    {
+      "id": "treatment-wins",
+      "description": "Treatment model with lower MAE is promoted",
+      "tags": ["ab-test", "promotion"],
+      "inputs": {
+        "config": {
+          "test_id": "ab-yield-promotion",
+          "control_version": "v1.0.1",
+          "treatment_version": "v1.0.2",
+          "traffic_split_pct": 50,
+          "min_samples": 30,
+          "max_duration_s": 86400,
+          "significance_level": 0.05
+        },
+        "control_observations": [
+          { "predicted": 10.0, "actual": 8.0 },
+          { "predicted": 12.0, "actual": 9.0 },
+          { "predicted": 11.0, "actual": 8.5 }
+        ],
+        "treatment_observations": [
+          { "predicted": 8.5, "actual": 8.0 },
+          { "predicted": 9.2, "actual": 9.0 },
+          { "predicted": 8.7, "actual": 8.5 }
+        ]
+      },
+      "expected_outputs": {
+        "treatment_mae_lower": true,
+        "decision": "promote_treatment"
+      }
+    },
+    {
+      "id": "insufficient-samples",
+      "description": "Test with too few samples returns inconclusive",
+      "tags": ["ab-test", "inconclusive"],
+      "inputs": {
+        "config": {
+          "test_id": "ab-yield-small",
+          "control_version": "v1.0.1",
+          "treatment_version": "v1.0.2",
+          "traffic_split_pct": 50,
+          "min_samples": 100,
+          "max_duration_s": 86400,
+          "significance_level": 0.05
+        },
+        "observations_per_arm": 5
+      },
+      "expected_outputs": {
+        "status": "running",
+        "decision": "pending",
+        "p_value": null
+      }
+    },
+    {
+      "id": "test-cancellation",
+      "description": "Cancelled test stops routing to treatment",
+      "tags": ["ab-test", "cancellation"],
+      "inputs": {
+        "config": {
+          "test_id": "ab-yield-cancel",
+          "control_version": "v1.0.1",
+          "treatment_version": "v1.0.2",
+          "traffic_split_pct": 50,
+          "min_samples": 100,
+          "max_duration_s": 86400,
+          "significance_level": 0.05
+        }
+      },
+      "expected_outputs": {
+        "after_cancel_routes_to": "control",
+        "status": "cancelled"
+      }
+    }
+  ]
+}

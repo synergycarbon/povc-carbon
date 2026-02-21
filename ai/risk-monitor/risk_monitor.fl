@@ -1,0 +1,147 @@
+// Risk Monitoring Circuit
+// Multi-dimensional risk scoring: counterparty, delivery, market, methodology
+// Risk scores 0–100: Low (0–25), Moderate (26–50), Elevated (51–75), Critical (76–100)
+
+type CounterpartyInput = struct {
+    counterparty_hash: bytes(32),
+    payment_history_score: u64,
+    completion_rate: u64,
+    reputation_score: u64,
+    days_since_default: u32,
+    outstanding_volume: u64,
+}
+
+type DeliveryInput = struct {
+    source_id: bytes(16),
+    forecast_tco2e: u64,
+    committed_tco2e: u64,
+    site_health: u64,
+    weather_outlook: u64,
+    delivery_history: u64,
+}
+
+type MarketInput = struct {
+    volatility_30d: u64,
+    bid_ask_spread_pct: u64,
+    order_book_depth: u64,
+    volume_trend: i64,
+}
+
+type MethodologyInput = struct {
+    methodology_id: bytes(32),
+    governance_proposals: u32,
+    compliance_flags: u64,
+    registry_status: u64,
+    age_years: u32,
+    peer_review_score: u64,
+}
+
+type RiskResult = struct {
+    target_id: bytes(16),
+    risk_type: u8,
+    score: u64,
+    severity: u8,
+    assessed_at: u64,
+    mitigation_hash: bytes(32),
+}
+
+type RiskAlertEvent = struct {
+    alert_id: bytes(16),
+    target_id: bytes(16),
+    risk_type: u8,
+    severity: u8,
+    score: u64,
+    threshold: u64,
+    timestamp: u64,
+}
+
+// risk_type: 0=counterparty, 1=delivery, 2=market, 3=methodology
+// severity: 0=low, 1=moderate, 2=elevated, 3=critical
+
+graph risk_monitor_graph {
+    node CounterpartyInput
+    node DeliveryInput
+    node MarketInput
+    node MethodologyInput
+    node RiskResult
+    node RiskAlertEvent
+    edge scores_counterparty: CounterpartyInput -> RiskResult { guard data_valid }
+    edge scores_delivery: DeliveryInput -> RiskResult { guard data_valid }
+    edge scores_market: MarketInput -> RiskResult { guard data_valid }
+    edge scores_methodology: MethodologyInput -> RiskResult { guard data_valid }
+    edge triggers: RiskResult -> RiskAlertEvent { guard threshold_exceeded }
+    overlay risk_score: u64 bitmask delta_curate
+    overlay alert_frequency: u64 bitmask delta_curate
+    overlay composite_risk: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed risk_monitoring_pipeline
+    observe risk_monitor_graph: [risk_score, alert_frequency, composite_risk] threshold: {
+        anomaly_score 0.80
+        baseline_window 60
+    }
+}
+
+circuit score_counterparty(graph_id: bytes(32), input: CounterpartyInput) -> RiskResult
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/counterparty
+    precision C
+    observe metrics: [counterparty_hash, score, severity]
+{
+    RiskResult {
+        target_id: input.counterparty_hash,
+        risk_type: 0,
+        score: 0,
+        severity: 0,
+        assessed_at: 0,
+        mitigation_hash: input.counterparty_hash,
+    }
+}
+
+circuit score_delivery(graph_id: bytes(32), input: DeliveryInput) -> RiskResult
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/delivery
+    precision C
+    observe metrics: [source_id, forecast_tco2e, committed_tco2e, score, severity]
+{
+    RiskResult {
+        target_id: input.source_id,
+        risk_type: 1,
+        score: 0,
+        severity: 0,
+        assessed_at: 0,
+        mitigation_hash: input.source_id,
+    }
+}
+
+circuit score_market(graph_id: bytes(32), input: MarketInput) -> RiskResult
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/market
+    precision C
+    observe metrics: [volatility_30d, bid_ask_spread_pct, score, severity]
+{
+    RiskResult {
+        target_id: 0x00000000000000000000000000000000,
+        risk_type: 2,
+        score: 0,
+        severity: 0,
+        assessed_at: 0,
+        mitigation_hash: 0x00000000000000000000000000000000,
+    }
+}
+
+circuit portfolio_composite(graph_id: bytes(32), source_ids: list<bytes(16)>) -> u64
+    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
+    precision C
+    observe metrics: [source_count, avg_risk, max_risk, weighted_risk]
+{
+    0
+}
+
+stream risk_assessments: event<RiskResult>
+    retention 5y
+    consumers [compliance, ops, streamsight, alerting]
+
+stream risk_alert_events: event<RiskAlertEvent>
+    retention 5y
+    consumers [compliance, ops, streamsight, alerting, governance]

@@ -1,0 +1,67 @@
+{
+  "circuit": "sc_yield_forecaster_deviation",
+  "escir_version": "0.8.3",
+  "description": "Yield deviation detection and alert generation",
+  "vectors": [
+    {
+      "id": "severe-deviation",
+      "description": "80%+ deviation triggers severity 3 alert",
+      "tags": ["deviation", "severe", "alert"],
+      "inputs": {
+        "config": {
+          "deviation_alert_pct": 20.0
+        },
+        "forecast_daily_tco2e": 0.260,
+        "actual_daily_tco2e": 0.050,
+        "tenant_id": "thermogenzero",
+        "project_id": "tz-wellpad-alpha-01",
+        "timestamp": 1708200000
+      },
+      "expected_outputs": {
+        "alert_generated": true,
+        "deviation_pct_approx": 80.8,
+        "severity": 3,
+        "possible_causes_include": ["equipment_degradation", "fuel_supply_reduction", "sensor_malfunction"]
+      }
+    },
+    {
+      "id": "moderate-deviation",
+      "description": "40% deviation triggers severity 1 alert",
+      "tags": ["deviation", "moderate", "alert"],
+      "inputs": {
+        "config": {
+          "deviation_alert_pct": 20.0
+        },
+        "forecast_daily_tco2e": 0.260,
+        "actual_daily_tco2e": 0.156,
+        "tenant_id": "thermogenzero",
+        "project_id": "tz-wellpad-alpha-01",
+        "timestamp": 1708200000
+      },
+      "expected_outputs": {
+        "alert_generated": true,
+        "deviation_pct_approx": 40.0,
+        "severity": 1,
+        "possible_causes_include": ["sensor_malfunction", "weather_impact"]
+      }
+    },
+    {
+      "id": "within-tolerance",
+      "description": "10% deviation does not trigger alert",
+      "tags": ["deviation", "normal", "no-alert"],
+      "inputs": {
+        "config": {
+          "deviation_alert_pct": 20.0
+        },
+        "forecast_daily_tco2e": 0.260,
+        "actual_daily_tco2e": 0.234,
+        "tenant_id": "thermogenzero",
+        "project_id": "tz-wellpad-alpha-01",
+        "timestamp": 1708200000
+      },
+      "expected_outputs": {
+        "alert_generated": false
+      }
+    }
+  ]
+}

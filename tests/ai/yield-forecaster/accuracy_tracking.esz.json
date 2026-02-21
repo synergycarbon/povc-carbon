@@ -1,0 +1,57 @@
+{
+  "circuit": "sc_yield_forecaster_accuracy",
+  "escir_version": "0.8.3",
+  "description": "Rolling accuracy metric computation (MAE, MAPE, R²)",
+  "vectors": [
+    {
+      "id": "accurate-model",
+      "description": "Model with high accuracy across all horizons",
+      "tags": ["accuracy", "high-quality", "metrics"],
+      "inputs": {
+        "observations": [
+          { "horizon": 0, "predicted": 1.95, "actual": 1.98, "timestamp": 1708000000 },
+          { "horizon": 0, "predicted": 2.01, "actual": 2.00, "timestamp": 1708003600 },
+          { "horizon": 0, "predicted": 1.88, "actual": 1.90, "timestamp": 1708007200 },
+          { "horizon": 1, "predicted": 13.5, "actual": 13.88, "timestamp": 1708000000 },
+          { "horizon": 1, "predicted": 14.2, "actual": 14.0, "timestamp": 1708604800 },
+          { "horizon": 2, "predicted": 58.0, "actual": 59.49, "timestamp": 1708000000 },
+          { "horizon": 2, "predicted": 61.0, "actual": 60.5, "timestamp": 1710592000 },
+          { "horizon": 3, "predicted": 175.0, "actual": 178.47, "timestamp": 1708000000 },
+          { "horizon": 4, "predicted": 710.0, "actual": 723.80, "timestamp": 1708000000 }
+        ]
+      },
+      "expected_outputs": {
+        "overall_mae_below": 5.0,
+        "overall_mape_below": 3.0,
+        "overall_r_squared_above": 0.95,
+        "total_samples": 9,
+        "per_horizon": [
+          { "horizon": 0, "sample_count": 3, "mae_below": 0.05 },
+          { "horizon": 1, "sample_count": 2, "mae_below": 0.5 },
+          { "horizon": 2, "sample_count": 2, "mae_below": 2.0 },
+          { "horizon": 3, "sample_count": 1 },
+          { "horizon": 4, "sample_count": 1 }
+        ]
+      }
+    },
+    {
+      "id": "degraded-model",
+      "description": "Model showing accuracy degradation requiring retrain",
+      "tags": ["accuracy", "degraded", "retrain-trigger"],
+      "inputs": {
+        "observations": [
+          { "horizon": 0, "predicted": 2.50, "actual": 1.20, "timestamp": 1708000000 },
+          { "horizon": 0, "predicted": 3.00, "actual": 1.50, "timestamp": 1708003600 },
+          { "horizon": 1, "predicted": 20.0, "actual": 10.0, "timestamp": 1708000000 },
+          { "horizon": 2, "predicted": 100.0, "actual": 45.0, "timestamp": 1708000000 }
+        ]
+      },
+      "expected_outputs": {
+        "overall_mape_above": 50.0,
+        "overall_r_squared_below": 0.5,
+        "total_samples": 4,
+        "requires_retrain": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "circuit": "sc_eslm_training_pipeline",
+  "escir_version": "0.8.3",
+  "description": "ESLM training pipeline lifecycle and retrain validation",
+  "vectors": [
+    {
+      "id": "accumulation-phase",
+      "description": "Samples accumulate until retrain threshold (5000) is reached",
+      "tags": ["pipeline", "accumulation"],
+      "inputs": {
+        "retrain_threshold": 5000,
+        "samples_to_ingest": 100,
+        "sample_template": {
+          "tco2e": 1.5,
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "vintage_year": 2026
+        }
+      },
+      "expected_outputs": {
+        "triggered": false,
+        "status": "accumulating",
+        "buffer_size": 100
+      }
+    },
+    {
+      "id": "threshold-trigger",
+      "description": "5000th sample triggers retrain",
+      "tags": ["pipeline", "threshold", "retrain"],
+      "inputs": {
+        "retrain_threshold": 5000,
+        "samples_to_ingest": 5000
+      },
+      "expected_outputs": {
+        "triggered": true,
+        "buffer_size": 5000
+      }
+    },
+    {
+      "id": "successful-retrain",
+      "description": "Retrain succeeds when validation loss improves",
+      "tags": ["pipeline", "retrain", "success"],
+      "inputs": {
+        "retrain_threshold": 100,
+        "holdout_fraction": 0.10,
+        "min_improvement_bps": 10,
+        "samples_to_ingest": 100
+      },
+      "expected_outputs": {
+        "retrain_success": true,
+        "checkpoint_created": true,
+        "status_after": "idle",
+        "buffer_cleared": true,
+        "holdout_size_approx": 10
+      }
+    },
+    {
+      "id": "model-versioning",
+      "description": "Successful retrain creates new model version and promotes it",
+      "tags": ["pipeline", "versioning"],
+      "inputs": {
+        "retrain_threshold": 100,
+        "samples_to_ingest": 100
+      },
+      "expected_outputs": {
+        "new_version_created": true,
+        "version_status": "active",
+        "previous_version_retired": true
+      }
+    }
+  ]
+}

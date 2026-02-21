@@ -1,0 +1,78 @@
+{
+  "circuit": "sc_eslm_versioning",
+  "escir_version": "0.8.3",
+  "description": "Model version management, promotion, rollback, and pause",
+  "vectors": [
+    {
+      "id": "version-promotion",
+      "description": "New version is promoted to active, previous becomes retired",
+      "tags": ["versioning", "promotion"],
+      "inputs": {
+        "versions": [
+          { "version": "v1.0.1", "status": "active" },
+          { "version": "v1.0.2", "status": "candidate" }
+        ],
+        "promote": "v1.0.2"
+      },
+      "expected_outputs": {
+        "v1_0_1_status": "retired",
+        "v1_0_2_status": "active",
+        "active_version": "v1.0.2"
+      }
+    },
+    {
+      "id": "rollback",
+      "description": "Rollback reverts to parent version",
+      "tags": ["versioning", "rollback"],
+      "inputs": {
+        "versions": [
+          { "version": "v1.0.1", "status": "retired", "parent": null },
+          { "version": "v1.0.2", "status": "active", "parent": "v1.0.1" }
+        ],
+        "rollback_reason": "degradation_detected"
+      },
+      "expected_outputs": {
+        "v1_0_2_status": "rolled_back",
+        "v1_0_2_rollback_reason": "degradation_detected",
+        "v1_0_1_status": "active",
+        "active_version": "v1.0.1",
+        "rollback_count": 1
+      }
+    },
+    {
+      "id": "governance-pause",
+      "description": "Governance can pause a model version on anomaly detection",
+      "tags": ["versioning", "governance", "pause"],
+      "inputs": {
+        "versions": [
+          { "version": "v1.0.1", "status": "retired", "parent": null },
+          { "version": "v1.0.2", "status": "active", "parent": "v1.0.1" }
+        ],
+        "pause_version": "v1.0.2",
+        "pause_reason": "anomaly_detected"
+      },
+      "expected_outputs": {
+        "v1_0_2_status": "paused",
+        "v1_0_1_status": "active",
+        "active_version": "v1.0.1"
+      }
+    },
+    {
+      "id": "lineage-tracking",
+      "description": "Full version lineage is tracked with parent chain",
+      "tags": ["versioning", "lineage"],
+      "inputs": {
+        "versions": [
+          { "version": "v1.0.1", "parent": null },
+          { "version": "v1.0.2", "parent": "v1.0.1" },
+          { "version": "v1.0.3", "parent": "v1.0.2" }
+        ]
+      },
+      "expected_outputs": {
+        "lineage_length": 3,
+        "current": "v1.0.3",
+        "rollback_count": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "circuit": "sc_forward_pricing_oracle_v2",
+  "escir_version": "0.8.3",
+  "description": "Forward curve generation with cost-of-carry and supply adjustment",
+  "vectors": [
+    {
+      "id": "standard-carry",
+      "description": "Standard market conditions with cost-of-carry pricing",
+      "tags": ["forward-curve", "cost-of-carry", "standard"],
+      "inputs": {
+        "carry_config": {
+          "risk_free_rate_annual": 0.05,
+          "convenience_yield_annual": 0.02,
+          "storage_cost_per_tonne_annual": 0.25,
+          "insurance_rate_annual": 0.005
+        },
+        "spot": {
+          "price_per_tonne_usd": 25.00,
+          "volume_24h_tco2e": 1500.0,
+          "bid_ask_spread_usd": 0.50,
+          "timestamp": 1708000000
+        },
+        "yield_forecast": {
+          "tenant_id": "thermogenzero",
+          "horizons": [
+            { "horizon_days": 30, "projected_tco2e": 7.8, "confidence_80_lo": 6.24, "confidence_80_hi": 9.36 },
+            { "horizon_days": 90, "projected_tco2e": 23.4, "confidence_80_lo": 18.72, "confidence_80_hi": 28.08 },
+            { "horizon_days": 365, "projected_tco2e": 94.9, "confidence_80_lo": 75.92, "confidence_80_hi": 113.88 }
+          ],
+          "forecast_time": 1708000000
+        },
+        "historical_yield": {
+          "avg_daily_tco2e_30d": 0.260,
+          "avg_daily_tco2e_90d": 0.255,
+          "avg_daily_tco2e_365d": 0.250,
+          "timestamp": 1708000000
+        },
+        "methodology_id": "EPA-AP42-CH4-FLARE"
+      },
+      "expected_outputs": {
+        "curve_valid": true,
+        "spot_price_usd": 25.00,
+        "tenor_count": 5,
+        "tenors": [
+          { "label": "1M", "days": 30, "price_above_spot": true },
+          { "label": "3M", "days": 90, "price_above_spot": true },
+          { "label": "6M", "days": 180, "price_above_spot": true },
+          { "label": "1Y", "days": 365, "price_above_spot": true },
+          { "label": "2Y", "days": 730, "price_above_spot": true }
+        ],
+        "contango": true,
+        "all_have_confidence_intervals": true
+      }
+    },
+    {
+      "id": "supply-shortage",
+      "description": "Forward price premium when yield forecast is 50% below historical",
+      "tags": ["forward-curve", "supply-shortage", "premium"],
+      "inputs": {
+        "carry_config": {
+          "risk_free_rate_annual": 0.05,
+          "convenience_yield_annual": 0.02,
+          "storage_cost_per_tonne_annual": 0.25,
+          "insurance_rate_annual": 0.005
+        },
+        "oracle_config": {
+          "supply_elasticity": 0.3
+        },
+        "spot": {
+          "price_per_tonne_usd": 25.00,
+          "volume_24h_tco2e": 800.0,
+          "bid_ask_spread_usd": 1.20,
+          "timestamp": 1708100000
+        },
+        "yield_forecast": {
+          "tenant_id": "thermogenzero",
+          "horizons": [
+            { "horizon_days": 365, "projected_tco2e": 47.45, "confidence_80_lo": 28.47, "confidence_80_hi": 66.43 }
+          ],
+          "forecast_time": 1708100000
+        },
+        "historical_yield": {
+          "avg_daily_tco2e_365d": 0.250,
+          "avg_daily_tco2e_90d": 0.255,
+          "avg_daily_tco2e_30d": 0.260,
+          "timestamp": 1708100000
+        },
+        "methodology_id": "EPA-AP42-CH4-FLARE"
+      },
+      "expected_outputs": {
+        "curve_valid": true,
+        "1y_price_above_standard": true,
+        "supply_adjustment_positive": true
+      }
+    },
+    {
+      "id": "methodology-premium",
+      "description": "Gold Standard methodology commands 10% premium",
+      "tags": ["forward-curve", "methodology", "premium"],
+      "inputs": {
+        "spot": {
+          "price_per_tonne_usd": 25.00,
+          "volume_24h_tco2e": 1500.0,
+          "bid_ask_spread_usd": 0.50,
+          "timestamp": 1708000000
+        },
+        "methodology_id": "GS-MICRO-SCALE"
+      },
+      "expected_outputs": {
+        "curve_valid": true,
+        "methodology_premium": 1.10,
+        "all_prices_above_base_methodology": true
+      }
+    }
+  ]
+}

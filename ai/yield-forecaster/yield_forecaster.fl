@@ -1,0 +1,122 @@
+// Yield Forecaster Pipeline Circuit
+// Orchestrates Mamba/S4 SSM inference for multi-horizon carbon yield prediction
+// Inputs: energy telemetry, weather, market data, historical credits
+// Outputs: tCO2e yield forecast with 80%/95% confidence intervals
+
+type FeatureVector = struct {
+    power_mean: u64,
+    trend_slope: i64,
+    r_squared: u64,
+    capacity_factor: u64,
+    minting_rate: u64,
+    gas_flow: u64,
+    ch4_mass: u64,
+    attestation_rate: u64,
+    spot_price: u64,
+    volume_24h: u64,
+    forward_committed_pct: u64,
+    ambient_temp: i64,
+    wind_speed: u64,
+    irradiance: u64,
+    precipitation: u64,
+    hour_sin: i64,
+    hour_cos: i64,
+    day_sin: i64,
+    day_cos: i64,
+    is_weekend: u8,
+}
+
+type ForecastResult = struct {
+    source_id: bytes(16),
+    horizon: u8,
+    predicted_tco2e: u64,
+    confidence_80_lo: u64,
+    confidence_80_hi: u64,
+    confidence_95_lo: u64,
+    confidence_95_hi: u64,
+    model_version: bytes(32),
+    generated_at: u64,
+}
+
+type DeviationAlert = struct {
+    source_id: bytes(16),
+    forecast_tco2e: u64,
+    actual_tco2e: u64,
+    deviation_pct: u64,
+    severity: u8,
+}
+
+graph yield_forecaster_graph {
+    node FeatureVector
+    node ForecastResult
+    node DeviationAlert
+    edge forecasts: FeatureVector -> ForecastResult { guard model_loaded }
+    edge deviates: ForecastResult -> DeviationAlert { guard threshold_exceeded }
+    overlay feature_freshness: u64 bitmask delta_curate
+    overlay prediction_accuracy: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed yield_forecast_pipeline
+    observe yield_forecaster_graph: [feature_freshness, prediction_accuracy] threshold: {
+        anomaly_score 0.80
+        baseline_window 60
+    }
+}
+
+circuit extract_features(graph_id: bytes(32), source_id: bytes(16), timestamp: u64) -> FeatureVector
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/features/extract
+    precision D
+    observe metrics: [source_id, timestamp, feature_count]
+{
+    FeatureVector {
+        power_mean: 0, trend_slope: 0, r_squared: 0, capacity_factor: 0,
+        minting_rate: 0, gas_flow: 0, ch4_mass: 0, attestation_rate: 0,
+        spot_price: 0, volume_24h: 0, forward_committed_pct: 0,
+        ambient_temp: 0, wind_speed: 0, irradiance: 0, precipitation: 0,
+        hour_sin: 0, hour_cos: 0, day_sin: 0, day_cos: 0, is_weekend: 0,
+    }
+}
+
+circuit infer_yield(graph_id: bytes(32), model_id: bytes(16), features: FeatureVector, horizon: u8) -> ForecastResult
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/yield/infer
+    precision D
+    povc true
+    observe metrics: [model_id, horizon, predicted_tco2e, confidence_80_lo, confidence_80_hi]
+{
+    ForecastResult {
+        source_id: model_id,
+        horizon: horizon,
+        predicted_tco2e: 0,
+        confidence_80_lo: 0,
+        confidence_80_hi: 0,
+        confidence_95_lo: 0,
+        confidence_95_hi: 0,
+        model_version: model_id,
+        generated_at: 0,
+    }
+}
+
+circuit check_deviation(graph_id: bytes(32), source_id: bytes(16), forecast: u64, actual: u64, threshold_pct: u64) -> DeviationAlert
+    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/yield/deviation
+    precision C
+    observe metrics: [source_id, deviation_pct, severity]
+{
+    DeviationAlert {
+        source_id: source_id,
+        forecast_tco2e: forecast,
+        actual_tco2e: actual,
+        deviation_pct: 0,
+        severity: 0,
+    }
+}
+
+stream yield_forecasts: event<ForecastResult>
+    retention 5y
+    consumers [marketplace, compliance, streamsight, portfolio]
+
+stream deviation_alerts: event<DeviationAlert>
+    retention 5y
+    consumers [ops, compliance, streamsight, alerting]

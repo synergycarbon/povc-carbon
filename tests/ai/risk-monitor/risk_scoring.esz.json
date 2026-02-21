@@ -1,0 +1,139 @@
+{
+  "circuit": "sc_risk_monitor_v2",
+  "escir_version": "0.8.3",
+  "description": "Multi-dimensional risk scoring scenarios",
+  "vectors": [
+    {
+      "id": "low-risk-counterparty",
+      "description": "Counterparty with excellent history scores low risk",
+      "tags": ["counterparty", "low-risk"],
+      "inputs": {
+        "indicators": {
+          "payment_history_score": 0.98,
+          "contract_completion_rate": 0.95,
+          "spark_reputation_score": 0.90,
+          "days_since_last_default": 730,
+          "outstanding_volume_tco2e": 500
+        },
+        "timestamp": 1708000000
+      },
+      "expected_outputs": {
+        "risk_type": 0,
+        "score_below": 25,
+        "severity": 0,
+        "label": "low",
+        "mitigation_count": 0
+      }
+    },
+    {
+      "id": "critical-counterparty",
+      "description": "Counterparty with recent defaults and low completion rate",
+      "tags": ["counterparty", "critical"],
+      "inputs": {
+        "indicators": {
+          "payment_history_score": 0.20,
+          "contract_completion_rate": 0.30,
+          "spark_reputation_score": 0.15,
+          "days_since_last_default": 30,
+          "outstanding_volume_tco2e": 5000
+        },
+        "timestamp": 1708000000
+      },
+      "expected_outputs": {
+        "risk_type": 0,
+        "score_above": 75,
+        "severity": 3,
+        "label": "critical",
+        "mitigation_includes": ["Pause new commitments with this counterparty"]
+      }
+    },
+    {
+      "id": "elevated-delivery",
+      "description": "Delivery risk elevated when forecast < committed volume",
+      "tags": ["delivery", "elevated"],
+      "inputs": {
+        "indicators": {
+          "forecast_tco2e": 50.0,
+          "committed_tco2e": 100.0,
+          "site_health_score": 0.60,
+          "weather_outlook_score": 0.40,
+          "historical_delivery_rate": 0.80
+        },
+        "timestamp": 1708000000
+      },
+      "expected_outputs": {
+        "risk_type": 1,
+        "score_above": 50,
+        "severity_at_least": 2,
+        "mitigation_includes": ["Reduce forward commitment volume"]
+      }
+    },
+    {
+      "id": "high-market-volatility",
+      "description": "Market risk high during volatile period",
+      "tags": ["market", "high-volatility"],
+      "inputs": {
+        "indicators": {
+          "price_volatility_30d": 0.45,
+          "bid_ask_spread_pct": 3.0,
+          "order_book_depth_usd": 2000,
+          "volume_trend": -0.3,
+          "correlation_to_benchmark": 0.5
+        },
+        "timestamp": 1708000000
+      },
+      "expected_outputs": {
+        "risk_type": 2,
+        "score_above": 50,
+        "severity_at_least": 2
+      }
+    },
+    {
+      "id": "methodology-under-review",
+      "description": "Methodology risk elevated with active governance proposals",
+      "tags": ["methodology", "governance"],
+      "inputs": {
+        "indicators": {
+          "governance_proposal_count": 5,
+          "compliance_flag_density": 0.3,
+          "registry_status_score": 0.60,
+          "methodology_age_years": 1,
+          "peer_review_score": 0.70
+        },
+        "timestamp": 1708000000
+      },
+      "expected_outputs": {
+        "risk_type": 3,
+        "score_above": 40,
+        "severity_at_least": 1,
+        "mitigation_includes": ["Track governance proposals affecting this methodology"]
+      }
+    },
+    {
+      "id": "composite-portfolio",
+      "description": "Composite risk across all dimensions for a project",
+      "tags": ["composite", "portfolio"],
+      "inputs": {
+        "target_id": "tz-wellpad-alpha-01",
+        "target_type": "project",
+        "dimension_scores": [
+          { "risk_type": 0, "score": 20 },
+          { "risk_type": 1, "score": 55 },
+          { "risk_type": 2, "score": 35 },
+          { "risk_type": 3, "score": 15 }
+        ],
+        "weights": {
+          "counterparty": 0.30,
+          "delivery": 0.30,
+          "market": 0.25,
+          "methodology": 0.15
+        }
+      },
+      "expected_outputs": {
+        "composite_score_approx": 33.5,
+        "composite_severity": 1,
+        "highest_risk_dimension": "delivery"
+      }
+    }
+  ]
+}

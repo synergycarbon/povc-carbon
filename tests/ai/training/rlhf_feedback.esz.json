@@ -1,0 +1,81 @@
+{
+  "circuit": "sc_eslm_rlhf",
+  "escir_version": "0.8.3",
+  "description": "RLHF operator feedback integration and reward computation",
+  "vectors": [
+    {
+      "id": "expert-correction",
+      "description": "Expert operator correction gets maximum weight",
+      "tags": ["rlhf", "expert", "correction"],
+      "inputs": {
+        "feedback": {
+          "feedback_id": "fb-001",
+          "operator_id": "op-senior-01",
+          "operator_tier": 3,
+          "feedback_type": "yield_correction",
+          "target_id": "forecast-001",
+          "original_value": 100.0,
+          "corrected_value": 85.0,
+          "reason": "Weather system will reduce output",
+          "timestamp": 1708000000
+        }
+      },
+      "expected_outputs": {
+        "weight": 2.0,
+        "reward_signal_negative": true,
+        "applied": false
+      }
+    },
+    {
+      "id": "junior-correction",
+      "description": "Junior operator correction gets reduced weight",
+      "tags": ["rlhf", "junior", "correction"],
+      "inputs": {
+        "feedback": {
+          "feedback_id": "fb-002",
+          "operator_id": "op-junior-01",
+          "operator_tier": 0,
+          "feedback_type": "yield_correction",
+          "target_id": "forecast-001",
+          "original_value": 100.0,
+          "corrected_value": 120.0,
+          "reason": "Expected increase in capacity",
+          "timestamp": 1708000000
+        }
+      },
+      "expected_outputs": {
+        "weight": 0.5,
+        "reward_signal_positive": true
+      }
+    },
+    {
+      "id": "batch-harvest",
+      "description": "Batch of 50 feedbacks harvested for training",
+      "tags": ["rlhf", "batch"],
+      "inputs": {
+        "feedback_count": 50,
+        "batch_size": 50,
+        "staleness_hours": 168
+      },
+      "expected_outputs": {
+        "batch_harvested": true,
+        "batch_size": 50,
+        "buffer_after": 0
+      }
+    },
+    {
+      "id": "stale-feedback-filtered",
+      "description": "Feedback older than staleness window is filtered out",
+      "tags": ["rlhf", "staleness", "filter"],
+      "inputs": {
+        "feedback_timestamps": [1700000000, 1700100000, 1700200000],
+        "harvest_timestamp": 1708000000,
+        "staleness_decay_hours": 168
+      },
+      "expected_outputs": {
+        "all_filtered_as_stale": true,
+        "batch_harvested": false
+      }
+    }
+  ]
+}
