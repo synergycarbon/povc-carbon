@@ -1,0 +1,70 @@
+{
+  "circuit": "verra_bridge",
+  "description": "Verra rejection releases BRIDGE_LOCK and allows resubmission",
+  "vectors": [
+    {
+      "id": "verra-rejects-submission",
+      "description": "Verra rejects credit — bridge lock released, credit returns to transferable",
+      "tags": ["rejection", "unlock", "bridge_lock"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "sc_serial": "SC-2026-solar-farm-delta-000200",
+          "current_state": "SUBMITTED",
+          "bridge_locked": true
+        },
+        "webhook_event": {
+          "event_id": "evt-verra-010",
+          "event_type": "credit.review_complete",
+          "timestamp": "2026-02-25T14:00:00Z",
+          "vcu_serial": "VCS-2026-SC-000200",
+          "project_id": "VCS-PRJ-7890",
+          "data": {
+            "review_result": "rejected",
+            "rejection_reason": "Monitoring report incomplete — missing sections 4.2 and 4.3"
+          }
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "REJECTED",
+          "bridge_locked": false,
+          "rejection_reason": "Monitoring report incomplete — missing sections 4.2 and 4.3"
+        },
+        "sc_credit_status": {
+          "transferable": true,
+          "retirable": true,
+          "reason": "BRIDGE_UNLOCKED"
+        }
+      }
+    },
+    {
+      "id": "resubmit-after-rejection",
+      "description": "After rejection, credit can be resubmitted with updated data",
+      "tags": ["rejection", "resubmit", "state-machine"],
+      "inputs": {
+        "precondition": {
+          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "current_state": "REJECTED"
+        },
+        "submit_request": {
+          "credit_id": "0xCRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200CRED200C",
+          "sc_serial": "SC-2026-solar-farm-delta-000200",
+          "attestation_hash": "0xATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT200ATT0",
+          "methodology_id": "VM0006-GRID-DISPLACEMENT",
+          "vintage_year": 2026,
+          "tonnes_co2e": 12.500,
+          "project_name": "Delta Solar Farm — Grid Displacement",
+          "project_location": "Riverside County, CA, USA"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "SUBMITTED",
+          "bridge_locked": true
+        },
+        "state_transitions": ["REJECTED", "PENDING", "SUBMITTED"]
+      }
+    }
+  ]
+}

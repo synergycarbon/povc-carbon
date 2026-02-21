@@ -1,0 +1,92 @@
+{
+  "circuit": "verra_bridge",
+  "description": "Webhook signature validation and event handling edge cases",
+  "vectors": [
+    {
+      "id": "valid-signature",
+      "description": "Webhook with valid HMAC-SHA256 signature is accepted",
+      "tags": ["webhook", "signature", "happy-path"],
+      "inputs": {
+        "webhook_request": {
+          "body": "{\"event_id\":\"evt-001\",\"event_type\":\"credit.registered\",\"vcu_serial\":\"VCS-2026-SC-000200\"}",
+          "headers": {
+            "X-Verra-Signature": "valid_hmac_placeholder",
+            "X-Verra-Timestamp": "1740000000000"
+          },
+          "signing_secret": "test-secret-key"
+        }
+      },
+      "expected_outputs": {
+        "validation": {
+          "accepted": true
+        }
+      }
+    },
+    {
+      "id": "invalid-signature",
+      "description": "Webhook with tampered signature is rejected",
+      "tags": ["webhook", "signature", "security"],
+      "inputs": {
+        "webhook_request": {
+          "body": "{\"event_id\":\"evt-002\",\"event_type\":\"credit.registered\",\"vcu_serial\":\"VCS-2026-SC-000200\"}",
+          "headers": {
+            "X-Verra-Signature": "deadbeef00000000",
+            "X-Verra-Timestamp": "1740000000000"
+          },
+          "signing_secret": "test-secret-key"
+        }
+      },
+      "expected_outputs": {
+        "validation": {
+          "accepted": false,
+          "reason": "signature_mismatch"
+        }
+      }
+    },
+    {
+      "id": "expired-timestamp",
+      "description": "Webhook with stale timestamp is rejected (replay protection)",
+      "tags": ["webhook", "timestamp", "security"],
+      "inputs": {
+        "webhook_request": {
+          "body": "{\"event_id\":\"evt-003\",\"event_type\":\"credit.registered\",\"vcu_serial\":\"VCS-2026-SC-000200\"}",
+          "headers": {
+            "X-Verra-Signature": "valid_hmac_placeholder",
+            "X-Verra-Timestamp": "1700000000000"
+          },
+          "signing_secret": "test-secret-key"
+        }
+      },
+      "expected_outputs": {
+        "validation": {
+          "accepted": false,
+          "reason": "timestamp_expired"
+        }
+      }
+    },
+    {
+      "id": "unknown-vcu-serial",
+      "description": "Webhook for a VCU serial not mapped to any SC credit is ignored",
+      "tags": ["webhook", "unknown", "edge-case"],
+      "inputs": {
+        "webhook_event": {
+          "event_id": "evt-004",
+          "event_type": "credit.retired",
+          "timestamp": "2026-02-20T12:00:00Z",
+          "vcu_serial": "VCS-2026-UNKNOWN-999",
+          "project_id": "VCS-PRJ-9999",
+          "data": {
+            "retired_by": "Unknown Buyer"
+          }
+        }
+      },
+      "expected_outputs": {
+        "result": null,
+        "side_effects": {
+          "state_changed": false,
+          "event_published": false
+        }
+      }
+    }
+  ]
+}

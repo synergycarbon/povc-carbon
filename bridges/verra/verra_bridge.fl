@@ -1,0 +1,167 @@
+// Verra VCS Registry Bridge Circuit
+// Cross-listing SynergyCarbon credits on the Verra VCS registry
+// Handles: credit registration, status sync, retirement propagation, dedup
+// Subscribes: sc.credits.issued
+// Publishes:  sc.bridges.verra.status
+
+type VerraBridgeConfig = struct {
+    bridge_id: bytes(16),
+    api_endpoint_hash: bytes(32),
+    credential_vault_ref: bytes(32),
+    sync_interval_s: u32,
+    retry_max: u8,
+    dedup_timeout_ms: u32,
+    auto_submit: bool,
+}
+
+type BridgeMapping = struct {
+    credit_id: bytes(32),
+    sc_serial: string,
+    verra_serial: string,
+    verra_project_id: string,
+    state: u8,
+    submitted_at: u64,
+    listed_at: u64,
+    retired_at: u64,
+    attestation_hash: bytes(32),
+    methodology_id: bytes(16),
+    vintage_year: u16,
+    tonnes_co2e: u64,
+}
+
+type BridgeSubmitRequest = struct {
+    credit_id: bytes(32),
+    sc_serial: string,
+    attestation_hash: bytes(32),
+    methodology_id: bytes(16),
+    vintage_year: u16,
+    tonnes_co2e: u64,
+    project_name: string,
+    project_location: string,
+}
+
+type BridgeStatusUpdate = struct {
+    credit_id: bytes(32),
+    verra_serial: string,
+    previous_state: u8,
+    new_state: u8,
+    event_type: string,
+    timestamp: u64,
+}
+
+type BridgeSyncResult = struct {
+    bridge_id: bytes(16),
+    credits_synced: u32,
+    credits_pending: u32,
+    credits_listed: u32,
+    credits_retired: u32,
+    credits_rejected: u32,
+    last_sync_at: u64,
+}
+
+// state: 0=pending, 1=submitted, 2=listed, 3=retired, 4=rejected
+
+graph verra_bridge_graph {
+    node BridgeMapping
+    edge maps: BridgeMapping -> BridgeMapping { guard state_valid }
+    overlay bridge_state: u8 curate delta_curate
+    overlay sync_lag: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed bridge_anomaly
+    ai_feed sync_health
+    observe verra_bridge_graph: [bridge_state, sync_lag] threshold: {
+        anomaly_score 0.85
+        baseline_window 60
+    }
+}
+
+stream verra_bridge_events: event<BridgeStatusUpdate>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+// Submit a credit for cross-listing on Verra VCS
+circuit verra_submit_credit(graph_id: bytes(32), request: BridgeSubmitRequest) -> bytes(32)
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/submit
+    precision C
+    povc true
+    subscribe sc.credits.issued
+    publish sc.bridges.verra.status
+    observe metrics: [credit_id, sc_serial, methodology_id, vintage_year, tonnes_co2e]
+{
+    request.credit_id
+}
+
+// Handle Verra webhook status update (inbound from Verra)
+circuit verra_webhook_update(graph_id: bytes(32), update: BridgeStatusUpdate) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/webhook
+    precision C
+    povc true
+    publish sc.bridges.verra.status
+    observe metrics: [credit_id, verra_serial, previous_state, new_state, event_type]
+{
+    true
+}
+
+// Periodic sync: query Verra API for status of all SUBMITTED credits
+circuit verra_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> BridgeSyncResult
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/sync
+    precision C
+    observe metrics: [bridge_id, credits_synced, credits_pending, credits_listed]
+{
+    BridgeSyncResult {
+        bridge_id: bridge_id,
+        credits_synced: 0,
+        credits_pending: 0,
+        credits_listed: 0,
+        credits_retired: 0,
+        credits_rejected: 0,
+        last_sync_at: 0,
+    }
+}
+
+// Lock a credit for bridge submission (prevents SC-side transfer/retirement)
+circuit verra_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/lock
+    precision C
+    povc true
+    publish sc.bridges.verra.status
+    observe metrics: [credit_id]
+{
+    true
+}
+
+// Unlock a credit after bridge rejection (allows SC-side operations again)
+circuit verra_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/unlock
+    precision C
+    povc true
+    publish sc.bridges.verra.status
+    observe metrics: [credit_id]
+{
+    true
+}
+
+// Propagate retirement from Verra to SynergyCarbon
+circuit verra_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), verra_serial: string) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/retire
+    precision C
+    povc true
+    subscribe sc.bridges.verra.status
+    publish sc.credits.retired
+    observe metrics: [credit_id, verra_serial]
+{
+    true
+}
+
+// Check for duplicate serial numbers across registries before submission
+circuit verra_dedup_check(graph_id: bytes(32), sc_serial: string, methodology_id: bytes(16), vintage_year: u16, tonnes_co2e: u64) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/dedup
+    precision C
+    observe metrics: [sc_serial, methodology_id, vintage_year]
+{
+    true
+}

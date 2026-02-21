@@ -1,0 +1,103 @@
+{
+  "circuit": "verra_bridge",
+  "description": "Full BRIDGE_LOCKED lifecycle: PENDING → SUBMITTED → LISTED → RETIRED",
+  "vectors": [
+    {
+      "id": "submit-and-lock",
+      "description": "Credit submitted to Verra enters BRIDGE_LOCKED state on SC",
+      "tags": ["bridge_lock", "submit", "happy-path"],
+      "inputs": {
+        "config": {
+          "bridge_id": "0xBRIDGE01BRIDGE01BRIDGE01BRIDGE01",
+          "sync_interval_s": 3600,
+          "retry_max": 3,
+          "auto_submit": true
+        },
+        "submit_request": {
+          "credit_id": "0xCRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100C",
+          "sc_serial": "SC-2026-tz-wellpad-alpha-01-000100",
+          "attestation_hash": "0xATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT100ATT0",
+          "methodology_id": "EPA-AP42-CH4-FLARE",
+          "vintage_year": 2026,
+          "tonnes_co2e": 0.450,
+          "project_name": "ThermogenZero Alpha Wellpad - TEG Waste Heat Recovery",
+          "project_location": "Permian Basin, TX, USA"
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "SUBMITTED",
+          "bridge_locked": true,
+          "verra_serial": null
+        },
+        "sc_credit_status": {
+          "transferable": false,
+          "retirable": false,
+          "reason": "BRIDGE_LOCKED"
+        }
+      }
+    },
+    {
+      "id": "verra-approves-listing",
+      "description": "Verra review approves credit — state transitions to LISTED, remains locked",
+      "tags": ["bridge_lock", "listed", "webhook"],
+      "inputs": {
+        "webhook_event": {
+          "event_id": "evt-verra-001",
+          "event_type": "credit.review_complete",
+          "timestamp": "2026-02-20T12:00:00Z",
+          "vcu_serial": "VCS-2026-SC-000100",
+          "project_id": "VCS-PRJ-4521",
+          "data": {
+            "review_result": "approved",
+            "sc_reference": "0xCRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100CRED100C"
+          }
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "LISTED",
+          "bridge_locked": true,
+          "verra_serial": "VCS-2026-SC-000100",
+          "verra_project_id": "VCS-PRJ-4521"
+        },
+        "bridge_status_event": {
+          "previous_state": "SUBMITTED",
+          "new_state": "LISTED",
+          "event_type": "credit.review_complete"
+        }
+      }
+    },
+    {
+      "id": "retirement-propagation",
+      "description": "Credit retired on Verra — retirement propagates to SC, lock released",
+      "tags": ["bridge_lock", "retirement", "propagation"],
+      "inputs": {
+        "webhook_event": {
+          "event_id": "evt-verra-002",
+          "event_type": "credit.retired",
+          "timestamp": "2026-03-15T09:30:00Z",
+          "vcu_serial": "VCS-2026-SC-000100",
+          "project_id": "VCS-PRJ-4521",
+          "data": {
+            "retired_by": "Acme Corp",
+            "retirement_reason": "Scope 2 emissions offset Q1 2026",
+            "retirement_date": "2026-03-15"
+          }
+        }
+      },
+      "expected_outputs": {
+        "mapping": {
+          "state": "RETIRED",
+          "bridge_locked": false,
+          "verra_serial": "VCS-2026-SC-000100"
+        },
+        "sc_retirement": {
+          "triggered": true,
+          "trigger_type": "bridge_propagation",
+          "beneficiary_name": "Acme Corp"
+        }
+      }
+    }
+  ]
+}
