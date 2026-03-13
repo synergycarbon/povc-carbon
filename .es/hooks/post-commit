@@ -1,2 +1,0 @@
-#!/bin/sh
-es-git dual sync --quiet
