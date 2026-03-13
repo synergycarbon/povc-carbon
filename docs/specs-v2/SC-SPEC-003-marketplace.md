@@ -4,7 +4,7 @@
 > **Version**: 2.0.0
 > **Date**: 2026-02-20
 > **Scope**: Spot orderbook, forward contracts (9-state FSM), impact visualization, pricing, settlement
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 > **Compliance**: EPA GHG, ISO 14064, Verra VCS, Gold Standard
 
 ---
@@ -251,7 +251,7 @@ AI feeds are advisory only. They are not used in automated trading or settlement
 ## 9. Lex Integration
 
 ```
-esn/sustainability/carbon/org/synergycarbon/
+sustainability/carbon/org/synergycarbon/
   marketplace/
     orderbook/             # Active orders, depth snapshots
     trades/                # Executed trade records

@@ -338,7 +338,7 @@ fn build_tenor_point(
 // ─── Main Circuits ─────────────────────────────────────────────────────────────
 
 circuit compute_forward_curve(graph_id: bytes(32), spot: SpotInput, methodology: bytes(32)) -> list<ForwardCurvePoint>
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/forward/compute
+    lex sustainability/carbon/org/synergycarbon/marketplace/price/forward/compute
     precision D
     observe metrics: [spot_price, methodology, tenor_count]
 {
@@ -379,8 +379,8 @@ circuit compute_forward_curve(graph_id: bytes(32), spot: SpotInput, methodology:
 }
 
 circuit check_basis(graph_id: bytes(32), expected_cents: u64, observed_cents: u64, tenor_days: u32) -> BasisAlert
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/basis/check
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/price/basis/check
+    @precision C
     observe metrics: [tenor_days, sigma_deviation]
 {
     let expected_usd: f64 = (expected_cents as f64) / 100.0;
@@ -409,8 +409,8 @@ circuit check_basis(graph_id: bytes(32), expected_cents: u64, observed_cents: u6
 
 circuit interpolate_curve(graph_id: bytes(32), known: list<ForwardCurvePoint>,
                           spot_cents: u64, timestamp: u64) -> InterpolatedCurve
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/curve/interpolate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/price/curve/interpolate
+    @precision C
     observe metrics: [point_count, slope]
 {
     let spot_usd: f64 = (spot_cents as f64) / 100.0;
@@ -443,8 +443,8 @@ circuit interpolate_curve(graph_id: bytes(32), known: list<ForwardCurvePoint>,
 
 circuit compute_implied_yield(graph_id: bytes(32), spot_cents: u64,
                               forward_cents: u64, tenor_days: u32) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/carry/implied_yield
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/price/carry/implied_yield
+    @precision C
     observe metrics: [tenor_days, implied_yield]
 {
     let spot_usd: f64 = (spot_cents as f64) / 100.0;

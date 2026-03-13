@@ -4,7 +4,7 @@
 > **Version**: 2.0.0
 > **Date**: 2026-02-20
 > **Scope**: Credit lifecycle, per-project sub-lex with fan-in, vintage tracking, account management, provenance chain
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 > **Compliance**: EPA GHG, ISO 14064, Verra VCS, Gold Standard
 
 ---
@@ -139,7 +139,7 @@ Retired credits increment the beneficiary's cumulative offset counter. This coun
 Raw sensor data and individual attestations stay within the project-level lex:
 
 ```
-esn/sustainability/carbon/org/synergycarbon/
+sustainability/carbon/org/synergycarbon/
   project/{project_id}/
     credits/
       issued/              # Credit records

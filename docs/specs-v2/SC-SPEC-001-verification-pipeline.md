@@ -4,7 +4,7 @@
 > **Version**: 2.0.0
 > **Date**: 2026-02-20
 > **Scope**: PoVCR protocol, witness threshold verification, attestation chain, compliance mapping
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 > **Compliance**: EPA GHG (40 CFR Part 98), ISO 14064-2, Verra VCS, Gold Standard
 
 ---
@@ -160,7 +160,7 @@ Audit events are published to `sc.audit.{project_id}.verification` and fanned up
 
 ## 7. StreamSight Anomaly Detection
 
-The verification pipeline emits telemetry to StreamSight under the lex namespace `esn/sustainability/carbon/org/synergycarbon/project/{project_id}/verification/`.
+The verification pipeline emits telemetry to StreamSight under the lex namespace `sustainability/carbon/org/synergycarbon/project/{project_id}/verification/`.
 
 ### Monitored Metrics
 
@@ -215,7 +215,7 @@ Anomalies trigger events on `sc.anomalies.{project_id}.verification` and are sur
 ## 9. Lex Integration
 
 ```
-esn/sustainability/carbon/org/synergycarbon/
+sustainability/carbon/org/synergycarbon/
   project/{project_id}/
     verification/
       attestations/        # Raw attestation stream

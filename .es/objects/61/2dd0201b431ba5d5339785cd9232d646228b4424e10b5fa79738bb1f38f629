@@ -1,0 +1,20 @@
+Å§Blobë≈tree 14d5d83ac6ce8907f380a7d3200a27cb27284e0e
+parent e4d9cadab1102f98df305bd1c1b9b0cdc8028afc
+author toddrooke <todd@toddrooke.com> 1771240575 -0700
+committer toddrooke <todd@toddrooke.com> 1771240575 -0700
+
+Add ESZ test fixtures, console demo mode, and expanded marketing website
+
+- Create 29 ESZ fixture files across all 13 SmartCircuits with realistic
+  test vectors for circuit validation and console demo mode
+- Add console DemoProvider + DemoBanner with ?demo=true URL activation
+  that loads fixture data into ESLite tables for offline widget rendering
+- Generate 4 AI mockup images (dashboard, marketplace, impact, registry)
+- Rebuild marketing website with scroll animations, sticky nav, Platform
+  Features section with mockup fade-in/out, Why SynergyCarbon advantages,
+  and 5-step Get Started partner integration timeline
+- Extract inline styles to global.css with IntersectionObserver animation
+  system and animated stat counters
+- Update developer feedback with sections 3.7-3.10 (Astro integration,
+  Widget Embed SDK, ESZ fixture standard, Console Kit demo mode)
+- Update feature leverage report with website and demo mode references

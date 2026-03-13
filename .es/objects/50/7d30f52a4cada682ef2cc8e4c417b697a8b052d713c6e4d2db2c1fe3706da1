@@ -1,0 +1,178 @@
+¤Blob‘Å&// Cross-Bridge BRIDGE_LOCKED Coordinator
+// Global double-count prevention across all registry bridges (Verra, Gold Standard, CDM)
+//
+// Enforces: A credit locked by Bridge A cannot be submitted to Bridge B.
+// Lock is released only on: rejection by the registry, or retirement propagation.
+//
+// Subscribes: sc.bridges.verra.status, sc.bridges.gold_standard.status, sc.bridges.cdm.status
+// Publishes:  sc.bridges.lock_status
+
+type BridgeType = u8
+// 0 = verra_vcs, 1 = gold_standard, 2 = cdm
+
+type GlobalLockRecord = struct {
+    credit_id: bytes(32),
+    locked_by_bridge: BridgeType,
+    bridge_id: bytes(16),
+    lock_state: u8,
+    locked_at: u64,
+    unlocked_at: u64,
+    lock_reason: string,
+    unlock_reason: string,
+}
+
+type LockRequest = struct {
+    credit_id: bytes(32),
+    bridge_type: BridgeType,
+    bridge_id: bytes(16),
+    reason: string,
+    requested_at: u64,
+}
+
+type LockResponse = struct {
+    credit_id: bytes(32),
+    granted: bool,
+    conflict_bridge: BridgeType,
+    conflict_bridge_id: bytes(16),
+    reason: string,
+}
+
+type UnlockRequest = struct {
+    credit_id: bytes(32),
+    bridge_type: BridgeType,
+    bridge_id: bytes(16),
+    unlock_reason: string,
+    requested_at: u64,
+}
+
+type LockStatusQuery = struct {
+    credit_id: bytes(32),
+}
+
+type LockStatusResponse = struct {
+    credit_id: bytes(32),
+    is_locked: bool,
+    locked_by_bridge: BridgeType,
+    bridge_id: bytes(16),
+    lock_state: u8,
+    locked_at: u64,
+    lock_reason: string,
+}
+
+type CrossBridgeAuditEntry = struct {
+    entry_id: bytes(16),
+    credit_id: bytes(32),
+    action: u8,
+    bridge_type: BridgeType,
+    bridge_id: bytes(16),
+    timestamp: u64,
+    result: bool,
+    reason: string,
+}
+
+// lock_state: 0=unlocked, 1=locked, 2=lock_pending
+// action: 0=lock_requested, 1=lock_granted, 2=lock_denied, 3=unlock_requested, 4=unlock_granted
+
+graph bridge_lock_graph {
+    node GlobalLockRecord
+    node CrossBridgeAuditEntry
+    edge lock_history: GlobalLockRecord -> CrossBridgeAuditEntry { guard credit_match }
+    overlay lock_state: u8 curate delta_curate
+    overlay active_locks: u64 bitmask delta_curate
+    overlay conflict_count: u64 bitmask delta_curate
+    storage csr {
+        hot @bram,
+        warm @ddr,
+        cold @nvme,
+    }
+    ai_feed lock_anomaly
+    ai_feed conflict_pattern
+    observe bridge_lock_graph: [lock_state, active_locks, conflict_count] threshold: {
+        anomaly_score 0.90
+        baseline_window 60
+    }
+}
+
+series bridge_lock_audit: bridge_lock_graph
+    merkle_chain true
+    lattice_imprint true
+    witness_attest true
+
+// Request a global bridge lock for a credit before submitting to any registry.
+// Fails if the credit is already locked by a different bridge.
+circuit bridge_lock_acquire(graph_id: bytes(32), request: LockRequest) -> LockResponse
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/acquire
+    precision C
+    povc true
+    subscribe sc.bridges.verra.status
+    subscribe sc.bridges.gold_standard.status
+    subscribe sc.bridges.cdm.status
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, bridge_type, granted, conflict_bridge]
+    invariant "single_bridge_lock" { concurrent_locks_per_credit <= 1 }
+{
+    LockResponse {
+        credit_id: request.credit_id,
+        granted: true,
+        conflict_bridge: 0,
+        conflict_bridge_id: 0x00000000000000000000000000000000,
+        reason: "",
+    }
+}
+
+// Release a global bridge lock after rejection or retirement propagation.
+circuit bridge_lock_release(graph_id: bytes(32), request: UnlockRequest) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/release
+    precision C
+    povc true
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, bridge_type, unlock_reason]
+{
+    true
+}
+
+// Query the global lock status for a credit â€” used by all bridges before submission.
+circuit bridge_lock_query(graph_id: bytes(32), query: LockStatusQuery) -> LockStatusResponse
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/query
+    precision B
+    observe metrics: [credit_id, is_locked, locked_by_bridge]
+{
+    LockStatusResponse {
+        credit_id: query.credit_id,
+        is_locked: false,
+        locked_by_bridge: 0,
+        bridge_id: 0x00000000000000000000000000000000,
+        lock_state: 0,
+        locked_at: 0,
+        lock_reason: "",
+    }
+}
+
+// Force-unlock (admin only) â€” emergency release of a stuck bridge lock.
+circuit bridge_lock_force_release(graph_id: bytes(32), credit_id: bytes(32), admin_reason: string) -> bool
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/force-release
+    precision C
+    povc true
+    rbac [registry_admin]
+    publish sc.bridges.lock_status
+    observe metrics: [credit_id, admin_reason]
+{
+    true
+}
+
+// Audit trail query â€” returns lock/unlock history for a credit across all bridges.
+circuit bridge_lock_audit_query(graph_id: bytes(32), credit_id: bytes(32)) -> list<CrossBridgeAuditEntry>
+    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/audit
+    precision B
+    observe metrics: [credit_id]
+{
+    []
+}
+
+stream bridge_lock_events: event<GlobalLockRecord>
+    retention 10y
+    consumers [registry, compliance, audit, streamsight]
+
+stream bridge_lock_audit_events: event<CrossBridgeAuditEntry>
+    retention 10y
+    consumers [registry, compliance, audit, governance]

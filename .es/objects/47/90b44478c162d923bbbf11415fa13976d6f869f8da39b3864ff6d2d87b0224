@@ -1,0 +1,14 @@
+Å§Blobë≈˛tree d2a13626eca9c45dc814b75445e4dcc877142655
+parent 58db7e9a74ad7fa5cb4938465a456ddd0e63c916
+author toddrooke <todd@toddrooke.com> 1771229598 -0700
+committer toddrooke <todd@toddrooke.com> 1771229598 -0700
+
+closes #3 ‚Äî Phase 2 CO2e Calculator with 7 methodology definitions
+
+- Added 5 methodology formulas to carbon_calculator compute node:
+  IPCC-AR5-100Y (GWP-28), IPCC-AR5-20Y (GWP-84), VCS-AMS-III-H (wastewater),
+  GS-MICRO-SCALE (renewables), CDM-ACM0001 (landfill gas), CUSTOM (governance-approved)
+- Extended Methodology type with emission_factor, custom_formula, and
+  registry_compatibility fields
+- Updated formula_id description to enumerate all 7+1 supported methodologies
+- Total: EPA-AP42-CH4-FLARE, SOLAR-GRID-OFFSET + 5 new = 7 standard + CUSTOM

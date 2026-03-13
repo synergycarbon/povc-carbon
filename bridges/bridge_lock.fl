@@ -101,9 +101,9 @@ series bridge_lock_audit: bridge_lock_graph
 // Request a global bridge lock for a credit before submitting to any registry.
 // Fails if the credit is already locked by a different bridge.
 circuit bridge_lock_acquire(graph_id: bytes(32), request: LockRequest) -> LockResponse
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/acquire
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/lock/acquire
+    @precision C
+    @attested true
     subscribe sc.bridges.verra.status
     subscribe sc.bridges.gold_standard.status
     subscribe sc.bridges.cdm.status
@@ -122,9 +122,9 @@ circuit bridge_lock_acquire(graph_id: bytes(32), request: LockRequest) -> LockRe
 
 // Release a global bridge lock after rejection or retirement propagation.
 circuit bridge_lock_release(graph_id: bytes(32), request: UnlockRequest) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/release
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/lock/release
+    @precision C
+    @attested true
     publish sc.bridges.lock_status
     observe metrics: [credit_id, bridge_type, unlock_reason]
 {
@@ -133,8 +133,8 @@ circuit bridge_lock_release(graph_id: bytes(32), request: UnlockRequest) -> bool
 
 // Query the global lock status for a credit — used by all bridges before submission.
 circuit bridge_lock_query(graph_id: bytes(32), query: LockStatusQuery) -> LockStatusResponse
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/query
-    precision B
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/lock/query
+    @precision B
     observe metrics: [credit_id, is_locked, locked_by_bridge]
 {
     LockStatusResponse {
@@ -150,10 +150,10 @@ circuit bridge_lock_query(graph_id: bytes(32), query: LockStatusQuery) -> LockSt
 
 // Force-unlock (admin only) — emergency release of a stuck bridge lock.
 circuit bridge_lock_force_release(graph_id: bytes(32), credit_id: bytes(32), admin_reason: string) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/force-release
-    precision C
-    povc true
-    rbac [registry_admin]
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/lock/force-release
+    @precision C
+    @attested true
+    @rbac [registry_admin]
     publish sc.bridges.lock_status
     observe metrics: [credit_id, admin_reason]
 {
@@ -162,8 +162,8 @@ circuit bridge_lock_force_release(graph_id: bytes(32), credit_id: bytes(32), adm
 
 // Audit trail query — returns lock/unlock history for a credit across all bridges.
 circuit bridge_lock_audit_query(graph_id: bytes(32), credit_id: bytes(32)) -> list<CrossBridgeAuditEntry>
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/lock/audit
-    precision B
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/lock/audit
+    @precision B
     observe metrics: [credit_id]
 {
     []

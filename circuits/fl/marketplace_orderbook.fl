@@ -61,7 +61,7 @@ state_machine forward_lifecycle {
     initial DRAFT
     persistence wal
     terminal [SETTLED, EXPIRED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     DRAFT -> NEGOTIATING when terms_proposed
     NEGOTIATING -> AGREED when both_parties_signed guard signatures_valid
@@ -98,14 +98,14 @@ series trade_history: marketplace_orderbook
     witness_attest true
 
 circuit place_order(graph_id: bytes(32), order: Order, pk: bytes(1568)) -> OrderId
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/order/place {
+    lex sustainability/carbon/org/synergycarbon/marketplace/order/place {
         governance hierarchical
         audit_trail true
         compliance [epa_ghg, verra_vcs]
     }
-    precision A
-    constant_time true
-    rbac [trader, marketplace_admin]
+    @precision A
+    @constant_time true
+    @rbac [trader, marketplace_admin]
     observe metrics: [order_id, trader_id, side, order_type, price_cents, quantity_tonnes]
     invariant "quantity_positive" { order.quantity_tonnes > 0 }
     invariant "price_valid" { order.order_type == 1 || order.price_cents > 0 }
@@ -116,9 +116,9 @@ circuit place_order(graph_id: bytes(32), order: Order, pk: bytes(1568)) -> Order
 }
 
 circuit cancel_order(graph_id: bytes(32), order_id: OrderId, trader_id: AccountId) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/order/cancel
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/marketplace/order/cancel
+    @precision C
+    @attested true
     observe metrics: [order_id, trader_id]
 {
     let status = context_lookup("order_status", order_id)
@@ -127,22 +127,22 @@ circuit cancel_order(graph_id: bytes(32), order_id: OrderId, trader_id: AccountI
 }
 
 circuit match_orders(graph_id: bytes(32), vintage_year: u64, pk: bytes(1568)) -> list<bytes(32)>
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/match {
+    lex sustainability/carbon/org/synergycarbon/marketplace/match {
         governance hierarchical
         audit_trail true
         compliance [epa_ghg, verra_vcs]
     }
-    precision A
-    constant_time true
-    witness threshold(2, 3)
-    rbac [matching_engine, marketplace_admin]
+    @precision A
+    @constant_time true
+    @witness threshold(2, 3)
+    @rbac [matching_engine, marketplace_admin]
     observe metrics: [vintage_year, trades_matched, volume_matched, fees_collected]
     invariant "no_self_trade" { buyer_id != seller_id }
     invariant "fee_correct" { platform_fee_cents == computed_fee }
     property safety "price_time_priority" { fill_sequence_valid == true }
-    fuzz_target
-    esz_emit "verify/synergycarbon_orderbook.esz"
-    li_feed full_escir true, optimized_ir true
+    @fuzz_target
+    @serialize "verify/synergycarbon_orderbook.esz"
+    @ai_feed full_escir true, optimized_ir true
 {
     let kem = mlkem_encaps(pk)
     let bids = context_lookup("open_bids_by_price_time", vintage_year)
@@ -171,13 +171,13 @@ circuit match_orders(graph_id: bytes(32), vintage_year: u64, pk: bytes(1568)) ->
 }
 
 circuit create_forward(graph_id: bytes(32), seller_id: AccountId, buyer_id: AccountId, vintage: u64, tonnes: u64, price_cents: u64, delivery_date: u64, pk: bytes(1568)) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/forward/create {
+    lex sustainability/carbon/org/synergycarbon/marketplace/forward/create {
         governance hierarchical
         audit_trail true
     }
-    precision A
-    witness threshold(2, 3)
-    rbac [trader, marketplace_admin]
+    @precision A
+    @witness threshold(2, 3)
+    @rbac [trader, marketplace_admin]
     observe metrics: [contract_id, seller_id, buyer_id, tonnes, price_cents]
     invariant "tonnes_positive" { tonnes > 0 }
     invariant "delivery_future" { delivery_date > now() }
@@ -189,7 +189,7 @@ circuit create_forward(graph_id: bytes(32), seller_id: AccountId, buyer_id: Acco
 }
 
 transaction settle_forward(contract_id: bytes(32), seller_id: AccountId, buyer_id: AccountId, tonnes: u64, price_cents: u64)
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/forward/settle
+    lex sustainability/carbon/org/synergycarbon/marketplace/forward/settle
     invariant "funds_conserved" { total_debited == total_credited }
     timeout 60s
     reserve forward_escrow[contract_id] hold price_cents ttl 60s
@@ -198,8 +198,8 @@ transaction settle_forward(contract_id: bytes(32), seller_id: AccountId, buyer_i
     emit   forward_events SettlementEvent { contract_id, seller_id, buyer_id, tonnes, price_cents }
 
 circuit update_impact(graph_id: bytes(32), trade_tonnes: u64, retired_tonnes: u64) -> ImpactMetric
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace
-    precision B
+    lex sustainability/carbon/org/synergycarbon/marketplace
+    @precision B
     observe metrics: [total_tonnes_traded, total_tonnes_retired, total_trades]
 {
     let c = context_lookup("impact_metrics", graph_id)

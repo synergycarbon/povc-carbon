@@ -2,7 +2,7 @@
 
 > **Version:** 1.1.0
 > **Date:** 2026-02-15
-> **Platform:** eStream v0.8.1 + Console Kit (`@estream/sdk-browser/widgets`)
+> **Platform:** eStream v0.12.0 + Console Kit (`@estream/sdk-browser/widgets`)
 > **Patent Portfolio:** [PORTFOLIO-REVIEW.md](../../../../synergythermogen/ip/patents/PORTFOLIO-REVIEW.md) (22 patents across 4 clusters)
 
 ---

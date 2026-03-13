@@ -2,7 +2,7 @@
 
 > **eStream SDK**: v0.8.3 (single version model)
 > **Date**: February 2026
-> **Previous**: eStream v0.8.1 + Console Kit (see [Migration](#migrating-from-v081))
+> **Previous**: eStream v0.12.0 + Console Kit (see [Migration](#migrating-from-v081))
 
 This guide covers how SynergyCarbon developers connect to the eStream platform, write FastLang circuits, test locally, and deploy to the alpha-devnet.
 
@@ -14,7 +14,7 @@ SynergyCarbon has 3 production-ready FastLang circuit files in the eStream SDK:
 
 | File | What It Does | Key Features |
 |------|-------------|--------------|
-| [`povcr_verifier.fl`](https://github.com/polyquantum/estream-io/blob/main/crates/estream-fastlang/examples/synergycarbon/povcr_verifier.fl) | PoVCR measurement verification with witness attestation | `witness threshold(3,5)`, `commitment_create`/`verify`, `fuzz_target`, `kat_vector`, `constant_time` |
+| [`povcr_verifier.fl`](https://github.com/polyquantum/estream-io/blob/main/crates/estream-fastlang/examples/synergycarbon/povcr_verifier.fl) | PoVCR measurement verification with witness attestation | `witness threshold(3,5)`, `commitment_create`/`verify`, `@fuzz_target`, `@golden_test`, `@constant_time` |
 | [`methodology.fl`](https://github.com/polyquantum/estream-io/blob/main/crates/estream-fastlang/examples/synergycarbon/methodology.fl) | EPA AP-42 and ISO 14064 emission factor calculation | `methodology epa_ghg`, `methodology iso_14064`, `window_aggregate` |
 | [`credit_registry.fl`](https://github.com/polyquantum/estream-io/blob/main/crates/estream-fastlang/examples/synergycarbon/credit_registry.fl) | Carbon credit issue/transfer/retire lifecycle | `transaction`, `escrow_lock`, sub_lex fan_in, `store`, `emit` |
 
@@ -40,7 +40,7 @@ These are the **golden source** for SynergyCarbon's circuit logic. The methodolo
 
 3. **Methodology compliance is type-safe** — `methodology.fl` encodes EPA AP-42 and ISO 14064 formulas directly in FastLang. The SMT backend can formally prove your emission factor calculations are correct. Don't hand-roll compliance math.
 
-4. **PoVCR is your differentiator** — Proof of Verified Carbon Reduction uses 3-of-5 witness attestation. The `povcr_verifier.fl` circuit with `constant_time true` and `fuzz_target` is designed to be side-channel resistant and fuzz-tested. Trust it.
+4. **PoVCR is your differentiator** — Proof of Verified Carbon Reduction uses 3-of-5 witness attestation. The `povcr_verifier.fl` circuit with `constant_time true` and `@fuzz_target` is designed to be side-channel resistant and fuzz-tested. Trust it.
 
 5. **Webhooks for B2B integration** — Your 8 webhook event types notify external systems (registry operators, auditors) without polling. Configure via the REST API.
 
@@ -76,7 +76,7 @@ estream localnet start --nodes 3 --with-console
 
 ```bash
 estream lex compile crates/estream-fastlang/examples/synergycarbon/povcr_verifier.fl
-estream lex submit povcr_verifier --lex esn/region/global/org/synergycarbon
+estream lex submit povcr_verifier --lex region/global/org/synergycarbon
 ```
 
 ### 5. Test carbon credit lifecycle
@@ -84,14 +84,14 @@ estream lex submit povcr_verifier --lex esn/region/global/org/synergycarbon
 ```bash
 # Issue a credit
 estream stream emit credit_events '{"action":"issue","project_id":"SC-001","tonnes_co2e":100}' \
-  --lex esn/region/global/org/synergycarbon
+  --lex region/global/org/synergycarbon
 
 # Verify a measurement
 estream stream emit verification_requests '{"measurement_id":"M-001","sensor_hash":"0xabc..."}' \
-  --lex esn/region/global/org/synergycarbon
+  --lex region/global/org/synergycarbon
 
 # Watch credit registry
-estream stream subscribe credit_events --lex esn/region/global/org/synergycarbon --follow
+estream stream subscribe credit_events --lex region/global/org/synergycarbon --follow
 ```
 
 ### 6. Formal verification of methodology
@@ -123,7 +123,7 @@ To deploy SynergyCarbon circuits:
 ```bash
 estream lex compile crates/estream-fastlang/examples/synergycarbon/povcr_verifier.fl
 estream lex submit povcr_verifier \
-  --lex esn/region/global/org/synergycarbon \
+  --lex region/global/org/synergycarbon \
   --target alpha-devnet \
   --signing-key $SYNERGYCARBON_KEY
 ```
@@ -132,7 +132,7 @@ estream lex submit povcr_verifier \
 
 ## Migrating from v0.8.1
 
-SynergyCarbon references eStream v0.8.1 + Console Kit. The v0.8.3 SDK is backward-compatible:
+SynergyCarbon references eStream v0.12.0 + Console Kit. The v0.8.3 SDK is backward-compatible:
 
 | What Changed | Action Required |
 |-------------|-----------------|

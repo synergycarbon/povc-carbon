@@ -1,7 +1,7 @@
 // SynergyCarbon: Verification Pipeline DAG
 // PoVCR protocol: hardware-attested → Merkle commitment → multi-witness (3-of-5) → credit eligibility
 //
-// Lex: esn/sustainability/carbon/org/synergycarbon
+// Lex: sustainability/carbon/org/synergycarbon
 //   └── sub_lex project fan_in → verification/
 //       Only VERIFIED_DATA, COMPLIANCE flow up; RAW_SENSOR stays local
 
@@ -61,7 +61,7 @@ state_machine verification_lifecycle {
     initial PENDING
     persistence wal
     terminal [ELIGIBLE, REJECTED, REVOKED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     PENDING -> ATTESTED when hardware_attestation_received
     ATTESTED -> COMMITTED when merkle_commitment_created
@@ -102,21 +102,21 @@ series verification_chain: verification_pipeline
     witness_attest true
 
 circuit submit_measurement(dag_id: bytes(32), measurement: Measurement, pk: bytes(1568)) -> MeasurementId
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification {
+    lex sustainability/carbon/org/synergycarbon/project/verification {
         governance hierarchical
         approval_required true
         audit_trail true
         sovereignty us
         compliance [epa_ghg, iso_14064, verra_vcs]
     }
-    precision A
-    witness threshold(3, 5)
-    rbac [sensor_operator, verifier, registry_admin]
+    @precision A
+    @witness threshold(3, 5)
+    @rbac [sensor_operator, verifier, registry_admin]
     observe metrics: [measurement_id, sensor_id, value, unit]
     invariant "value_positive" { measurement.value > 0 }
     invariant "hardware_attested" { measurement.hardware_attestation != 0x00 }
     monitor "anomaly_rate" { anomaly_rate < 0.10 }
-    fuzz_target
+    @fuzz_target
 {
     let reading_hash = sha3_256(measurement.sensor_id ++ measurement.value ++ measurement.timestamp)
     let hw_valid = mldsa_verify(reading_hash, measurement.hardware_attestation, measurement.sensor_id)
@@ -127,14 +127,14 @@ circuit submit_measurement(dag_id: bytes(32), measurement: Measurement, pk: byte
 }
 
 circuit create_commitment(dag_id: bytes(32), measurement_id: MeasurementId, pk: bytes(1568)) -> AttestationId
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification
-    precision A
-    constant_time true
-    witness threshold(2, 3)
+    lex sustainability/carbon/org/synergycarbon/project/verification
+    @precision A
+    @constant_time true
+    @witness threshold(2, 3)
     observe metrics: [measurement_id, merkle_root]
     invariant "commitment_deterministic" { sha3_256(measurement_id) == expected }
-    critical_path
-    fuzz_target
+    @critical_path
+    @fuzz_target
 {
     let measurement = context_lookup("measurements", measurement_id)
     let data_hash = sha3_256(measurement_id ++ measurement.value)
@@ -148,14 +148,14 @@ circuit create_commitment(dag_id: bytes(32), measurement_id: MeasurementId, pk: 
 }
 
 circuit witness_verify(dag_id: bytes(32), attestation_id: AttestationId, witness_pk: bytes(1952), witness_sig: bytes(4627)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification
-    precision A
-    constant_time true
-    witness threshold(3, 5)
-    rbac [verifier, registry_admin]
+    lex sustainability/carbon/org/synergycarbon/project/verification
+    @precision A
+    @constant_time true
+    @witness threshold(3, 5)
+    @rbac [verifier, registry_admin]
     observe metrics: [attestation_id, witness_count, threshold_met]
     invariant "signature_valid" { verified == true }
-    fuzz_target
+    @fuzz_target
 {
     let attestation = context_lookup("attestations", attestation_id)
     let verified = mldsa_verify(attestation, witness_sig, witness_pk)
@@ -165,21 +165,21 @@ circuit witness_verify(dag_id: bytes(32), attestation_id: AttestationId, witness
 }
 
 circuit check_compliance(dag_id: bytes(32), verification_id: bytes(32), methodology: bytes(256), pk: bytes(1568)) -> VerificationResult
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification/compliance
-    precision A
-    witness threshold(3, 5)
-    rbac [compliance_officer, verifier, registry_admin]
-    streamsight true
+    lex sustainability/carbon/org/synergycarbon/project/verification/compliance
+    @precision A
+    @witness threshold(3, 5)
+    @rbac [compliance_officer, verifier, registry_admin]
+    @observe true
     observe metrics: [verification_id, compliance_flags, reduction_tonnes, eligible]
     invariant "reduction_positive" { reduction_tonnes > 0 }
     monitor "verification_rate" { verified_pct > 0.95 }
-    fuzz_target
-    esz_emit "verify/synergycarbon_verification.esz"
-    li_feed full_escir true, optimized_ir true
+    @fuzz_target
+    @serialize "verify/synergycarbon_verification.esz"
+    @ai_feed full_escir true, optimized_ir true
 {
     let method_hash = blake3(methodology)
     let kem = mlkem_encaps(pk)
-    let classification = li_classify(methodology, verification_id)
+    let classification = ai_classify(methodology, verification_id)
     let anomaly = streamsight_anomaly(method_hash)
     let baseline = streamsight_baseline("verification_rate")
     let measurement = context_lookup("measurement_for_verification", verification_id)
@@ -196,10 +196,10 @@ circuit check_compliance(dag_id: bytes(32), verification_id: bytes(32), methodol
 }
 
 circuit record_audit(dag_id: bytes(32), verification_id: bytes(32), auditor_id: bytes(32), action: u8, finding: u8) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification
-    precision A
-    povc true
-    rbac [auditor, compliance_officer, registry_admin]
+    lex sustainability/carbon/org/synergycarbon/project/verification
+    @precision A
+    @attested true
+    @rbac [auditor, compliance_officer, registry_admin]
     observe metrics: [audit_id, verification_id, auditor_id, action, finding]
 {
     let audit_id = sha3_256(verification_id ++ auditor_id ++ action)
@@ -245,22 +245,22 @@ type MeteringValidationResult = struct {
 }
 
 circuit ingest_metered_measurement(dag_id: bytes(32), metering_result: MeteringValidationResult, sensor_id: bytes(32), methodology_id: bytes(16), location_hash: bytes(32), pk: bytes(1568)) -> MeasurementId
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification {
+    lex sustainability/carbon/org/synergycarbon/project/verification {
         governance hierarchical
         approval_required true
         audit_trail true
         sovereignty us
         compliance [iec_62053_21, iec_62053_22, epa_ghg, iso_14064, verra_vcs]
     }
-    precision A
-    witness threshold(3, 5)
-    rbac [metering_operator, verifier, registry_admin]
+    @precision A
+    @witness threshold(3, 5)
+    @rbac [metering_operator, verifier, registry_admin]
     observe metrics: [validation_id, meter_id, accuracy_class, energy_wh_validated, compliance_flags]
     invariant "metering_compliant" { metering_result.compliance_flags == 0x0F }
     invariant "no_tamper" { metering_result.tamper_detected == false }
     invariant "energy_positive" { metering_result.energy_wh_validated > 0 }
     monitor "metered_ingestion_rate" { metered_ingest_pct > 0.95 }
-    fuzz_target
+    @fuzz_target
 {
     let measurement_id = sha3_256(metering_result.validation_id ++ metering_result.meter_id ++ metering_result.validated_at)
     let hw_attestation = sha3_256(metering_result.validation_id ++ metering_result.compliance_flags)

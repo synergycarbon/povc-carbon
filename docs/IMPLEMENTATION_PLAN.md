@@ -3,7 +3,7 @@
 > **Version:** 2.0.0  
 > **Date:** 2026-02-11  
 > **Status:** Draft  
-> **Platform:** eStream v0.8.1  
+> **Platform:** eStream v0.12.0  
 > **First Customer:** ThermogenZero (thermoelectric microgrid)  
 > **Design Reference:** [DESIGN.md](DESIGN.md)  
 > **Spec Collections:** [specs/INDEX.md](specs/INDEX.md)  

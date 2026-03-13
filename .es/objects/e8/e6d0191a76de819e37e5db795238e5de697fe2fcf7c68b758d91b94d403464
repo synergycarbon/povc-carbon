@@ -1,0 +1,22 @@
+Å§Blobë≈Btree bbfc1597e5a24d655c2db09793b20f1cc308ee01
+parent 0b4defda87bab8ee9f3a73a725316d4a66a0b992
+author toddrooke <todd@toddrooke.com> 1771634242 -0700
+committer toddrooke <todd@toddrooke.com> 1771634242 -0700
+
+feat(api): webhook dispatch system and enhanced rate limiting (#75, #76)
+
+Webhook system (closes #75):
+- 8 typed event definitions (credit.issued/retired/transferred,
+  attestation.verified, marketplace.order.filled, contract.settled,
+  trigger.fired, bridge.status_changed)
+- ML-DSA-87 signed payloads with X-SC-Signature header
+- Webhook endpoint CRUD routes (POST/GET/DELETE /webhooks)
+- Dispatch engine with exponential backoff retry (max 5 attempts, 10s timeout)
+- Delivery log tracking with per-webhook history endpoint
+
+Rate limiting & pagination (closes #76):
+- Sliding window algorithm replacing simple counter
+- Per-tier rate limits (public:20, buyer:50, auditor:100, owner:200 req/s)
+- X-RateLimit-Limit/Remaining/Reset headers + 429 with Retry-After
+- page_size parameter with validation (min 1, max 100, default 25)
+- page_size included in pagination response metadata

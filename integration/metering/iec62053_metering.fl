@@ -2,7 +2,7 @@
 // Validates IEC 62053-21 (active energy) and IEC 62053-22 (static meters)
 // compliant telemetry for PoVC attestation in the SC verification pipeline.
 //
-// Lex: esn/sustainability/carbon/org/synergycarbon/metering/iec62053
+// Lex: sustainability/carbon/org/synergycarbon/metering/iec62053
 //   └── sub_lex project fan_in → verification/
 //       Only VALIDATED_METERING, COMPLIANCE flow up; RAW_METER stays local
 //
@@ -219,7 +219,7 @@ state_machine metering_validation_lifecycle {
     initial RECEIVED
     persistence wal
     terminal [VALIDATED, REJECTED, QUARANTINED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     RECEIVED -> ACCURACY_CHECKED when accuracy_class_verified
     RECEIVED -> REJECTED when accuracy_class_invalid
@@ -235,7 +235,7 @@ state_machine calibration_drift_lifecycle {
     initial NOMINAL
     persistence wal
     terminal [RECALIBRATED, DECOMMISSIONED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     NOMINAL -> DRIFTING when drift_detected guard drift_rate_bp_per_day > 0.1
     NOMINAL -> NOMINAL when within_spec
@@ -293,25 +293,25 @@ series metering_chain: iec62053_metering
 // calibration errors fall within the allowed bounds for its accuracy class.
 
 circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: CalibrationCertificate, pk: bytes(1568)) -> MeteringValidationResult
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053 {
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053 {
         governance hierarchical
         approval_required true
         audit_trail true
         sovereignty us
         compliance [iec_62053_21, iec_62053_22, epa_ghg, iso_14064]
     }
-    precision A
-    constant_time true
-    witness threshold(3, 5)
-    rbac [metering_operator, verifier, registry_admin]
+    @precision A
+    @constant_time true
+    @witness threshold(3, 5)
+    @rbac [metering_operator, verifier, registry_admin]
     observe metrics: [meter_id, accuracy_class, accuracy_valid, power_factor_pct, tamper_detected]
     invariant "reading_positive" { reading.active_power_mw > 0 }
     invariant "meter_match" { reading.meter_id == cert.meter_id }
     invariant "class_match" { reading.accuracy_class == cert.accuracy_class }
     monitor "accuracy_rejection_rate" { accuracy_reject_rate < 0.05 }
-    fuzz_target
-    esz_emit "verify/iec62053_metering.esz"
-    li_feed full_escir true, optimized_ir true
+    @fuzz_target
+    @serialize "verify/iec62053_metering.esz"
+    @ai_feed full_escir true, optimized_ir true
 {
     let reading_hash = sha3_256(reading.meter_id ++ reading.energy_wh ++ reading.timestamp)
     let hw_valid = mldsa_verify(reading_hash, reading.hardware_attestation, reading.meter_id)
@@ -376,25 +376,25 @@ circuit validate_accuracy_class(dag_id: bytes(32), reading: MeterReading, cert: 
 // consistency, CT/VT ratio validation, and frequency bounds checking.
 
 circuit validate_meter_reading_f64(dag_id: bytes(32), reading: MeterReadingF64, cert: CalibrationCertificate, ct_vt: CTVTConfig, pk: bytes(1568)) -> MeteringValidationResult
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053 {
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053 {
         governance hierarchical
         approval_required true
         audit_trail true
         sovereignty us
         compliance [iec_62053_21, iec_62053_22, epa_ghg, iso_14064]
     }
-    precision A
-    constant_time true
-    witness threshold(3, 5)
-    rbac [metering_operator, verifier, registry_admin]
+    @precision A
+    @constant_time true
+    @witness threshold(3, 5)
+    @rbac [metering_operator, verifier, registry_admin]
     observe metrics: [meter_id, accuracy_class, power_factor, voltage_v, frequency_hz]
     invariant "power_positive" { reading.active_power_w > 0.0 }
     invariant "meter_match" { reading.meter_id == cert.meter_id }
     invariant "class_match" { reading.accuracy_class == cert.accuracy_class }
     invariant "ct_vt_match" { reading.meter_id == ct_vt.meter_id }
-    fuzz_target
-    esz_emit "verify/iec62053_metering_f64.esz"
-    li_feed full_escir true, optimized_ir true
+    @fuzz_target
+    @serialize "verify/iec62053_metering_f64.esz"
+    @ai_feed full_escir true, optimized_ir true
 {
     let reading_hash = sha3_256(reading.meter_id ++ reading.timestamp)
     let hw_valid = mldsa_verify(reading_hash, reading.hardware_attestation, reading.meter_id)
@@ -499,10 +499,10 @@ circuit validate_meter_reading_f64(dag_id: bytes(32), reading: MeterReadingF64, 
 // per day and estimates days until the meter drifts out of spec.
 
 circuit detect_calibration_drift(dag_id: bytes(32), meter_id: MeterId, new_cert: CalibrationCertificate) -> CalibrationDriftResult
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, calibration_authority]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, calibration_authority]
     observe metrics: [meter_id, drift_rate_bp_per_day, days_to_out_of_spec, recalibration_recommended]
     invariant "cert_for_meter" { new_cert.meter_id == meter_id }
 {
@@ -591,10 +591,10 @@ circuit detect_calibration_drift(dag_id: bytes(32), meter_id: MeterId, new_cert:
 // bypass detection (current imbalance), and clock drift analysis.
 
 circuit detect_tamper_advanced(dag_id: bytes(32), reading: MeterReadingF64, prev_reading: MeterReadingF64) -> TamperEvent
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, verifier]
     observe metrics: [meter_id, tamper_type, severity]
     invariant "same_meter" { reading.meter_id == prev_reading.meter_id }
 {
@@ -695,10 +695,10 @@ circuit detect_tamper_advanced(dag_id: bytes(32), reading: MeterReadingF64, prev
 // (e.g. 999999.999 → 0.0) and configurable max values.
 
 circuit handle_totalizer_rollover(dag_id: bytes(32), meter_id: MeterId, prev_kwh: f64, curr_kwh: f64, rollover_max_kwh: f64) -> RolloverEvent
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, verifier]
     observe metrics: [meter_id, corrected_delta_kwh, rollover_count]
     invariant "max_positive" { rollover_max_kwh > 0.0 }
 {
@@ -755,10 +755,10 @@ circuit handle_totalizer_rollover(dag_id: bytes(32), meter_id: MeterId, prev_kwh
 // accuracy class tolerance. Also checks burden loading.
 
 circuit validate_ct_vt_config(dag_id: bytes(32), ct_vt: CTVTConfig) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, calibration_authority]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, calibration_authority]
     observe metrics: [meter_id, ct_ratio_primary, ct_ratio_secondary, vt_ratio_primary, vt_ratio_secondary]
     invariant "ct_secondary_positive" { ct_vt.ct_secondary_a > 0.0 }
     invariant "vt_secondary_positive" { ct_vt.vt_secondary_v > 0.0 }
@@ -800,8 +800,8 @@ circuit validate_ct_vt_config(dag_id: bytes(32), ct_vt: CTVTConfig) -> bool
 
 // Internal helper: validate reading CT/VT ratios against configuration
 circuit validate_ct_vt_ratios(reading: MeterReadingF64, ct_vt: CTVTConfig) -> bool
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     let ct_ratio_expected = ct_vt.ct_primary_a / ct_vt.ct_secondary_a
     let vt_ratio_expected = ct_vt.vt_primary_v / ct_vt.vt_secondary_v
@@ -826,10 +826,10 @@ circuit validate_ct_vt_ratios(reading: MeterReadingF64, ct_vt: CTVTConfig) -> bo
 // average power factor for the interval.
 
 circuit compute_demand_interval(dag_id: bytes(32), meter_id: MeterId, start_ts: u64, end_ts: u64, readings_energy_start: f64, readings_energy_end: f64, readings_count: u64, readings_pf_sum: f64, max_instantaneous_kw: f64) -> DemandInterval
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, verifier]
     observe metrics: [meter_id, demand_kw, max_demand_kw, power_factor_avg]
     invariant "end_after_start" { end_ts > start_ts }
     invariant "count_positive" { readings_count > 0 }
@@ -908,10 +908,10 @@ circuit compute_demand_interval(dag_id: bytes(32), meter_id: MeterId, start_ts: 
 // Runs anomaly detection on the aggregated statistics.
 
 circuit compute_meter_statistics(dag_id: bytes(32), meter_id: MeterId, count: u64, v_sum: f64, v_sq_sum: f64, i_sum: f64, i_sq_sum: f64, p_sum: f64, p_sq_sum: f64, pf_sum: f64, pf_sq_sum: f64, freq_sum: f64, freq_sq_sum: f64, energy_delta_kwh: f64) -> MeterStatistics
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, verifier]
     observe metrics: [meter_id, voltage_mean, voltage_std, power_mean, anomaly_score]
     invariant "count_positive" { count > 0 }
 {
@@ -1003,10 +1003,10 @@ circuit compute_meter_statistics(dag_id: bytes(32), meter_id: MeterId, count: u6
 // reactive compensation and verifies the corrected PF.
 
 circuit validate_power_factor_correction(dag_id: bytes(32), reading: MeterReadingF64, target_pf: f64) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    constant_time true
-    rbac [metering_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @constant_time true
+    @rbac [metering_operator, verifier]
     observe metrics: [meter_id, power_factor, target_pf, correction_kvar]
     invariant "target_valid" { target_pf > 0.0 && target_pf <= 1.0 }
 {
@@ -1046,10 +1046,10 @@ circuit validate_power_factor_correction(dag_id: bytes(32), reading: MeterReadin
 // ---------------------------------------------------------------------------
 
 circuit register_calibration_cert(dag_id: bytes(32), cert: CalibrationCertificate) -> CalibrationCertId
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision C
-    povc true
-    rbac [registry_admin, calibration_authority]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision C
+    @attested true
+    @rbac [registry_admin, calibration_authority]
     observe metrics: [cert_id, meter_id, accuracy_class, calibrated_at, expires_at]
     invariant "cert_not_expired" { cert.expires_at > now() }
     invariant "se050_signed" { cert.se050_attestation != 0x00 }
@@ -1068,10 +1068,10 @@ circuit register_calibration_cert(dag_id: bytes(32), cert: CalibrationCertificat
 // ---------------------------------------------------------------------------
 
 circuit record_tamper_event(dag_id: bytes(32), event: TamperEvent) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    povc true
-    rbac [metering_operator, verifier, registry_admin]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @attested true
+    @rbac [metering_operator, verifier, registry_admin]
     observe metrics: [event_id, meter_id, tamper_type, severity]
 {
     eslite_insert("tamper_events", event.event_id, event)
@@ -1084,13 +1084,13 @@ circuit record_tamper_event(dag_id: bytes(32), event: TamperEvent) -> bytes(32)
 // ---------------------------------------------------------------------------
 
 circuit forward_metering_to_pipeline(dag_id: bytes(32), validation: MeteringValidationResult, reading: MeterReading, pipeline_dag_id: bytes(32)) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/metering/iec62053
-    precision A
-    witness threshold(2, 3)
-    rbac [metering_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/metering/iec62053
+    @precision A
+    @witness threshold(2, 3)
+    @rbac [metering_operator, verifier]
     observe metrics: [validation_id, meter_id, energy_wh_validated, compliance_flags]
     invariant "fully_compliant" { validation.compliance_flags == 0x0F }
-    critical_path
+    @critical_path
 {
     publish("sc.metering.iec62053.validated", validation)
     validation.validation_id
@@ -1101,8 +1101,8 @@ circuit forward_metering_to_pipeline(dag_id: bytes(32), validation: MeteringVali
 // ---------------------------------------------------------------------------
 
 circuit accuracy_limit(class: AccuracyClass, load_point: u8) -> u16
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     if class == 0 {
         if load_point == 0 { 40 }
@@ -1123,8 +1123,8 @@ circuit accuracy_limit(class: AccuracyClass, load_point: u8) -> u16
 
 // f64 accuracy limits (basis points as f64)
 circuit accuracy_limit_f64(class: AccuracyClass, load_point: u8) -> f64
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     if class == 0 {
         if load_point == 0 { 40.0 }
@@ -1144,8 +1144,8 @@ circuit accuracy_limit_f64(class: AccuracyClass, load_point: u8) -> f64
 }
 
 circuit power_factor_threshold(class: AccuracyClass) -> u16
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     if class == 0 { 8000 }
     else if class == 1 { 5000 }
@@ -1155,8 +1155,8 @@ circuit power_factor_threshold(class: AccuracyClass) -> u16
 
 // f64 power factor thresholds (0.0–1.0 scale)
 circuit power_factor_threshold_f64(class: AccuracyClass) -> f64
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     if class == 0 { 0.80 }
     else if class == 1 { 0.50 }
@@ -1165,8 +1165,8 @@ circuit power_factor_threshold_f64(class: AccuracyClass) -> f64
 }
 
 circuit abs_diff(a: u64, b: u64) -> u64
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     if a > b { a - b }
     else { b - a }

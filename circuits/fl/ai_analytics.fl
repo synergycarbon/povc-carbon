@@ -108,9 +108,9 @@ series prediction_history: ai_analytics_graph
 
 // Deploy a new forecast model (Mamba/S4 SSM architecture)
 circuit deploy_model(graph_id: bytes(32), model: ForecastModel) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/model/deploy
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/model/deploy
+    @precision C
+    @attested true
     observe metrics: [model_id, model_type, architecture, horizon]
 {
     model.model_id
@@ -118,7 +118,7 @@ circuit deploy_model(graph_id: bytes(32), model: ForecastModel) -> bytes(16)
 
 // Generate yield forecast for a source at a given horizon (24h, 7d, 30d, 90d, 1y)
 circuit forecast_yield(graph_id: bytes(32), model_id: bytes(16), source_id: bytes(16), horizon: u8) -> YieldCurve
-    lex esn/sustainability/carbon/org/synergycarbon/project/credits/forecast
+    lex sustainability/carbon/org/synergycarbon/project/credits/forecast
     precision D
     observe metrics: [model_id, source_id, horizon, predicted_kwh, confidence_lower, confidence_upper]
 {
@@ -136,7 +136,7 @@ circuit forecast_yield(graph_id: bytes(32), model_id: bytes(16), source_id: byte
 
 // Compute forward price curve for a credit type and registry
 circuit price_forward(graph_id: bytes(32), credit_type: u8, registry: u8) -> list<PricePoint>
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/price/forward
+    lex sustainability/carbon/org/synergycarbon/marketplace/price/forward
     precision D
     observe metrics: [credit_type, registry, curve_points, spot_price]
 {
@@ -145,7 +145,7 @@ circuit price_forward(graph_id: bytes(32), credit_type: u8, registry: u8) -> lis
 
 // Assess risk for a specific source or contract
 circuit assess_risk(graph_id: bytes(32), risk_type: u8, target_id: bytes(16)) -> RiskMetric
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/assess
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/assess
     precision D
     observe metrics: [risk_type, target_id, score, severity]
 {
@@ -162,9 +162,9 @@ circuit assess_risk(graph_id: bytes(32), risk_type: u8, target_id: bytes(16)) ->
 
 // Ingest ESLM continuous learning update
 circuit eslm_update(graph_id: bytes(32), update: ESLMUpdate) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/eslm/update
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/eslm/update
+    @precision C
+    @attested true
     observe metrics: [update_id, model_id, samples_ingested, improvement_bps]
 {
     true
@@ -172,8 +172,8 @@ circuit eslm_update(graph_id: bytes(32), update: ESLMUpdate) -> bool
 
 // Evaluate model accuracy against actuals
 circuit evaluate_accuracy(graph_id: bytes(32), model_id: bytes(16), actual_kwh: u64, horizon: u8) -> u64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/model/evaluate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/model/evaluate
+    @precision C
     observe metrics: [model_id, horizon, predicted_kwh, actual_kwh, error_pct]
 {
     0
@@ -181,8 +181,8 @@ circuit evaluate_accuracy(graph_id: bytes(32), model_id: bytes(16), actual_kwh: 
 
 // Aggregate risk scores across a portfolio of sources
 circuit portfolio_risk(graph_id: bytes(32), source_ids: list<bytes(16)>) -> u64
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
+    @precision C
     observe metrics: [source_count, avg_risk, max_risk, weighted_risk]
 {
     0

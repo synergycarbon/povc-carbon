@@ -1,0 +1,14 @@
+Å§Blobë≈Àtree 28e180a7fa123fab02850a93a5ab77ba8a199e72
+parent 696a40b5ad9db95a5a8cfedc667f25154a77bb1c
+author toddrooke <todd@toddrooke.com> 1771229469 -0700
+committer toddrooke <todd@toddrooke.com> 1771229469 -0700
+
+closes #26 ‚Äî Platform Governance circuit + spec
+
+- Created circuits/governance/governance.escir.yaml (v0.8.1)
+  - Methodology approval, verifier registration, parameter management
+  - Proposal-vote-execute workflow with ML-DSA-87 signatures
+  - Governance events emitted to lex://sc/governance/*
+- Created docs/specs/governance/SPEC.md with full governance specification
+- Created docs/specs/governance/PATENTS.md with claim-to-feature mapping
+- Added governance component to platform composition circuit

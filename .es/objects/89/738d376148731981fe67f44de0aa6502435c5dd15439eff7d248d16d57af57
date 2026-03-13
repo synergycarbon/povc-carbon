@@ -1,0 +1,12 @@
+Å§Blobë≈otree d5e6be82505f136648fcbd3555b057dca0877a35
+parent 56eaec2383968bf4b7ef7560a39980b5b9435575
+author toddrooke <todd@toddrooke.com> 1771634660 -0700
+committer toddrooke <todd@toddrooke.com> 1771634660 -0700
+
+feat(bridges): enhance CDM bridge and cross-bridge lock coordinator (#63, #64)
+
+Refine bridge_lock.fl with explicit LockResponse/UnlockRequest types and
+audit trail. Expand batch_export.ts with cross-bridge lock checking.
+Add CDM bridge lock lifecycle and SOAP status sync test fixtures.
+Add comprehensive cross-bridge conflict test vectors (Verra-vs-GS,
+GS-vs-CDM, CDM-vs-Verra, rejection resubmit, force-unlock).

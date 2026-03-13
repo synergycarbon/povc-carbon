@@ -1,0 +1,12 @@
+Å§Blobë≈ﬁtree 8e4968b4cc4dd810ddc6181c485168963352ef1c
+author toddrooke <toddrooke@TRMBA3.local> 1770322815 -0500
+committer toddrooke <toddrooke@TRMBA3.local> 1770322815 -0500
+
+Initial README with project overview and architecture
+
+- PoVC Carbon Credit Minting infrastructure
+- ECC-1 token standard specification
+- SmartCircuit catalog (7 circuits)
+- Registry bridge architecture (Verra, Gold Standard, ACR, CAR)
+- Implementation timeline (5 phases)
+- estream platform integration notes

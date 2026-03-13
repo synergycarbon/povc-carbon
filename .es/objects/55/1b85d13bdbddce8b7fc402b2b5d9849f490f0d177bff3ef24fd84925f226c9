@@ -1,0 +1,13 @@
+Å§Blobë≈;tree 2da252117e94d41717b70e4cceca98a24b5dbeb1
+parent e15669436f5f138bab6d3f30c9dc139db3fbead2
+author toddrooke <todd@toddrooke.com> 1771632746 -0700
+committer toddrooke <todd@toddrooke.com> 1771632746 -0700
+
+feat(website): enhance layout, global styles, and add marketing pages
+
+Refs #50 #55 #59
+
+Update Base.astro layout with improved navigation and footer. Refactor
+index.astro to use shared layout. Add global.css with full design system
+(typography, cards, buttons, grid). Add new pages: about, api,
+for-buyers, for-developers, how-it-works, marketplace, technology.

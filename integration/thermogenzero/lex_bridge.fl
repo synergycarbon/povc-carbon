@@ -2,7 +2,7 @@
 // Cross-org attestation bridge: TZ FPGA witness nodes → SC verification pipeline
 //
 // Bridge path:
-//   esn/.../thermogenzero/carbon/ → esn/.../synergycarbon/project/thermogenzero/verification/
+//   .../thermogenzero/carbon/ → .../synergycarbon/project/thermogenzero/verification/
 //
 // Receives EPA AP-42 methane destruction attestations from TZ edge nodes,
 // validates ML-DSA-87 witness signatures, maps to SC verification format,
@@ -180,7 +180,7 @@ state_machine bridge_attestation_lifecycle {
     initial RECEIVED
     persistence wal
     terminal [FORWARDED, REJECTED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     RECEIVED -> VALIDATED when signatures_verified guard witness_count >= 3
     RECEIVED -> REJECTED when signature_failed
@@ -193,7 +193,7 @@ state_machine bridge_envelope_lifecycle {
     initial CREATED
     persistence wal
     terminal [DELIVERED, EXPIRED, FAILED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     CREATED -> SIGNED when envelope_signed
     SIGNED -> SENT when lex_bridge_dispatched
@@ -246,10 +246,10 @@ series bridge_provenance: tz_bridge
 // ---------------------------------------------------------------------------
 
 circuit create_secure_envelope(dag_id: bytes(32), sender_org: OrgId, receiver_org: OrgId, payload_hash: bytes(32), payload_type: u8, signing_key: bytes(4627)) -> BridgeEnvelope
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [bridge_operator, registry_admin]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [bridge_operator, registry_admin]
     observe metrics: [envelope_id, sender_org, receiver_org, payload_type]
     invariant "sender_nonzero" { sender_org != 0x00 }
     invariant "receiver_nonzero" { receiver_org != 0x00 }
@@ -295,27 +295,27 @@ circuit create_secure_envelope(dag_id: bytes(32), sender_org: OrgId, receiver_or
 // ---------------------------------------------------------------------------
 
 circuit receive_tz_attestation(dag_id: bytes(32), attestation: TzAttestation, pk: bytes(1568)) -> BridgedAttestation
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification {
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification {
         governance hierarchical
         approval_required true
         audit_trail true
         sovereignty us
         compliance [epa_ghg, iso_14064, verra_vcs]
     }
-    lex_bridge esn/energy/thermogenzero/carbon -> esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    witness threshold(3, 5)
-    rbac [bridge_operator, verifier, registry_admin]
+    lex_bridge energy/thermogenzero/carbon -> sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @witness threshold(3, 5)
+    @rbac [bridge_operator, verifier, registry_admin]
     observe metrics: [attestation_hash, reduction_tonnes, methodology_id, witness_count, site_id]
     invariant "reduction_positive" { attestation.reduction_tonnes > 0 }
     invariant "witness_threshold" { attestation.witness_count >= 3 }
     invariant "methodology_valid" { attestation.methodology_id != 0x00 }
     monitor "bridge_throughput" { attestations_per_epoch > 0 }
     monitor "signature_failure_rate" { sig_fail_rate < 0.01 }
-    fuzz_target
-    esz_emit "verify/thermogenzero_bridge.esz"
-    li_feed full_escir true, optimized_ir true
+    @fuzz_target
+    @serialize "verify/thermogenzero_bridge.esz"
+    @ai_feed full_escir true, optimized_ir true
 {
     let valid_sigs = 0
     let i = 0
@@ -382,13 +382,13 @@ circuit receive_tz_attestation(dag_id: bytes(32), attestation: TzAttestation, pk
 // Per EPA AP-42 Section 13.5, CH4 GWP = 28 over 100yr horizon.
 
 circuit calculate_methane_tco2e(dag_id: bytes(32), gas_consumed_mcf: f64, flare_temp_c: f64, teg_power_w: f64, baseline_power_w: f64) -> MethaneDestructionResult
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [bridge_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [bridge_operator, verifier]
     observe metrics: [gas_consumed_mcf, flare_temp_c, teg_power_w, tco2e]
     invariant "gas_positive" { gas_consumed_mcf > 0.0 }
-    fuzz_target
+    @fuzz_target
 {
     let gwp_factor: f64 = 28.0
     let methane_density: f64 = 19.15
@@ -446,8 +446,8 @@ circuit calculate_methane_tco2e(dag_id: bytes(32), gas_consumed_mcf: f64, flare_
 
 // Derive destruction efficiency from combustion temperature (migrated from TS)
 circuit derive_destruction_efficiency(flare_temp_c: f64) -> f64
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     if flare_temp_c < 760.0 { 0.0 }
     else if flare_temp_c >= 1200.0 { 0.999 }
@@ -463,11 +463,11 @@ circuit derive_destruction_efficiency(flare_temp_c: f64) -> f64
 // envelope and dispatches via lex_bridge_send. Persists state in eslite.
 
 circuit send_generation_data(dag_id: bytes(32), packet: GenerationDataPacket, sender_org: OrgId, receiver_org: OrgId, signing_key: bytes(4627)) -> BridgeEnvelope
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    witness threshold(3, 5)
-    rbac [bridge_operator]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @witness threshold(3, 5)
+    @rbac [bridge_operator]
     observe metrics: [packet_id, site_id, tco2e_net, gas_consumed_mcf]
     invariant "gas_positive" { packet.gas_consumed_mcf > 0.0 }
     invariant "tco2e_valid" { packet.tco2e_net >= 0.0 }
@@ -476,8 +476,8 @@ circuit send_generation_data(dag_id: bytes(32), packet: GenerationDataPacket, se
     let envelope = create_secure_envelope(dag_id, sender_org, receiver_org, payload_hash, 3, signing_key)
 
     lex_bridge_send(
-        "esn/energy/thermogenzero/carbon",
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
         envelope.envelope_id,
         payload_hash
     )
@@ -496,24 +496,24 @@ circuit send_generation_data(dag_id: bytes(32), packet: GenerationDataPacket, se
 // declared value. Stores validated packet in eslite for pipeline consumption.
 
 circuit receive_generation_data(dag_id: bytes(32), envelope: BridgeEnvelope, packet: GenerationDataPacket, sender_pubkey: bytes(2592)) -> GenerationDataPacket
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification {
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification {
         governance hierarchical
         approval_required true
         audit_trail true
         sovereignty us
         compliance [epa_ghg, iso_14064, verra_vcs]
     }
-    precision A
-    constant_time true
-    witness threshold(3, 5)
-    rbac [bridge_operator, verifier]
+    @precision A
+    @constant_time true
+    @witness threshold(3, 5)
+    @rbac [bridge_operator, verifier]
     observe metrics: [envelope_id, packet_id, tco2e_net, destruction_efficiency]
     invariant "envelope_type_generation" { envelope.payload_type == 3 }
     invariant "not_expired" { envelope.timestamp + envelope.ttl_s > now() }
 {
     let recv_data = lex_bridge_recv(
-        "esn/energy/thermogenzero/carbon",
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
         envelope.envelope_id
     )
 
@@ -557,10 +557,10 @@ circuit receive_generation_data(dag_id: bytes(32), envelope: BridgeEnvelope, pac
 // retirement confirmation and sends it back to TZ for their records.
 
 circuit send_retirement_confirmation(dag_id: bytes(32), confirmation: CreditRetirementConfirmation, sender_org: OrgId, receiver_org: OrgId, signing_key: bytes(4627)) -> BridgeEnvelope
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [bridge_operator, registry_admin]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [bridge_operator, registry_admin]
     observe metrics: [confirmation_id, credit_id, tonnes_co2e, vintage_year]
     invariant "tonnes_positive" { confirmation.tonnes_co2e > 0.0 }
     invariant "permanent_flag" { confirmation.permanent == true }
@@ -569,8 +569,8 @@ circuit send_retirement_confirmation(dag_id: bytes(32), confirmation: CreditReti
     let envelope = create_secure_envelope(dag_id, sender_org, receiver_org, payload_hash, 1, signing_key)
 
     lex_bridge_send(
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
-        "esn/energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
         envelope.envelope_id,
         payload_hash
     )
@@ -586,17 +586,17 @@ circuit send_retirement_confirmation(dag_id: bytes(32), confirmation: CreditReti
 // ---------------------------------------------------------------------------
 
 circuit receive_retirement_confirmation(dag_id: bytes(32), envelope: BridgeEnvelope, confirmation: CreditRetirementConfirmation, sender_pubkey: bytes(2592)) -> CreditRetirementConfirmation
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [bridge_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [bridge_operator, verifier]
     observe metrics: [envelope_id, confirmation_id, credit_id, tonnes_co2e]
     invariant "envelope_type_retirement" { envelope.payload_type == 1 }
     invariant "not_expired" { envelope.timestamp + envelope.ttl_s > now() }
 {
     let recv_data = lex_bridge_recv(
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
-        "esn/energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
         envelope.envelope_id
     )
 
@@ -620,10 +620,10 @@ circuit receive_retirement_confirmation(dag_id: bytes(32), envelope: BridgeEnvel
 // independently verify that their local calculations match the registry.
 
 circuit send_methodology_attestation(dag_id: bytes(32), attestation: MethodologyAttestation, sender_org: OrgId, receiver_org: OrgId, signing_key: bytes(4627)) -> BridgeEnvelope
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [registry_admin]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [registry_admin]
     observe metrics: [attestation_id, methodology_id, gwp_factor]
     invariant "gwp_positive" { attestation.gwp_factor > 0.0 }
     invariant "density_positive" { attestation.methane_density_kg_per_mcf > 0.0 }
@@ -632,8 +632,8 @@ circuit send_methodology_attestation(dag_id: bytes(32), attestation: Methodology
     let envelope = create_secure_envelope(dag_id, sender_org, receiver_org, payload_hash, 2, signing_key)
 
     lex_bridge_send(
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
-        "esn/energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
         envelope.envelope_id,
         payload_hash
     )
@@ -648,17 +648,17 @@ circuit send_methodology_attestation(dag_id: bytes(32), attestation: Methodology
 // ---------------------------------------------------------------------------
 
 circuit receive_methodology_attestation(dag_id: bytes(32), envelope: BridgeEnvelope, attestation: MethodologyAttestation, sender_pubkey: bytes(2592)) -> MethodologyAttestation
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [bridge_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [bridge_operator, verifier]
     observe metrics: [envelope_id, attestation_id, methodology_id]
     invariant "envelope_type_methodology" { envelope.payload_type == 2 }
     invariant "not_expired" { envelope.timestamp + envelope.ttl_s > now() }
 {
     let recv_data = lex_bridge_recv(
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
-        "esn/energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
         envelope.envelope_id
     )
 
@@ -685,10 +685,10 @@ circuit receive_methodology_attestation(dag_id: bytes(32), envelope: BridgeEnvel
 // an inbound envelope. Used for delivery guarantees and state reconciliation.
 
 circuit acknowledge_bridge_message(dag_id: bytes(32), envelope: BridgeEnvelope, status: u8, rejection_reason: u8, responder_org: OrgId, signing_key: bytes(4627)) -> BridgeAck
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    constant_time true
-    rbac [bridge_operator]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @constant_time true
+    @rbac [bridge_operator]
     observe metrics: [ack_id, envelope_id, status]
 {
     let ack_id = sha3_256(envelope.envelope_id ++ responder_org ++ status)
@@ -706,8 +706,8 @@ circuit acknowledge_bridge_message(dag_id: bytes(32), envelope: BridgeEnvelope, 
     }
 
     lex_bridge_send(
-        "esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
-        "esn/energy/thermogenzero/carbon",
+        "sustainability/carbon/org/synergycarbon/project/thermogenzero/verification",
+        "energy/thermogenzero/carbon",
         ack_id,
         sha3_256(ack_id ++ envelope.envelope_id)
     )
@@ -738,10 +738,10 @@ circuit acknowledge_bridge_message(dag_id: bytes(32), envelope: BridgeEnvelope, 
 // ---------------------------------------------------------------------------
 
 circuit enroll_tz_witness(dag_id: bytes(32), witness: TzWitnessNode, enrollment_sig: bytes(4627)) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision C
-    povc true
-    rbac [registry_admin, bridge_operator]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision C
+    @attested true
+    @rbac [registry_admin, bridge_operator]
     observe metrics: [node_id, fpga_platform, site_id]
     invariant "pubkey_nonzero" { witness.ml_dsa_87_pubkey != 0x00 }
 {
@@ -755,10 +755,10 @@ circuit enroll_tz_witness(dag_id: bytes(32), witness: TzWitnessNode, enrollment_
 // ---------------------------------------------------------------------------
 
 circuit register_bridge_mapping(dag_id: bytes(32), mapping: BridgeMapping) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision C
-    povc true
-    rbac [registry_admin]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision C
+    @attested true
+    @rbac [registry_admin]
     observe metrics: [mapping_id, tz_site_id, sc_project_id, methodology_id]
 {
     eslite_insert("bridge_mappings", mapping.tz_site_id, mapping)
@@ -770,13 +770,13 @@ circuit register_bridge_mapping(dag_id: bytes(32), mapping: BridgeMapping) -> by
 // ---------------------------------------------------------------------------
 
 circuit forward_to_pipeline(dag_id: bytes(32), bridged: BridgedAttestation, pipeline_dag_id: bytes(32)) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    witness threshold(2, 3)
-    rbac [bridge_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @witness threshold(2, 3)
+    @rbac [bridge_operator, verifier]
     observe metrics: [bridge_id, measurement_id, reduction_tonnes]
     invariant "bridge_sig_valid" { sig_verified == true }
-    critical_path
+    @critical_path
 {
     let sig_verified = mldsa_verify(bridged.bridge_id, bridged.bridge_signature, bridged.sensor_id)
     publish("sc.attestations.thermogenzero.raw", bridged)
@@ -788,8 +788,8 @@ circuit forward_to_pipeline(dag_id: bytes(32), bridged: BridgedAttestation, pipe
 // ---------------------------------------------------------------------------
 
 circuit compute_vintage_quarter(timestamp_ms: u64) -> u8
-    precision C
-    constant_time true
+    @precision C
+    @constant_time true
 {
     let seconds = timestamp_ms / 1000
     let days_since_epoch = seconds / 86400
@@ -810,9 +810,9 @@ circuit compute_vintage_quarter(timestamp_ms: u64) -> u8
 // detection when thresholds are breached.
 
 circuit check_bridge_health(dag_id: bytes(32), bridge_id: bytes(32)) -> u8
-    lex esn/sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
-    precision A
-    rbac [bridge_operator, verifier]
+    lex sustainability/carbon/org/synergycarbon/project/thermogenzero/verification
+    @precision A
+    @rbac [bridge_operator, verifier]
     observe metrics: [bridge_id, error_rate, latency_avg]
 {
     let state = eslite_query("bridge_state", bridge_id)

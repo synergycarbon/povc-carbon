@@ -1,0 +1,16 @@
+Å§Blobë≈Btree 542f9cb2c7f228e72a29dcf7bf6aade2272bc2fe
+parent 076ccd0d264339a6317ab40a9fb8404b3616b17a
+author toddrooke <todd@toddrooke.com> 1771231152 -0700
+committer toddrooke <todd@toddrooke.com> 1771231152 -0700
+
+closes #13 ‚Äî Universal Witness Node adapter circuit
+
+- Created circuits/adapters/universal_witness_node.escir.yaml (v0.8.1)
+  - 5 source-specific normalizers: solar, wind, thermoelectric, biogas, CCS
+  - Common pipeline: validation ‚Üí calibration check ‚Üí epoch accumulation ‚Üí
+    Merkle tree ‚Üí VRF proof ‚Üí ML-DSA-87 signing ‚Üí WitnessSubmission
+  - Edge deployment target (ARM64, 64MB RAM)
+  - 5 telemetry types with source-specific fields
+  - Governance events: WITNESS_EPOCH_SUBMITTED (0x86) / FAILED (0x87)
+- Added adapter component to platform composition
+- Updated source-adapters SPEC with circuit reference

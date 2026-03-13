@@ -1,0 +1,22 @@
+Å§Blobë≈%tree 15754bfa8bffed09a997601022ed453110e69ead
+parent 0e53ed07f4df232fc5784117e41eca90610e04a4
+author toddrooke <todd@toddrooke.com> 1771633942 -0700
+committer toddrooke <todd@toddrooke.com> 1771633942 -0700
+
+feat(integration): ThermogenZero lex_bridge and project registration (#77, #78)
+
+Add cross-org integration for ThermogenZero as first project in the
+SynergyCarbon credit registry:
+
+- lex_bridge.fl: FastLang circuit that receives TZ FPGA attestations via
+  eStream lex_bridge, validates ML-DSA-87 witness signatures (3-of-5),
+  maps to SC verification pipeline format, and publishes to
+  sc.attestations.thermogenzero.raw
+- project_config.yaml: TZ project registration with EPA AP-42 methane
+  destruction methodology, FPGA witness node enrollment, per-site
+  sub-lex mappings (Alpha/Bravo), and quarterly credit vintage config
+- attestation_adapter.ts: TypeScript adapter for TZ attestation format,
+  methane destruction CO2e calculations, and vintage helpers
+- ESZ test fixtures for bridge validation and cross-org E2E pipeline
+
+Closes #77, closes #78

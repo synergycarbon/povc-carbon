@@ -1,0 +1,12 @@
+Å§Blobë≈êtree d5677a70a06db3a7b6227e7e42967826ef540ae6
+parent 2e5f1b7e0aee7c1ba1b7a2bc3111aeb6bb2a5832
+author toddrooke <todd@toddrooke.com> 1771229547 -0700
+committer toddrooke <todd@toddrooke.com> 1771229547 -0700
+
+closes #2 ‚Äî Phase 1 Energy PoVC verified complete
+
+- povcr_verifier.escir.yaml covers all 8 DESIGN.md Section 3.2 pipeline stages:
+  ML-DSA-87 sig check, VRF validation, quorum collection, Merkle consensus,
+  energy validation, baseline comparison, carbon calculation, attestation emission
+- Updated verification/SPEC.md with v0.8.1 completeness verification note
+- Compute graph has 15 nodes decomposing the 8 stages with proper rejection flows

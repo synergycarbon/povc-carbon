@@ -22,7 +22,7 @@ PoVC-Carbon is a carbon credit issuance, registry, marketplace, and retirement p
 
 ## eStream Platform Dependencies
 
-- eStream v0.8.1+ (ESCIR, SmartCircuits, StreamSight)
+- eStream v0.12.0+ (ESCIR, SmartCircuits, StreamSight)
 - `esf-carbon` schema pack (CarbonCredit, CarbonAttestation, CarbonMint)
 - `carbon-credit` visibility profile
 - eStream marketplace for credit listing

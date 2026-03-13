@@ -2,7 +2,7 @@
 
 > **Status**: Draft
 > **Scope**: Edge proxy REST API (14 endpoints), 8 webhook event types, ML-DSA-87 signed JWT auth, rate limiting, cursor-based pagination
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 
 ---
 

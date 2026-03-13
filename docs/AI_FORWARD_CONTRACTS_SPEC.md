@@ -3,7 +3,7 @@
 > **Version:** 1.0.0  
 > **Date:** 2026-02-11  
 > **Status:** Draft  
-> **Platform:** eStream v0.8.1  
+> **Platform:** eStream v0.12.0  
 > **Dependencies:** ESCIR ML Extensions (Epic #470), StreamSight trend-detector, esf-carbon schemas  
 > **Design Reference:** [DESIGN.md](DESIGN.md)
 

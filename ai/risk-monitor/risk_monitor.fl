@@ -172,8 +172,8 @@ fn cooldown_for_risk_type(risk_type: u8) -> u64 {
 // Weights: payment 0.30, completion 0.25, reputation 0.25, default 0.10, exposure 0.10
 
 circuit score_counterparty(graph_id: bytes(32), input: CounterpartyInput) -> RiskResult
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/counterparty
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/counterparty
+    @precision C
     observe metrics: [counterparty_hash, score, severity]
 {
     let payment_risk = (1.0 - input.payment_history_score) * 100.0
@@ -216,8 +216,8 @@ circuit score_counterparty(graph_id: bytes(32), input: CounterpartyInput) -> Ris
 // Weights: coverage_gap 0.40, site_health 0.25, weather 0.15, history 0.20
 
 circuit score_delivery(graph_id: bytes(32), input: DeliveryInput) -> RiskResult
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/delivery
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/delivery
+    @precision C
     observe metrics: [source_id, forecast_tco2e, committed_tco2e, score, severity]
 {
     let coverage = if input.committed_tco2e > 0.0 {
@@ -258,8 +258,8 @@ circuit score_delivery(graph_id: bytes(32), input: DeliveryInput) -> RiskResult
 // Weights: volatility 0.35, spread 0.25, liquidity 0.25, volume 0.15
 
 circuit score_market(graph_id: bytes(32), input: MarketInput) -> RiskResult
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/market
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/market
+    @precision C
     observe metrics: [volatility_30d, bid_ask_spread_pct, score, severity]
 {
     let volatility_risk = min_f64(100.0, input.volatility_30d * 200.0)
@@ -301,8 +301,8 @@ circuit score_market(graph_id: bytes(32), input: MarketInput) -> RiskResult
 // Weights: governance 0.25, compliance 0.25, registry 0.20, maturity 0.15, peer 0.15
 
 circuit score_methodology(graph_id: bytes(32), input: MethodologyInput) -> RiskResult
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/methodology
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/methodology
+    @precision C
     observe metrics: [methodology_id, governance_proposals, score, severity]
 {
     let governance_risk = min_f64(100.0, (input.governance_proposals as f64) * 15.0)
@@ -341,8 +341,8 @@ circuit score_methodology(graph_id: bytes(32), input: MethodologyInput) -> RiskR
 
 circuit compute_composite(graph_id: bytes(32), target_id: bytes(16),
                           cp: RiskResult, dl: RiskResult, mk: RiskResult, mt: RiskResult) -> CompositeResult
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/composite
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/composite
+    @precision C
     observe metrics: [target_id, composite_score, composite_severity]
 {
     let weighted_sum = cp.score * WEIGHT_COUNTERPARTY
@@ -372,8 +372,8 @@ circuit compute_composite(graph_id: bytes(32), target_id: bytes(16),
 // and per-severity bucket counts.
 
 circuit portfolio_composite(graph_id: bytes(32), source_ids: list<bytes(16)>) -> PortfolioResult
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/portfolio
+    @precision C
     observe metrics: [source_count, avg_risk, max_risk, weighted_risk]
 {
     let count = len(source_ids) as u32
@@ -445,8 +445,8 @@ circuit portfolio_composite(graph_id: bytes(32), source_ids: list<bytes(16)>) ->
 // sentinel (no-op alert).
 
 circuit evaluate_alert(graph_id: bytes(32), target_id: bytes(16), result: RiskResult, now: u64) -> RiskAlertEvent
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/alert
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/alert
+    @precision C
     observe metrics: [target_id, risk_type, score, severity, is_critical]
 {
     let warning_threshold = ALERT_WARN_DEFAULT
@@ -503,8 +503,8 @@ circuit evaluate_alert(graph_id: bytes(32), target_id: bytes(16), result: RiskRe
 // window. Elevated alerts escalate after 2h, critical after 30m.
 
 circuit check_escalation(graph_id: bytes(32), alert: RiskAlertEvent, now: u64) -> RiskAlertEvent
-    lex esn/sustainability/carbon/org/synergycarbon/marketplace/risk/escalation
-    precision C
+    lex sustainability/carbon/org/synergycarbon/marketplace/risk/escalation
+    @precision C
     observe metrics: [alert_id, severity, escalated]
 {
     if alert.timestamp == 0 || alert.escalated {

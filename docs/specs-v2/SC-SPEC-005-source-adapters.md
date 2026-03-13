@@ -4,7 +4,7 @@
 > **Version**: 2.0.0
 > **Date**: 2026-02-20
 > **Scope**: Universal witness node hardware, multi-source energy adapters, registry bridges (Verra, Gold Standard, CDM)
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 > **Compliance**: EPA GHG, ISO 14064, Verra VCS, Gold Standard
 
 ---
@@ -249,7 +249,7 @@ Cross-listed credits maintain a `bridge_lock`:
 ## 6. Lex Integration
 
 ```
-esn/sustainability/carbon/org/synergycarbon/
+sustainability/carbon/org/synergycarbon/
   project/{project_id}/
     adapters/
       nodes/               # Witness Node registrations and heartbeats

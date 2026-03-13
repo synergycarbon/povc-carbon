@@ -102,9 +102,9 @@ series source_attestations: source_network_graph
 
 // Register a universal witness node (ARM64 SoC + SE050 secure element)
 circuit register_witness(graph_id: bytes(32), node: WitnessNode, se050_attestation: bytes(64)) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/ops/witness/register
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/witness/register
+    @precision C
+    @attested true
     observe metrics: [node_id, hw_platform, region, firmware_version]
 {
     node.node_id
@@ -112,9 +112,9 @@ circuit register_witness(graph_id: bytes(32), node: WitnessNode, se050_attestati
 
 // Register an energy source with its monitoring node
 circuit register_source(graph_id: bytes(32), source: EnergySource, node_id: bytes(32)) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/project/source/register
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/project/source/register
+    @precision C
+    @attested true
     observe metrics: [source_id, source_type, capacity_kw, node_id]
 {
     source.source_id
@@ -122,9 +122,9 @@ circuit register_source(graph_id: bytes(32), source: EnergySource, node_id: byte
 
 // Configure a multi-source adapter (solar, wind, biogas, teg, ccs)
 circuit configure_adapter(graph_id: bytes(32), config: AdapterConfig, node_id: bytes(32)) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/ops/adapter/configure
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/adapter/configure
+    @precision C
+    @attested true
     observe metrics: [adapter_id, source_type, protocol, sample_rate_hz]
 {
     config.adapter_id
@@ -132,9 +132,9 @@ circuit configure_adapter(graph_id: bytes(32), config: AdapterConfig, node_id: b
 
 // Submit a measurement attestation from a witness node
 circuit submit_attestation(graph_id: bytes(32), attestation: Attestation) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/project/verification/attest
+    lex sustainability/carbon/org/synergycarbon/project/verification/attest
     precision D
-    povc true
+    @attested true
     observe metrics: [attestation_id, source_id, node_id, measurement_kwh]
 {
     attestation.attestation_id
@@ -142,9 +142,9 @@ circuit submit_attestation(graph_id: bytes(32), attestation: Attestation) -> byt
 
 // Register a registry bridge (Verra VCS, Gold Standard, CDM)
 circuit register_bridge(graph_id: bytes(32), bridge: RegistryBridge) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridge/register
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridge/register
+    @precision C
+    @attested true
     observe metrics: [bridge_id, registry_type, sync_interval_s]
 {
     bridge.bridge_id
@@ -152,9 +152,9 @@ circuit register_bridge(graph_id: bytes(32), bridge: RegistryBridge) -> bytes(16
 
 // Submit attested credits to a registry bridge (attestation_hash + credit_metadata -> registry format)
 circuit bridge_submit(graph_id: bytes(32), submission: BridgeSubmission) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridge/submit
+    lex sustainability/carbon/org/synergycarbon/registry/bridge/submit
     precision D
-    povc true
+    @attested true
     observe metrics: [submission_id, bridge_id, attestation_hash, registry_format]
 {
     submission.submission_id
@@ -162,8 +162,8 @@ circuit bridge_submit(graph_id: bytes(32), submission: BridgeSubmission) -> byte
 
 // Sync bridge status with external registry
 circuit sync_bridge(graph_id: bytes(32), bridge_id: bytes(16)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridge/sync
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridge/sync
+    @precision C
     observe metrics: [bridge_id, last_sync_at, pending_count, ack_count]
 {
     true
@@ -171,8 +171,8 @@ circuit sync_bridge(graph_id: bytes(32), bridge_id: bytes(16)) -> bool
 
 // Update witness node heartbeat and health
 circuit heartbeat(graph_id: bytes(32), node_id: bytes(32), timestamp: u64) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/ops/witness/heartbeat
-    precision A
+    lex sustainability/carbon/org/synergycarbon/ops/witness/heartbeat
+    @precision A
     observe metrics: [node_id, timestamp, uptime_s]
 {
     true
@@ -180,9 +180,9 @@ circuit heartbeat(graph_id: bytes(32), node_id: bytes(32), timestamp: u64) -> bo
 
 // Recalibrate an adapter (updates calibration_hash and drift overlay)
 circuit recalibrate_adapter(graph_id: bytes(32), adapter_id: bytes(16), new_calibration: bytes(32)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/ops/adapter/recalibrate
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/adapter/recalibrate
+    @precision C
+    @attested true
     observe metrics: [adapter_id, calibration_drift, new_calibration]
 {
     true

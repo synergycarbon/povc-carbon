@@ -1,0 +1,15 @@
+Å§Blobë≈+tree f1e6a7cb07fcf23237726907ab3664438822100c
+parent 8032ff3e0d3c40533bfe20cd846a230e7215a03e
+author toddrooke <todd@toddrooke.com> 1771231293 -0700
+committer toddrooke <todd@toddrooke.com> 1771231293 -0700
+
+closes #19 ‚Äî Universal Carbon Witness Node hardware specification
+
+- Created hardware/WITNESS_NODE_SPEC.md with full hardware design:
+  - ARM64 SoC (Cortex-A76), 2GB RAM, 32GB eMMC, NXP SE050 secure element
+  - Modular sensor interface board (6 variants for solar/wind/TEG/biogas/CCS/universal)
+  - IP67 enclosure, -40¬∞C to +85¬∞C, tamper detection, DIN rail mount
+  - WebTransport uplink (cellular 5G, Wi-Fi, Ethernet), 30-day offline buffer
+  - Secure boot chain, hardware ML-DSA-87 key storage, firmware OTA
+  - ~$200 BOM at 1000-unit volume
+- Updated source-adapters SPEC with hardware reference

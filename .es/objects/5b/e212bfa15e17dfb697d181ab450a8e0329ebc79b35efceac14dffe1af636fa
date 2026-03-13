@@ -1,0 +1,15 @@
+Å§Blobë≈ztree 7211d243cd6777deb0d674f8fd529bbce4f24252
+parent 764f3c24868886994c4df393de64b9ddeb829bd3
+author toddrooke <toddrooke@TRMBA3.local> 1770323451 -0500
+committer toddrooke <toddrooke@TRMBA3.local> 1770323451 -0500
+
+Add estream platform contributions documentation
+
+- Document 35% timeline reduction via platform features
+- List consumed features (IsolationAttestation, Cross-Lex, Tiered Visibility)
+- Define contribution commitments:
+  - ECC-1 Token Standard (Q3 2026)
+  - CO2e Calculator circuit (Q2 2026)
+  - Verra Registry Bridge SDK (Q4 2026)
+  - Retirement Patterns (Q1 2027)
+- Include contribution timeline and platform impact

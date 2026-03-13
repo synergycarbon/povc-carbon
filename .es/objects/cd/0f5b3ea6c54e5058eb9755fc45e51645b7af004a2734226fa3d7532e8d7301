@@ -1,0 +1,25 @@
+Å§Blobë≈ótree 401f445f624d431de8c9ef7942e9e4736918cfd5
+parent e6b582e52d333c47eeee3b52aaebc97a80785476
+author toddrooke <todd@toddrooke.com> 1771634396 -0700
+committer toddrooke <todd@toddrooke.com> 1771634396 -0700
+
+feat(integration): IEC 62053 energy metering standard alignment (#79, #70)
+
+Add IEC 62053-21/22 energy metering validation for PoVC attestation:
+
+- integration/metering/iec62053_metering.fl: FastLang circuit validating
+  accuracy class (0.2S/0.5S/1.0/2.0), calibration certificates (SE050),
+  power factor, power triangle tamper detection
+- integration/metering/types.ts: TypeScript types for IEC 62053-21
+  (active energy) and IEC 62053-22 (static meters) standards
+- circuits/fl/verification_pipeline.fl: ingest_metered_measurement
+  circuit accepts IEC 62053-validated telemetry into the existing
+  verification flow
+- integration/thermogenzero/attestation_adapter.ts: IEC 62053
+  metering validation in TZ attestation processing pipeline
+- tests/integration/metering/: ESZ test fixtures for accuracy class
+  boundary, calibration expiry, tamper detection, power factor
+
+Depends on eStream IEC 62053 circuits (polyquantum/estream-io #145).
+
+Closes #79, closes #70

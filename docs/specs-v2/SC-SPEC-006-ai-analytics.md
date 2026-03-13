@@ -2,7 +2,7 @@
 
 > **Status**: Draft
 > **Scope**: Mamba/S4 SSM yield forecasting, forward pricing oracle, risk monitoring, carbon yield prediction
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 
 ---
 

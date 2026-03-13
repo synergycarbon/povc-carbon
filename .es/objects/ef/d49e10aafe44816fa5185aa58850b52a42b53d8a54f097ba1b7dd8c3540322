@@ -1,0 +1,12 @@
+Å§Blobë≈jtree f4f34afffaef58380e11c26c9d6fa39678129d1a
+parent e0295de08295c1b3a169b698acc31f893d4bbf8b
+author toddrooke <todd@toddrooke.com> 1771230551 -0700
+committer toddrooke <todd@toddrooke.com> 1771230551 -0700
+
+closes #9 ‚Äî Retirement Triggers verified with all 5 trigger types
+
+- Added CircuitInvocation variant to TriggerType enum (WebTransport wire protocol)
+- Now covers all 5 DESIGN.md Section 5.1 triggers: CircuitInvocation, ApiCall,
+  StreamEvent, Schedule, Threshold
+- Updated metadata description from "four" to "five" trigger types
+- Updated notification description: lex topic (Console Kit) or webhook (B2B)

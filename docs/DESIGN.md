@@ -3,7 +3,7 @@
 > **Version:** 1.1.0  
 > **Date:** 2026-02-15  
 > **Status:** Draft  
-> **Platform:** eStream v0.8.1 + Console Kit (`@estream/sdk-browser/widgets`)  
+> **Platform:** eStream v0.12.0 + Console Kit (`@estream/sdk-browser/widgets`)  
 > **First Customer:** ThermogenZero (thermoelectric microgrid)  
 > **Compliance Targets:** GHG Protocol, Verra VCS, Gold Standard, ISCC
 

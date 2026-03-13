@@ -2,7 +2,7 @@
 
 > **Status**: Draft
 > **Scope**: 14 Console Kit widgets, RBAC (4 visibility tiers), demo mode with ESZ fixtures, Console Kit architecture
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 
 ---
 

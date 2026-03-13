@@ -1,7 +1,7 @@
 // AI Training Pipeline Circuit
 // Training lifecycle, RLHF reward computation, model versioning FSM, A/B testing
 // Migrated from: pipeline.ts, rlhf.ts, versioning.ts, ab_test.ts
-// lex: esn/sustainability/carbon/org/synergycarbon/ops/ai/training
+// lex: sustainability/carbon/org/synergycarbon/ops/ai/training
 //
 // Pipeline:
 //   Verified credit data -> Corpus accumulator -> Threshold check (5,000 samples)
@@ -239,8 +239,8 @@ series training_history: training_pipeline_graph
 
 // Ingest a verified sample; transition from idle to accumulating
 circuit ingest_sample(graph_id: bytes(32), sample: VerifiedSample, state: PipelineState) -> PipelineState
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ingest
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ingest
+    @precision C
     observe metrics: [sample_id, buffer_size, total_ingested, status]
 {
     let new_buffer: u64 = state.buffer_size + 1;
@@ -261,9 +261,9 @@ circuit ingest_sample(graph_id: bytes(32), sample: VerifiedSample, state: Pipeli
 
 // Prepare training corpus with VRF-deterministic shuffle and holdout split
 circuit prepare_corpus(graph_id: bytes(32), state: PipelineState, config: PipelineConfig, secret_key: bytes(32), epoch_bytes: bytes(32)) -> TrainingCorpus
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/prepare
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/prepare
+    @precision C
+    @attested true
     observe metrics: [sample_count, holdout_count, corpus_hash]
 {
     let vrf_proof: bytes(64) = vrf_prove(secret_key, epoch_bytes);
@@ -289,9 +289,9 @@ circuit prepare_corpus(graph_id: bytes(32), state: PipelineState, config: Pipeli
 
 // Training loop: iterative loss reduction with VRF-based noise injection
 circuit train_model(graph_id: bytes(32), corpus: TrainingCorpus, config: PipelineConfig, secret_key: bytes(32)) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/train
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/train
+    @precision C
+    @attested true
     observe metrics: [sample_count, epochs, final_loss]
 {
     let loss: f64 = 1.0;
@@ -319,8 +319,8 @@ circuit train_model(graph_id: bytes(32), corpus: TrainingCorpus, config: Pipelin
 
 // Validate model on holdout set via AI inference; returns mean absolute error
 circuit validate_model(graph_id: bytes(32), corpus: TrainingCorpus) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/validate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/validate
+    @precision C
     observe metrics: [holdout_size, validation_loss]
 {
     if corpus.holdout_count == 0 {
@@ -341,8 +341,8 @@ circuit validate_model(graph_id: bytes(32), corpus: TrainingCorpus) -> f64
 
 // Compute improvement in basis points between current and candidate loss
 circuit check_improvement(graph_id: bytes(32), current_loss: f64, validation_loss: f64) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/check
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/check
+    @precision C
     observe metrics: [current_loss, validation_loss, improvement_bps]
 {
     if current_loss <= 0.0 {
@@ -355,9 +355,9 @@ circuit check_improvement(graph_id: bytes(32), current_loss: f64, validation_los
 
 // Full pipeline: prepare -> train -> validate -> promote or reject
 circuit run_pipeline(graph_id: bytes(32), state: PipelineState, config: PipelineConfig, secret_key: bytes(32), epoch_bytes: bytes(32)) -> TrainingResult
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/run
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/run
+    @precision C
+    @attested true
     observe metrics: [status, training_loss, validation_loss, improvement_bps, success]
 {
     if state.buffer_size < config.retrain_threshold_samples {
@@ -409,8 +409,8 @@ circuit run_pipeline(graph_id: bytes(32), state: PipelineState, config: Pipeline
 
 // Normalized reward signal from operator correction using tanh()
 circuit compute_reward_signal(graph_id: bytes(32), original_value: f64, corrected_value: f64) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/reward
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/reward
+    @precision C
     observe metrics: [original_value, corrected_value, reward_signal]
 {
     if original_value == 0.0 {
@@ -426,8 +426,8 @@ circuit compute_reward_signal(graph_id: bytes(32), original_value: f64, correcte
 
 // Resolve tier weight: junior=0.5, standard=1.0, senior=1.5, expert=2.0
 circuit tier_weight(graph_id: bytes(32), operator_tier: u8, max_weight: f64) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/tier
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/tier
+    @precision C
     observe metrics: [operator_tier, weight]
 {
     let w: f64 = 0.5;
@@ -449,8 +449,8 @@ circuit tier_weight(graph_id: bytes(32), operator_tier: u8, max_weight: f64) -> 
 
 // Process single operator feedback: compute weighted, clamped reward signal
 circuit submit_feedback(graph_id: bytes(32), feedback: OperatorFeedback, rlhf_config: RLHFConfig) -> FeedbackEffect
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/submit
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/submit
+    @precision C
     observe metrics: [feedback_id, operator_tier, weight, reward_signal]
 {
     let w: f64 = tier_weight(graph_id, feedback.operator_tier, rlhf_config.max_operator_weight);
@@ -475,8 +475,8 @@ circuit submit_feedback(graph_id: bytes(32), feedback: OperatorFeedback, rlhf_co
 
 // Aggregate batch reward with geometric discount via pow()
 circuit compute_aggregate_reward(graph_id: bytes(32), effects: list<FeedbackEffect>, discount_factor: f64) -> FeedbackBatchResult
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/aggregate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/aggregate
+    @precision C
     observe metrics: [feedback_count, aggregate_reward, total_weight]
 {
     let total_reward: f64 = 0.0;
@@ -507,8 +507,8 @@ circuit compute_aggregate_reward(graph_id: bytes(32), effects: list<FeedbackEffe
 
 // Filter stale feedback beyond the staleness decay window
 circuit check_staleness(graph_id: bytes(32), feedback_timestamp: u64, current_timestamp: u64, staleness_hours: f64) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/staleness
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/rlhf/staleness
+    @precision C
     observe metrics: [age_hours, is_fresh]
 {
     let age_seconds: f64 = current_timestamp - feedback_timestamp;
@@ -527,8 +527,8 @@ circuit check_staleness(graph_id: bytes(32), feedback_timestamp: u64, current_ti
 
 // Create a new draft model version
 circuit create_version(graph_id: bytes(32), major: u32, minor: u32, patch: u32, parent_version: bytes(16), created_at: u64) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/create
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/create
+    @precision C
     observe metrics: [version_id, major, minor, patch, status]
 {
     ModelVersion {
@@ -549,8 +549,8 @@ circuit create_version(graph_id: bytes(32), major: u32, minor: u32, patch: u32, 
 
 // Advance version through FSM: draft(0)->training(1)->validating(2)->active(3)->deprecated(4)->archived(5)
 circuit transition_version(graph_id: bytes(32), version: ModelVersion, target_status: u8) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/transition
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/transition
+    @precision C
     observe metrics: [version_id, from_status, to_status]
 {
     let new_status: u8 = fsm_transition(version.status, target_status);
@@ -573,9 +573,9 @@ circuit transition_version(graph_id: bytes(32), version: ModelVersion, target_st
 
 // Begin training: draft(0) -> training(1), attach corpus metadata
 circuit begin_training(graph_id: bytes(32), version: ModelVersion, corpus: TrainingCorpus) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/begin
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/begin
+    @precision C
+    @attested true
     observe metrics: [version_id, sample_count]
 {
     let new_status: u8 = fsm_transition(version.status, 1);
@@ -598,8 +598,8 @@ circuit begin_training(graph_id: bytes(32), version: ModelVersion, corpus: Train
 
 // Complete training and enter validation: training(1) -> validating(2)
 circuit begin_validation(graph_id: bytes(32), version: ModelVersion, training_loss: f64) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/validate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/validate
+    @precision C
     observe metrics: [version_id, training_loss]
 {
     let new_status: u8 = fsm_transition(version.status, 2);
@@ -622,9 +622,9 @@ circuit begin_validation(graph_id: bytes(32), version: ModelVersion, training_lo
 
 // Promote candidate to active: validating(2) -> active(3), deprecate current active
 circuit promote_version(graph_id: bytes(32), candidate: ModelVersion, current_active: ModelVersion, validation_loss: f64) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/promote
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/promote
+    @precision C
+    @attested true
     observe metrics: [version_id, from_status, to_status, validation_loss]
 {
     let deprecated_status: u8 = fsm_transition(current_active.status, 4);
@@ -648,9 +648,9 @@ circuit promote_version(graph_id: bytes(32), candidate: ModelVersion, current_ac
 
 // Rollback: deprecate current active(3) -> deprecated(4), reactivate parent
 circuit rollback_version(graph_id: bytes(32), current: ModelVersion, parent: ModelVersion) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/rollback
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/rollback
+    @precision C
+    @attested true
     observe metrics: [version_id, rolled_back_from, rolled_back_to]
 {
     let deprecated_status: u8 = fsm_transition(current.status, 4);
@@ -674,8 +674,8 @@ circuit rollback_version(graph_id: bytes(32), current: ModelVersion, parent: Mod
 
 // Archive: any state -> archived(5), terminal state
 circuit archive_version(graph_id: bytes(32), version: ModelVersion) -> ModelVersion
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/archive
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/archive
+    @precision C
     observe metrics: [version_id, from_status]
 {
     let archived_status: u8 = fsm_transition(version.status, 5);
@@ -698,8 +698,8 @@ circuit archive_version(graph_id: bytes(32), version: ModelVersion) -> ModelVers
 
 // Query version lineage: count versions and rollbacks
 circuit query_lineage(graph_id: bytes(32), current_version: bytes(16), version_count: u64, rollback_count: u64) -> VersionLineage
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/version/lineage
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/version/lineage
+    @precision C
     observe metrics: [current_version, version_count, rollback_count]
 {
     let is_active: bool = false;
@@ -722,8 +722,8 @@ circuit query_lineage(graph_id: bytes(32), current_version: bytes(16), version_c
 // Route request via VRF-deterministic assignment — NOT Math.random()
 // Hashes user_id with secret_key for repeatable, verifiable traffic split
 circuit ab_route_request(graph_id: bytes(32), test_config: ABTestConfig, user_id: bytes(16), secret_key: bytes(32)) -> u8
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/route
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/route
+    @precision C
     observe metrics: [test_id, user_id, assignment]
 {
     let vrf_proof: bytes(64) = vrf_prove(secret_key, user_id);
@@ -740,8 +740,8 @@ circuit ab_route_request(graph_id: bytes(32), test_config: ABTestConfig, user_id
 
 // Initialize a fresh A/B test arm
 circuit ab_create_arm(graph_id: bytes(32), version_id: bytes(16)) -> ABTestArm
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/arm
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/arm
+    @precision C
     observe metrics: [version_id]
 {
     ABTestArm {
@@ -756,8 +756,8 @@ circuit ab_create_arm(graph_id: bytes(32), version_id: bytes(16)) -> ABTestArm
 
 // Record prediction vs actual for an arm (Welford's online algorithm for variance)
 circuit ab_record_observation(graph_id: bytes(32), arm: ABTestArm, predicted: f64, actual: f64) -> ABTestArm
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/record
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/record
+    @precision C
     observe metrics: [version_id, samples, error]
 {
     let error: f64 = abs(predicted - actual);
@@ -782,8 +782,8 @@ circuit ab_record_observation(graph_id: bytes(32), arm: ABTestArm, predicted: f6
 
 // Welch's t-test for unequal variances using sqrt() for standard error
 circuit welch_t_test(graph_id: bytes(32), control: ABTestArm, treatment: ABTestArm) -> ABTestResult
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/ttest
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/ttest
+    @precision C
     observe metrics: [control_samples, treatment_samples, t_statistic, p_value]
 {
     let c_n: f64 = control.samples;
@@ -860,8 +860,8 @@ circuit welch_t_test(graph_id: bytes(32), control: ABTestArm, treatment: ABTestA
 
 // Normal CDF approximation (Abramowitz & Stegun, Handbook of Mathematical Functions)
 circuit normal_cdf(graph_id: bytes(32), x: f64) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/normalcdf
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/normalcdf
+    @precision C
     observe metrics: [x, cdf]
 {
     let a1: f64 = 0.254829592;
@@ -887,8 +887,8 @@ circuit normal_cdf(graph_id: bytes(32), x: f64) -> f64
 
 // Determine A/B test outcome from statistical results
 circuit ab_decide(graph_id: bytes(32), result: ABTestResult, significance_level: f64) -> u8
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/decide
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/decide
+    @precision C
     observe metrics: [test_id, p_value, decision]
 {
     if result.control_samples < 30 {
@@ -908,8 +908,8 @@ circuit ab_decide(graph_id: bytes(32), result: ABTestResult, significance_level:
 
 // Cohen's d effect size for reporting using sqrt() and abs()
 circuit compute_effect_size(graph_id: bytes(32), control: ABTestArm, treatment: ABTestArm) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/effect
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/effect
+    @precision C
     observe metrics: [effect_size]
 {
     let c_n: f64 = control.samples;
@@ -935,8 +935,8 @@ circuit compute_effect_size(graph_id: bytes(32), control: ABTestArm, treatment: 
 
 // Check if test should complete based on duration or sample count
 circuit ab_check_completion(graph_id: bytes(32), config: ABTestConfig, control: ABTestArm, treatment: ABTestArm, elapsed_s: u64) -> u8
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/training/ab/completion
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/training/ab/completion
+    @precision C
     observe metrics: [test_id, elapsed_s, control_samples, treatment_samples, status]
 {
     if elapsed_s >= config.max_duration_s {

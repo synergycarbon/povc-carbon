@@ -1,0 +1,12 @@
+Å§Blobë≈tree b54db7cfe05e2d2eb295fd77c0d2e0815e5c1c98
+parent da446c0d19d1f08ad1cc4d07a09fdaae88fc08db
+author toddrooke <todd@toddrooke.com> 1771268709 -0700
+committer toddrooke <todd@toddrooke.com> 1771268709 -0700
+
+feat(#1): console/website scaffolding, circuit + design updates
+
+- Add .gitignore (node_modules, .astro, dist)
+- Update sc-povc-carbon-platform.escir.yaml circuit definition
+- Update DESIGN.md and marketplace-ui SPEC.md
+- Add console Vite entry (index.html, main.tsx, package-lock)
+- Add website package-lock.json for Astro build

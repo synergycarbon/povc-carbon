@@ -1,0 +1,12 @@
+Å§Blobë≈∏tree faeafc80799a08b529af00acb5f798bedd20c7af
+parent 1a38eafaa29f1c07a6bc9380fa8768aa0754d66a
+author toddrooke <todd@toddrooke.com> 1771229742 -0700
+committer toddrooke <todd@toddrooke.com> 1771229742 -0700
+
+closes #4 ‚Äî Phase 3 Credit Mint verified and completed
+
+- Added CancelRequest type and cancel_request input for governance-initiated cancellation
+- Added cancel compute flow: lookup ‚Üí governance sig verify ‚Üí status update ‚Üí audit emit
+- Added cross-registry dedup note at attestation_dedup node (bridge circuit dependency)
+- Verified NFT structure (ECC-1), visibility tiers (by reference), double-spend prevention,
+  and full credit lifecycle (mint, transfer, retire, now cancel)

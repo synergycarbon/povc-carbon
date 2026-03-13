@@ -62,7 +62,7 @@ state_machine methodology_lifecycle {
     initial PROPOSED
     persistence wal
     terminal [SUPERSEDED, RETIRED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     PROPOSED -> UNDER_REVIEW when committee_assigned guard has_committee_quorum
     UNDER_REVIEW -> PUBLIC_COMMENT when review_complete guard min_2_reviewers
@@ -112,9 +112,9 @@ series governance_decisions: governance_graph
 
 // Register a new verifier (ISO 14065 accreditation + ML-DSA-87 key ceremony)
 circuit register_verifier(graph_id: bytes(32), verifier: Verifier, ceremony_sig: bytes(4627)) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/governance/verifier/register
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/governance/verifier/register
+    @precision C
+    @attested true
     observe metrics: [verifier_id, org_name, jurisdiction, accredited_at]
 {
     verifier.verifier_id
@@ -122,9 +122,9 @@ circuit register_verifier(graph_id: bytes(32), verifier: Verifier, ceremony_sig:
 
 // Propose a new methodology
 circuit propose_methodology(graph_id: bytes(32), methodology: Methodology, doc_hash: bytes(32)) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/propose
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/governance/methodology/propose
+    @precision C
+    @attested true
     observe metrics: [methodology_id, name, category, author]
 {
     methodology.methodology_id
@@ -132,9 +132,9 @@ circuit propose_methodology(graph_id: bytes(32), methodology: Methodology, doc_h
 
 // Cast a committee approval vote (3-of-5 threshold)
 circuit cast_vote(graph_id: bytes(32), vote: ApprovalVote, sig: bytes(4627)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/governance/vote/cast
+    lex sustainability/carbon/org/synergycarbon/governance/vote/cast
     precision D
-    povc true
+    @attested true
     observe metrics: [vote_id, voter, methodology_id, approve]
 {
     true
@@ -142,7 +142,7 @@ circuit cast_vote(graph_id: bytes(32), vote: ApprovalVote, sig: bytes(4627)) -> 
 
 // Check if methodology has reached 3-of-5 approval
 circuit check_approval(graph_id: bytes(32), methodology_id: bytes(16)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/governance/vote/check
+    lex sustainability/carbon/org/synergycarbon/governance/vote/check
     precision D
     observe metrics: [methodology_id, approve_count, reject_count, threshold_met]
 {
@@ -151,9 +151,9 @@ circuit check_approval(graph_id: bytes(32), methodology_id: bytes(16)) -> bool
 
 // Publish a new methodology version (SHA3-256 doc hash)
 circuit publish_version(graph_id: bytes(32), version: MethodologyVersion) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/version
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/governance/methodology/version
+    @precision C
+    @attested true
     observe metrics: [methodology_id, version, doc_hash_sha3_256]
 {
     version.version_id
@@ -161,8 +161,8 @@ circuit publish_version(graph_id: bytes(32), version: MethodologyVersion) -> byt
 
 // Submit a public comment during comment period
 circuit submit_comment(graph_id: bytes(32), comment: PublicComment) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/governance/comment/submit
-    precision C
+    lex sustainability/carbon/org/synergycarbon/governance/comment/submit
+    @precision C
     observe metrics: [comment_id, methodology_id, author]
 {
     comment.comment_id
@@ -170,9 +170,9 @@ circuit submit_comment(graph_id: bytes(32), comment: PublicComment) -> bytes(16)
 
 // Activate a methodology after approval (transitions APPROVED -> ACTIVE)
 circuit activate_methodology(graph_id: bytes(32), methodology_id: bytes(16)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/activate
+    lex sustainability/carbon/org/synergycarbon/governance/methodology/activate
     precision D
-    povc true
+    @attested true
     observe metrics: [methodology_id, approval_status]
 {
     true
@@ -180,9 +180,9 @@ circuit activate_methodology(graph_id: bytes(32), methodology_id: bytes(16)) -> 
 
 // Supersede an active methodology with a new version
 circuit supersede_methodology(graph_id: bytes(32), old_id: bytes(16), new_version_id: bytes(16)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/governance/methodology/supersede
+    lex sustainability/carbon/org/synergycarbon/governance/methodology/supersede
     precision D
-    povc true
+    @attested true
     observe metrics: [old_id, new_version_id]
 {
     true

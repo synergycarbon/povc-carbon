@@ -1,0 +1,41 @@
+Å§Blobë≈ˇtree a983fd648aa80de45ac65260eda6d3fd8aefc2d9
+parent 58f0cbc6791b7ab217a876ba7e645233ce66c3cc
+author toddrooke <todd@toddrooke.com> 1771635334 -0700
+committer toddrooke <todd@toddrooke.com> 1771635334 -0700
+
+feat(ai): implement AI analytics engines ‚Äî yield forecasting, forward pricing, risk monitoring, ESLM training (#65, #66, #67, #68)
+
+Yield Forecaster (ai/yield-forecaster/):
+- Mamba/S4 SSM model interface with BitNet b1.58 quantization
+- 20-feature vector extraction (power, carbon, market, weather, calendar)
+- Multi-horizon forecasting (24h, 7d, 30d, 90d, 1y) with 80%/95% CI
+- Rolling accuracy metrics (MAE, MAPE, R¬≤) and deviation alerting
+- FastLang circuit for forecasting pipeline
+
+Forward Pricing Oracle (ai/pricing-oracle/):
+- Cost-of-carry model (storage, insurance, time value, convenience yield)
+- Forward curve generation with supply adjustment and methodology premiums
+- Curve interpolation/extrapolation with smoothing
+- Basis alert detection for price anomalies
+- FastLang circuit for pricing pipeline
+
+Risk Monitor (ai/risk-monitor/):
+- Multi-factor risk scoring: counterparty, delivery, market, methodology
+- 0‚Äì100 scale with Low/Moderate/Elevated/Critical severity bands
+- Composite risk scoring with configurable dimension weights
+- Alert manager with cooldown, escalation, and auto-resolution
+- Portfolio-level risk aggregation
+- FastLang circuit for risk monitoring pipeline
+
+ESLM Training Pipeline (ai/training/):
+- Corpus construction from verified credit data with holdout validation
+- Retrain trigger at 5,000 verified samples
+- RLHF operator feedback with tier-weighted reward signals
+- Model version management with promotion, rollback, and governance pause
+- A/B testing framework with Welch's t-test significance testing
+
+Test fixtures (tests/ai/):
+- Forecaster: multi-horizon, accuracy tracking, deviation detection
+- Pricing: forward curve generation, cost-of-carry validation
+- Risk: scoring scenarios, alert generation/escalation
+- Training: pipeline lifecycle, RLHF feedback, A/B testing, versioning

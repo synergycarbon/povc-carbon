@@ -1,0 +1,17 @@
+Å§Blobë≈◊tree a9fa596c1a558573c4a5d48f53fde1516f8ac7a2
+parent 609da501bbfdc0ed221c11db5f93c4d6988f7383
+author toddrooke <todd@toddrooke.com> 1771634208 -0700
+committer toddrooke <todd@toddrooke.com> 1771634208 -0700
+
+feat(website): embed impact widget and add Cloudflare Pages deployment (#73, #74)
+
+Add ImpactWidget.astro component that loads the impact-counter widget in
+standalone mode via iframe (eStream #146 WASM/Wire embedding pattern).
+Integrate on homepage, How It Works, and For Buyers pages.
+
+Set up GitHub Actions CI/CD for Cloudflare Pages with production deploy
+on push to main (website/** paths) and preview deploys on PRs. Update
+astro.config.mjs with production domain and console origin config.
+
+Closes #73
+Closes #74

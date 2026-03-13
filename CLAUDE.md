@@ -1,6 +1,6 @@
 # PoVC Carbon
 
-PoVC carbon credit platform — hardware-attested verification using eStream v0.8.3, FastLang circuits, and entity-scoped sub-lex. 78 of 79 issues complete.
+PoVC carbon credit platform — hardware-attested verification using eStream v0.12.0, FastLang circuits, and entity-scoped sub-lex. 78 of 79 issues complete.
 
 ## What belongs here
 

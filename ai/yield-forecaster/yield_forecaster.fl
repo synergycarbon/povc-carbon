@@ -199,7 +199,7 @@ fn normalize_precipitation(mm: f64) -> f64 { clamp_f64(mm / 100.0, 0.0, 1.0) }
 // ─── Feature Extraction ─────────────────────────────────────────────────────
 
 circuit extract_features(graph_id: bytes(32), source_id: bytes(16), timestamp: u64) -> FeatureVector
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/features/extract
+    lex sustainability/carbon/org/synergycarbon/ops/ai/features/extract
     precision D
     observe metrics: [source_id, timestamp, feature_count]
 {
@@ -249,9 +249,9 @@ circuit extract_features(graph_id: bytes(32), source_id: bytes(16), timestamp: u
 // ─── Model Inference ─────────────────────────────────────────────────────────
 
 circuit infer_yield(graph_id: bytes(32), model_id: bytes(16), features: FeatureVector, horizon: u8) -> ForecastResult
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/yield/infer
+    lex sustainability/carbon/org/synergycarbon/ops/ai/yield/infer
     precision D
-    povc true
+    @attested true
     observe metrics: [model_id, horizon, predicted_tco2e, confidence_80_lo, confidence_80_hi]
 {
     // Decode fixed-point features to f64 for computation
@@ -362,8 +362,8 @@ circuit infer_yield(graph_id: bytes(32), model_id: bytes(16), features: FeatureV
 // ─── Deviation Detection ─────────────────────────────────────────────────────
 
 circuit check_deviation(graph_id: bytes(32), source_id: bytes(16), forecast: u64, actual: u64, threshold_pct: u64) -> DeviationAlert
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/yield/deviation
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/yield/deviation
+    @precision C
     observe metrics: [source_id, deviation_pct, severity]
 {
     let forecast_f: f64 = from_scaled_u64(forecast);
@@ -400,8 +400,8 @@ circuit check_deviation(graph_id: bytes(32), source_id: bytes(16), forecast: u64
 // ─── Capacity Forecast ───────────────────────────────────────────────────────
 
 circuit forecast_capacity(graph_id: bytes(32), source_id: bytes(16), current_cf: f64, nameplate_kw: f64) -> CapacityForecast
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/capacity/forecast
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/capacity/forecast
+    @precision C
     observe metrics: [source_id, current_cf, projected_7d]
 {
     CapacityForecast {
@@ -416,8 +416,8 @@ circuit forecast_capacity(graph_id: bytes(32), source_id: bytes(16), current_cf:
 // ─── Accuracy Tracking ───────────────────────────────────────────────────────
 
 circuit record_actual(graph_id: bytes(32), source_id: bytes(16), horizon: u8, predicted: u64, actual: u64, timestamp: u64) -> AccuracyRecord
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/accuracy/record
-    precision C
+    lex sustainability/carbon/org/synergycarbon/ops/ai/accuracy/record
+    @precision C
     observe metrics: [source_id, horizon]
 {
     let pred_f: f64 = from_scaled_u64(predicted);
@@ -435,7 +435,7 @@ circuit record_actual(graph_id: bytes(32), source_id: bytes(16), horizon: u8, pr
 }
 
 circuit compute_accuracy(graph_id: bytes(32), source_id: bytes(16), horizon: u8, window_size: u64) -> AccuracyMetrics
-    lex esn/sustainability/carbon/org/synergycarbon/ops/ai/accuracy/compute
+    lex sustainability/carbon/org/synergycarbon/ops/ai/accuracy/compute
     precision D
     observe metrics: [source_id, horizon, mae, mape, r_squared]
 {

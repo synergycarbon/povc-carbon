@@ -1,0 +1,23 @@
+Å§Blobë≈·tree ba898d173ae5bcd33500f67fa5fde1f7de4a3eea
+parent f97eea46c0e6f98ae61c7b23ff7be7afd095fb32
+author toddrooke <todd@toddrooke.com> 1771635163 -0700
+committer toddrooke <todd@toddrooke.com> 1771635163 -0700
+
+feat(integration): ThermogenZero lex_bridge wiring and E2E cross-org tests (#69, #71)
+
+Wire the full TZ‚ÜíSC attestation pipeline and add comprehensive E2E tests:
+
+- bridge_config.yaml: lex_bridge routing rules, topic mappings, per-site
+  subscriptions, filter rules (methane/solar/CCS), rate limiting with
+  token bucket backpressure, circuit breaker, dead-letter routing
+- pipeline.ts: TypeScript orchestrator wiring attestation_adapter ‚Üí
+  verification_pipeline ‚Üí credit_registry ‚Üí retirement_engine ‚Üí verra_bridge
+  with error handling, dead-letter queue, and circuit breaker pattern
+- monitoring.ts: StreamSight integration for pipeline health metrics,
+  latency histograms, error rate alerting, and stall detection
+- tests/e2e/: 4 ESZ fixture files (edge attestation, multi-site batch,
+  failure recovery, retirement-to-registry) + cross_org_pipeline.test.ts
+  covering 20 test scenarios (happy path, rejections, metering, batch,
+  retirement, certificate, Verra sync, monitoring, dead-letter, breaker)
+
+Closes #69, closes #71

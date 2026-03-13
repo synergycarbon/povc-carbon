@@ -126,8 +126,8 @@ stream verra_bridge_events: event<BridgeStatusUpdate>
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_validate_request(graph_id: bytes(32), request: BridgeSubmitRequest) -> BridgeValidation
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/validate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/validate
+    @precision C
     observe metrics: [credit_id, sc_serial, methodology_id, vintage_year, tonnes_co2e]
 {
     let current_year: f64 = 2026.0
@@ -192,9 +192,9 @@ circuit verra_validate_request(graph_id: bytes(32), request: BridgeSubmitRequest
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_submit_credit(graph_id: bytes(32), request: BridgeSubmitRequest) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/submit
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/submit
+    @precision C
+    @attested true
     subscribe sc.credits.issued
     publish sc.bridges.verra.status
     observe metrics: [credit_id, sc_serial, methodology_id, vintage_year, tonnes_co2e]
@@ -280,9 +280,9 @@ circuit verra_submit_credit(graph_id: bytes(32), request: BridgeSubmitRequest) -
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_webhook_update(graph_id: bytes(32), update: BridgeStatusUpdate) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/webhook
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/webhook
+    @precision C
+    @attested true
     publish sc.bridges.verra.status
     observe metrics: [credit_id, verra_serial, previous_state, new_state, event_type]
 {
@@ -438,8 +438,8 @@ circuit verra_webhook_update(graph_id: bytes(32), update: BridgeStatusUpdate) ->
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> BridgeSyncResult
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/sync
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/sync
+    @precision C
     observe metrics: [bridge_id, credits_synced, credits_pending, credits_listed]
 {
     let submitted = eslite_query("bridge_mappings_by_state", 1)
@@ -580,9 +580,9 @@ circuit verra_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> BridgeS
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/lock
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/lock
+    @precision C
+    @attested true
     publish sc.bridges.verra.status
     observe metrics: [credit_id]
 {
@@ -632,9 +632,9 @@ circuit verra_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/unlock
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/unlock
+    @precision C
+    @attested true
     publish sc.bridges.verra.status
     observe metrics: [credit_id]
 {
@@ -693,9 +693,9 @@ circuit verra_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), verra_serial: string) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/retire
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/retire
+    @precision C
+    @attested true
     subscribe sc.bridges.verra.status
     publish sc.credits.retired
     observe metrics: [credit_id, verra_serial]
@@ -764,8 +764,8 @@ circuit verra_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), verra_
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_dedup_check(graph_id: bytes(32), sc_serial: string, methodology_id: bytes(16), vintage_year: u16, tonnes_co2e: f64) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/dedup
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/dedup
+    @precision C
     observe metrics: [sc_serial, methodology_id, vintage_year]
 {
     // Layer 1: SC serial already mapped?
@@ -825,8 +825,8 @@ circuit verra_dedup_check(graph_id: bytes(32), sc_serial: string, methodology_id
 // ═══════════════════════════════════════════════════════════════════════════
 
 circuit verra_is_bridge_locked(graph_id: bytes(32), credit_id: bytes(32)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/verra/is_locked
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/verra/is_locked
+    @precision C
     observe metrics: [credit_id]
 {
     let mapping = eslite_query("bridge_mappings", credit_id)

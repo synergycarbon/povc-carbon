@@ -167,9 +167,9 @@ series cdm_bridge_events: cdm_bridge_graph
 
 // Batch import legacy CDM credits into SynergyCarbon
 circuit cdm_batch_import(graph_id: bytes(32), batch: CdmBatchImport) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/batch-import
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/batch-import
+    @precision C
+    @attested true
     publish sc.bridges.cdm.status
     observe metrics: [batch_id, batch_size, source_registry, imported_at]
     invariant "batch_not_empty" { batch.batch_size > 0 }
@@ -235,9 +235,9 @@ circuit cdm_batch_import(graph_id: bytes(32), batch: CdmBatchImport) -> bytes(16
 
 // Batch export SC credits to CDM registry
 circuit cdm_batch_export(graph_id: bytes(32), batch: CdmBatchExport) -> bytes(16)
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/batch-export
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/batch-export
+    @precision C
+    @attested true
     subscribe sc.credits.issued
     publish sc.bridges.cdm.status
     observe metrics: [batch_id, batch_size, exported_at]
@@ -324,9 +324,9 @@ circuit cdm_batch_export(graph_id: bytes(32), batch: CdmBatchExport) -> bytes(16
 
 // Submit a single credit to CDM for cross-listing
 circuit cdm_submit_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> bytes(32)
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/submit
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/submit
+    @precision C
+    @attested true
     subscribe sc.credits.issued
     publish sc.bridges.cdm.status
     observe metrics: [credit_id, sc_serial, methodology_ref, vintage_year, tonnes_co2e]
@@ -393,8 +393,8 @@ circuit cdm_submit_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> byt
 
 // CDM-specific validation: CER serial format, Host Party LOA, monitoring period, additionality
 circuit cdm_validate_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> CdmValidationResult
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/validate
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/validate
+    @precision C
     observe metrics: [credit_id, serial_valid, loa_valid, monitoring_valid, additionality_valid]
 {
     // CER serial format: length and hash-based structural check
@@ -447,9 +447,9 @@ circuit cdm_validate_credit(graph_id: bytes(32), request: CdmSubmitRequest) -> C
 // Handle CDM status update (polled from SOAP API)
 // Maps CDM status to bridge state and executes FSM transition
 circuit cdm_status_update(graph_id: bytes(32), update: CdmStatusUpdate) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/status
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/status
+    @precision C
+    @attested true
     publish sc.bridges.cdm.status
     observe metrics: [credit_id, cdm_serial, previous_state, new_state, event_type]
 {
@@ -531,8 +531,8 @@ circuit cdm_status_update(graph_id: bytes(32), update: CdmStatusUpdate) -> bool
 // Periodic sync: poll CDM SOAP API for status of all SUBMITTED credits
 // Detects state divergence between local FSM and CDM registry
 circuit cdm_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> CdmSyncResult
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/sync
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/sync
+    @precision C
     observe metrics: [bridge_id, credits_synced, credits_pending, credits_registered]
 {
     let submitted_credits = eslite_query("cdm_mappings_by_state", 1)
@@ -637,9 +637,9 @@ circuit cdm_sync_pending(graph_id: bytes(32), bridge_id: bytes(16)) -> CdmSyncRe
 
 // Lock a credit for CDM bridge submission (prevents SC-side transfer/retirement)
 circuit cdm_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/lock
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/lock
+    @precision C
+    @attested true
     publish sc.bridges.cdm.status
     observe metrics: [credit_id]
 {
@@ -675,9 +675,9 @@ circuit cdm_lock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
 
 // Unlock a credit after CDM rejection (allows SC-side operations again)
 circuit cdm_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/unlock
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/unlock
+    @precision C
+    @attested true
     publish sc.bridges.cdm.status
     observe metrics: [credit_id]
 {
@@ -708,9 +708,9 @@ circuit cdm_unlock_credit(graph_id: bytes(32), credit_id: bytes(32)) -> bool
 // Propagate retirement from CDM to SynergyCarbon
 // Triggers SC-side retirement when CDM reports credit as retired
 circuit cdm_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), cdm_serial: string) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/retire
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/retire
+    @precision C
+    @attested true
     subscribe sc.bridges.cdm.status
     publish sc.credits.retired
     observe metrics: [credit_id, cdm_serial]
@@ -785,8 +785,8 @@ circuit cdm_retire_propagate(graph_id: bytes(32), credit_id: bytes(32), cdm_seri
 // Additionality assessment using AI classification
 // Evaluates barrier analysis, investment analysis, and common practice analysis
 circuit cdm_assess_additionality(graph_id: bytes(32), credit_id: bytes(32), methodology_ref: string, project_data: bytes(256)) -> CdmAdditionalityResult
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/additionality
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/additionality
+    @precision C
     observe metrics: [credit_id, methodology_ref, composite_score, passes]
 {
     let method_hash = sha3_256(methodology_ref)
@@ -824,9 +824,9 @@ circuit cdm_assess_additionality(graph_id: bytes(32), credit_id: bytes(32), meth
 
 // Register a Host Party LOA (Letter of Approval) from a Designated National Authority
 circuit cdm_register_loa(graph_id: bytes(32), loa: CdmHostPartyLoa) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/loa
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/loa
+    @precision C
+    @attested true
     observe metrics: [country_code, dna_authority, valid]
     invariant "loa_not_expired" { loa.expires_at > loa.issued_at }
 {
@@ -853,9 +853,9 @@ circuit cdm_register_loa(graph_id: bytes(32), loa: CdmHostPartyLoa) -> bool
 
 // Record a monitoring period for a credit (required for CDM validation)
 circuit cdm_record_monitoring_period(graph_id: bytes(32), period: CdmMonitoringPeriod) -> bool
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/cdm/monitoring
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/cdm/monitoring
+    @precision C
+    @attested true
     observe metrics: [credit_id, period_start, period_end]
     invariant "period_valid" { period.period_end > period.period_start }
     invariant "within_crediting" { period.period_start >= period.crediting_start && period.period_end <= period.crediting_end }

@@ -1,0 +1,18 @@
+Å§Blobë≈2tree 5a9301d7bef6f963baeab20ae13d60967111e6fc
+parent 1e76c481125a63eb88dbd7c8b05b9737d99961d5
+author toddrooke <todd@toddrooke.com> 1771229873 -0700
+committer toddrooke <todd@toddrooke.com> 1771229873 -0700
+
+closes #21 ‚Äî Console Kit Foundation scaffold + branding.yaml
+
+- Created console/ project structure with package.json, tsconfig.json, vite.config.ts
+- Dependencies: @estream/sdk, @estream/sdk-browser, @estream/transport, React 19
+- branding.yaml: SynergyCarbon green palette, Spark hue 145, dark mode tokens
+- src/App.tsx: Root app with EStreamThemeProvider, SparkAuthProvider, EsliteProvider,
+  WidgetDataGateway, WidgetGrid, WidgetPicker
+- src/types/index.ts: Full TypeScript types mirroring ESCIR circuit definitions
+  (CarbonCredit, Attestation, Retirement, ForwardContract, etc.)
+- src/eslite/schemas.ts: 11 ESLite table schemas for local-first caching
+- src/widgets/index.ts: Widget registration barrel (populated by #23 and #12/#17)
+- Placeholder SVG logos in public/brand/synergy-carbon/logo/
+- console/README.md: Architecture docs and widget catalog table

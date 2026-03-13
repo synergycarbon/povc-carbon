@@ -1,0 +1,15 @@
+Å§Blobë≈7tree d9327a0d215d89a7f59ded61e2f45edaa9c782c9
+parent ecc4febdfd1ebcc71ed13b230fa220452f73acf7
+author toddrooke <todd@toddrooke.com> 1771230066 -0700
+committer toddrooke <todd@toddrooke.com> 1771230066 -0700
+
+closes #23 ‚Äî Impact Widget Suite (4 Console Kit widgets + embed routes)
+
+- ImpactCounterWidget: running tCO2e total with year/month breakdown
+- ImpactCertificateWidget: visual retirement certificate with provenance
+- ImpactLiveMeterWidget: real-time generation + attestation feed (<1s latency)
+- ImpactLeaderboardWidget: multi-entity ranking by tCO2e retired
+- Each widget has manifest.ts (Console Kit registration) + component TSX
+- Shared SVG icons in impact-counter/icons.tsx
+- Standalone embed routes for iframe integration (/embed/impact-*)
+- Updated widget catalog barrel to register all 4 impact manifests

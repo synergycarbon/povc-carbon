@@ -2,7 +2,7 @@
 
 > **Status**: Draft
 > **Scope**: Astro SSG static site, Cloudflare Pages deployment, carbon credit marketplace promotion
-> **Platform**: eStream v0.8.3 (PolyQuantum Labs)
+> **Platform**: eStream v0.12.0 (PolyQuantum Labs)
 
 ---
 

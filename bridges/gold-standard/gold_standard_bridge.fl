@@ -110,7 +110,7 @@ state_machine gs_credit_lifecycle {
     initial PENDING
     persistence wal
     terminal [SYNCED]
-    li_anomaly_detection true
+    ai_anomaly_detection true
 
     PENDING -> SUBMITTED when credit_submitted guard serial_valid
     PENDING -> REJECTED when validation_failed
@@ -166,9 +166,9 @@ series gs_mirror_events: gold_standard_bridge_graph
 circuit gs_webhook_ingest(graph_id: bytes(32), payload: WebhookPayload, raw_body: bytes(4096)) -> bytes(16)
     subscribe sc.bridges.gold_standard.webhook
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/webhook
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/webhook
+    @precision C
+    @attested true
     observe metrics: [event_id, event_type, gs_serial, credit_quantity]
     invariant "timestamp_window" { abs(now_ms - payload_ts) <= timeout_ms }
 {
@@ -243,9 +243,9 @@ circuit gs_webhook_ingest(graph_id: bytes(32), payload: WebhookPayload, raw_body
 circuit gs_mirror_credit(graph_id: bytes(32), request: CreditMirrorRequest) -> MirrorStatus
     subscribe sc.credits.issued
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/mirror
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/mirror
+    @precision C
+    @attested true
     observe metrics: [credit_id, gs_serial, tonnes_co2e, methodology_id]
     invariant "tonnes_positive" { request.tonnes_co2e > 0.0 }
     invariant "serial_gs_prefix" { serial_valid == true }
@@ -327,9 +327,9 @@ circuit gs_mirror_credit(graph_id: bytes(32), request: CreditMirrorRequest) -> M
 circuit gs_batch_register(graph_id: bytes(32), batch: BatchRegistration) -> bytes(16)
     subscribe sc.credits.issued
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/batch
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/batch
+    @precision C
+    @attested true
     observe metrics: [batch_id, batch_size, submitted_at]
     invariant "batch_size_limit" { batch.batch_size <= config_max }
 {
@@ -378,9 +378,9 @@ circuit gs_batch_register(graph_id: bytes(32), batch: BatchRegistration) -> byte
 // ---------------------------------------------------------------------------
 circuit gs_update_mirror_state(graph_id: bytes(32), credit_id: bytes(16), new_state: u8) -> MirrorStatus
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/state
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/state
+    @precision C
+    @attested true
     observe metrics: [credit_id, new_state]
 {
     let existing = eslite_query("gs_mirror_mappings", credit_id)
@@ -425,9 +425,9 @@ circuit gs_update_mirror_state(graph_id: bytes(32), credit_id: bytes(16), new_st
 // ---------------------------------------------------------------------------
 circuit gs_bridge_lock(graph_id: bytes(32), credit_id: bytes(16)) -> bool
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/lock
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/lock
+    @precision C
+    @attested true
     observe metrics: [credit_id]
     invariant "not_already_locked" { existing_locked == false }
 {
@@ -473,9 +473,9 @@ circuit gs_bridge_lock(graph_id: bytes(32), credit_id: bytes(16)) -> bool
 // ---------------------------------------------------------------------------
 circuit gs_bridge_unlock(graph_id: bytes(32), credit_id: bytes(16), reason: string) -> bool
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/unlock
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/unlock
+    @precision C
+    @attested true
     observe metrics: [credit_id, reason]
 {
     let existing = eslite_query("gs_mirror_mappings", credit_id)
@@ -525,9 +525,9 @@ circuit gs_bridge_unlock(graph_id: bytes(32), credit_id: bytes(16), reason: stri
 circuit gs_sync_retirement(graph_id: bytes(32), credit_id: bytes(16), gs_serial: string, beneficiary: string, reason: string) -> bool
     subscribe sc.credits.retired
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/retirement
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/retirement
+    @precision C
+    @attested true
     observe metrics: [credit_id, gs_serial, beneficiary]
     invariant "must_be_locked" { existing_locked == true }
 {
@@ -583,9 +583,9 @@ circuit gs_sync_retirement(graph_id: bytes(32), credit_id: bytes(16), gs_serial:
 // Migrated from: mapping.ts validation logic + GS registry requirements
 // ---------------------------------------------------------------------------
 circuit gs_validate_credit(graph_id: bytes(32), request: CreditMirrorRequest) -> GoldStandardValidation
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/validate
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/validate
+    @precision C
+    @attested true
     observe metrics: [credit_id, gs_serial, vintage_year, tonnes_co2e]
 {
     let config = eslite_query("gs_bridge_config", graph_id)
@@ -632,8 +632,8 @@ circuit gs_validate_credit(graph_id: bytes(32), request: CreditMirrorRequest) ->
 // 3 UN Sustainable Development Goals. Returns normalized score [0.0, 1.0].
 // ---------------------------------------------------------------------------
 circuit gs_sdg_alignment_score(graph_id: bytes(32), methodology_id: string, project_location: string, sdg_goals: list<u8>) -> f64
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/sdg
-    precision C
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/sdg
+    @precision C
     observe metrics: [methodology_id, sdg_score]
 {
     // AI inference on methodology text and project geography
@@ -660,9 +660,9 @@ circuit gs_sdg_alignment_score(graph_id: bytes(32), methodology_id: string, proj
 // Migrated from: webhook.ts handleStatusUpdated + mapping.ts BridgeStateFromGSStatus
 // ---------------------------------------------------------------------------
 circuit gs_detect_sync_conflict(graph_id: bytes(32), credit_id: bytes(16), gs_serial: string, remote_state: u8, remote_quantity: f64) -> SyncConflict
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/sync-conflict
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/sync-conflict
+    @precision C
+    @attested true
     observe metrics: [credit_id, gs_serial, local_state, remote_state, conflict_type]
 {
     let existing = eslite_query("gs_mirror_mappings", credit_id)
@@ -713,8 +713,8 @@ circuit gs_detect_sync_conflict(graph_id: bytes(32), credit_id: bytes(16), gs_se
 // Migrated from: mapping.ts BridgeStateFromGSStatus
 // ---------------------------------------------------------------------------
 circuit gs_map_remote_status(graph_id: bytes(32), gs_serial: string, remote_status: string) -> u8
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/status-map
-    precision B
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/status-map
+    @precision B
     observe metrics: [gs_serial, remote_status]
 {
     // Gold Standard status → bridge state mapping:
@@ -735,9 +735,9 @@ circuit gs_map_remote_status(graph_id: bytes(32), gs_serial: string, remote_stat
 // ---------------------------------------------------------------------------
 circuit gs_record_error(graph_id: bytes(32), credit_id: bytes(16), error_code: u16, error_detail: string) -> MirrorStatus
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/error
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/error
+    @precision C
+    @attested true
     observe metrics: [credit_id, error_code]
 {
     let existing = eslite_query("gs_mirror_mappings", credit_id)
@@ -778,9 +778,9 @@ circuit gs_record_error(graph_id: bytes(32), credit_id: bytes(16), error_code: u
 // ---------------------------------------------------------------------------
 circuit gs_update_serial(graph_id: bytes(32), credit_id: bytes(16), new_gs_serial: string) -> MirrorStatus
     publish sc.bridges.gold_standard.status
-    lex esn/sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/update-serial
-    precision C
-    povc true
+    lex sustainability/carbon/org/synergycarbon/registry/bridges/gold-standard/update-serial
+    @precision C
+    @attested true
     observe metrics: [credit_id, new_gs_serial]
 {
     let existing = eslite_query("gs_mirror_mappings", credit_id)
